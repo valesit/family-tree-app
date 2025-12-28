@@ -1,0 +1,381 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User accounts for authentication
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  phone         String?   @unique
+  emailVerified DateTime?
+  phoneVerified DateTime?
+  password      String?
+  name          String?
+  image         String?
+  role          UserRole  @default(MEMBER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  linkedPerson      Person?           @relation("UserPerson")
+  pendingChanges    PendingChange[]   @relation("ChangeCreator")
+  approvalsGiven    Approval[]
+  corrections       CorrectionRequest[] @relation("CorrectionCreator")
+  messagesSent      Message[]         @relation("MessageSender")
+  messagesReceived  Message[]         @relation("MessageReceiver")
+  notifications     Notification[]
+  activities        Activity[]
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  type       String   @default("email") // email or phone
+
+  @@unique([identifier, token])
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// Family member in the tree (can be linked to a user account or not)
+model Person {
+  id          String    @id @default(cuid())
+  firstName   String
+  lastName    String
+  middleName  String?
+  maidenName  String?
+  nickname    String?
+  gender      Gender?
+  birthDate   DateTime?
+  birthPlace  String?
+  deathDate   DateTime?
+  deathPlace  String?
+  biography   String?   @db.Text
+  facts       String?   @db.Text // JSON array of interesting facts
+  email       String?
+  phone       String?
+  address     String?
+  occupation  String?
+  isLiving    Boolean   @default(true)
+  isPrivate   Boolean   @default(false) // Hide contact info from public
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+
+  // Link to user account (optional)
+  userId String? @unique
+  user   User?   @relation("UserPerson", fields: [userId], references: [id])
+
+  // Profile image
+  profileImageId String?
+  profileImage   PersonImage? @relation("ProfileImage", fields: [profileImageId], references: [id])
+
+  // Relations
+  images            PersonImage[]       @relation("PersonImages")
+  parentRelations   Relationship[]      @relation("ChildRelation")
+  childRelations    Relationship[]      @relation("ParentRelation")
+  spouseRelations1  Relationship[]      @relation("Spouse1Relation")
+  spouseRelations2  Relationship[]      @relation("Spouse2Relation")
+  pendingChanges    PendingChange[]
+  corrections       CorrectionRequest[]
+
+  @@index([firstName, lastName])
+  @@index([userId])
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// Images associated with a person
+model PersonImage {
+  id          String   @id @default(cuid())
+  url         String
+  caption     String?
+  isPrimary   Boolean  @default(false)
+  uploadedAt  DateTime @default(now())
+
+  // Relations
+  personId      String
+  person        Person   @relation("PersonImages", fields: [personId], references: [id], onDelete: Cascade)
+  profileFor    Person[] @relation("ProfileImage")
+
+  @@index([personId])
+}
+
+// Family relationships
+model Relationship {
+  id        String           @id @default(cuid())
+  type      RelationshipType
+  startDate DateTime?        // e.g., marriage date
+  endDate   DateTime?        // e.g., divorce date
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Parent-child relationship
+  parentId String?
+  parent   Person? @relation("ParentRelation", fields: [parentId], references: [id], onDelete: Cascade)
+  childId  String?
+  child    Person? @relation("ChildRelation", fields: [childId], references: [id], onDelete: Cascade)
+
+  // Spouse relationship
+  spouse1Id String?
+  spouse1   Person? @relation("Spouse1Relation", fields: [spouse1Id], references: [id], onDelete: Cascade)
+  spouse2Id String?
+  spouse2   Person? @relation("Spouse2Relation", fields: [spouse2Id], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@index([childId])
+  @@index([spouse1Id])
+  @@index([spouse2Id])
+}
+
+enum RelationshipType {
+  PARENT_CHILD
+  SPOUSE
+  SIBLING
+  ADOPTED
+  STEP_PARENT
+  STEP_CHILD
+  FOSTER
+}
+
+// Pending changes awaiting approval
+model PendingChange {
+  id          String            @id @default(cuid())
+  changeType  ChangeType
+  changeData  Json              // The proposed changes
+  status      ApprovalStatus    @default(PENDING)
+  comment     String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Who created this change
+  createdById String
+  createdBy   User   @relation("ChangeCreator", fields: [createdById], references: [id])
+
+  // What person is being changed (null for new persons)
+  personId String?
+  person   Person? @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  // Approvals required
+  approvals Approval[]
+
+  @@index([createdById])
+  @@index([personId])
+  @@index([status])
+}
+
+enum ChangeType {
+  CREATE_PERSON
+  UPDATE_PERSON
+  DELETE_PERSON
+  ADD_RELATIONSHIP
+  UPDATE_RELATIONSHIP
+  DELETE_RELATIONSHIP
+  ADD_IMAGE
+  DELETE_IMAGE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// Individual approvals for a pending change
+model Approval {
+  id        String          @id @default(cuid())
+  status    ApprovalStatus  @default(PENDING)
+  comment   String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  // Who is the approver
+  approverId String
+  approver   User   @relation(fields: [approverId], references: [id])
+
+  // Which pending change
+  pendingChangeId String
+  pendingChange   PendingChange @relation(fields: [pendingChangeId], references: [id], onDelete: Cascade)
+
+  @@unique([approverId, pendingChangeId])
+  @@index([approverId])
+  @@index([pendingChangeId])
+}
+
+// Correction requests for existing information
+model CorrectionRequest {
+  id              String          @id @default(cuid())
+  currentData     Json            // Current data snapshot
+  proposedData    Json            // Proposed corrections
+  reason          String          @db.Text
+  status          ApprovalStatus  @default(PENDING)
+  adminComment    String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Who requested the correction
+  requestedById String
+  requestedBy   User   @relation("CorrectionCreator", fields: [requestedById], references: [id])
+
+  // Which person needs correction
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([requestedById])
+  @@index([personId])
+  @@index([status])
+}
+
+// Messages between users
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Sender
+  senderId String
+  sender   User   @relation("MessageSender", fields: [senderId], references: [id])
+
+  // Receiver (null for group messages)
+  receiverId String?
+  receiver   User?   @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  // Group conversation (optional)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+// Group conversations
+model Conversation {
+  id        String   @id @default(cuid())
+  name      String?
+  isGroup   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages     Message[]
+  participants ConversationParticipant[]
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime?
+
+  userId         String
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId])
+  @@index([userId])
+  @@index([conversationId])
+}
+
+// Notifications for users
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // Additional data (e.g., link to approval)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  APPROVAL_REQUEST
+  APPROVAL_GRANTED
+  APPROVAL_REJECTED
+  CORRECTION_REQUEST
+  CORRECTION_RESOLVED
+  NEW_MESSAGE
+  NEW_FAMILY_MEMBER
+  WELCOME
+}
+
+// Activity log for the family tree
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  data        Json?
+  createdAt   DateTime     @default(now())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum ActivityType {
+  PERSON_ADDED
+  PERSON_UPDATED
+  RELATIONSHIP_ADDED
+  IMAGE_UPLOADED
+  USER_JOINED
+  APPROVAL_COMPLETED
+}
