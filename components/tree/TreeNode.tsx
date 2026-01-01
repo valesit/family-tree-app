@@ -3,7 +3,7 @@
 import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
-import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink, Link2 } from 'lucide-react';
 
 interface TreeNodeProps {
   node: TreeNodeType;
@@ -11,7 +11,7 @@ interface TreeNodeProps {
   onAddChild: (parentId: string) => void;
   onAddSpouse: (personId: string) => void;
   onAddParent?: (childId: string) => void;
-  onViewBirthFamily?: (personId: string, maidenName?: string) => void;
+  onViewBirthFamily?: (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => void;
   expandedNodes: Set<string>;
   toggleExpanded: (nodeId: string) => void;
   level: number;
@@ -114,14 +114,29 @@ export function TreeNode({
       {/* Birth family badge for spouse */}
       {spouseHasBirthFamily && (
         <div 
-          className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-purple-500 text-white text-[8px] font-medium rounded-full whitespace-nowrap cursor-pointer hover:bg-purple-600 flex items-center gap-0.5 z-10"
+          className={`absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 text-white text-[8px] font-medium rounded-full whitespace-nowrap flex items-center gap-0.5 z-10 ${
+            person.attributes?.birthFamilyId 
+              ? 'bg-purple-600 cursor-pointer hover:bg-purple-700' 
+              : 'bg-purple-400'
+          }`}
           onClick={(e) => {
             e.stopPropagation();
-            onViewBirthFamily?.(person.id, person.attributes?.maidenName);
+            if (person.attributes?.birthFamilyId) {
+              // Direct link to birth family tree
+              onViewBirthFamily?.(person.id, person.attributes.maidenName, person.attributes.birthFamilyId);
+            } else {
+              // Search for birth family
+              onViewBirthFamily?.(person.id, person.attributes?.maidenName);
+            }
           }}
+          title={person.attributes?.birthFamilyId ? 'View birth family tree' : `Search for ${person.attributes?.maidenName} family`}
         >
           née {person.attributes?.maidenName}
-          <ExternalLink className="w-2 h-2" />
+          {person.attributes?.birthFamilyId ? (
+            <Link2 className="w-2 h-2" />
+          ) : (
+            <ExternalLink className="w-2 h-2" />
+          )}
         </div>
       )}
 

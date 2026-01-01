@@ -53,6 +53,8 @@ export const personSchema = z.object({
   occupation: z.string().max(200).optional().or(z.literal('')),
   isLiving: z.boolean(),
   isPrivate: z.boolean(),
+  // Birth family link for spouses
+  birthFamilyRootPersonId: z.string().optional().nullable(),
 }).refine(data => {
   if (data.birthDate && data.deathDate) {
     return new Date(data.birthDate) < new Date(data.deathDate);

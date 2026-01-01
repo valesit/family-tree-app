@@ -100,13 +100,15 @@ export async function PUT(
 
     // If admin, update directly
     if (user.role === 'ADMIN') {
+      const { birthFamilyRootPersonId, ...personFields } = validationResult.data;
       const person = await prisma.person.update({
         where: { id },
         data: {
-          ...validationResult.data,
-          birthDate: validationResult.data.birthDate ? new Date(validationResult.data.birthDate) : null,
-          deathDate: validationResult.data.deathDate ? new Date(validationResult.data.deathDate) : null,
-          facts: validationResult.data.facts ? JSON.stringify(validationResult.data.facts) : null,
+          ...personFields,
+          birthDate: personFields.birthDate ? new Date(personFields.birthDate) : null,
+          deathDate: personFields.deathDate ? new Date(personFields.deathDate) : null,
+          facts: personFields.facts ? JSON.stringify(personFields.facts) : null,
+          birthFamilyRootPersonId: birthFamilyRootPersonId || null,
         },
         include: {
           profileImage: true,

@@ -119,6 +119,10 @@ model Person {
   notableDescription String?  @db.Text
   notableAchievements String? @db.Text // JSON array of achievements
 
+  // Birth family link (for spouses who married into this family)
+  // Links to the root person of their birth family tree
+  birthFamilyRootPersonId String?
+
   // Link to user account (optional)
   userId String? @unique
   user   User?   @relation("UserPerson", fields: [userId], references: [id])
