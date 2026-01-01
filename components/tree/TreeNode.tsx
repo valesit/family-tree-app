@@ -63,10 +63,15 @@ export function TreeNode({
   // Person Card Component
   const PersonCard = ({ person, isSpouse = false }: { person: TreeNodeType; isSpouse?: boolean }) => (
     <button
-      onClick={() => onNodeClick(person)}
+      type="button"
+      data-clickable="true"
+      onClick={(e) => {
+        e.stopPropagation();
+        onNodeClick(person);
+      }}
       className={clsx(
         'relative bg-white rounded-xl p-3 shadow-md border-2 transition-all duration-200 min-w-[120px]',
-        'hover:shadow-lg hover:scale-[1.02]',
+        'hover:shadow-lg hover:scale-[1.02] cursor-pointer',
         isRoot && !isSpouse && 'ring-2 ring-maroon-300 ring-offset-2',
         getGenderColor(person.gender)
       )}

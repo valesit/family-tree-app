@@ -11,7 +11,7 @@ import { TreeNode, PersonWithRelations, SessionUser } from '@/types';
 import { 
   Loader2, AlertCircle, Users, TreePine, Calendar, Heart, Lock, 
   Maximize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
-  ChevronUp, ChevronDown
+  ChevronUp, ChevronDown, X, UserPlus
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -420,8 +420,17 @@ export default function TreePage() {
       >
         {selectedPerson && (
           <div className="space-y-6">
-            {/* Header with gradient */}
+            {/* Header with gradient and close button */}
             <div className="relative -m-6 mb-0">
+              {/* Close button */}
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="absolute top-3 right-3 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white transition-colors backdrop-blur-sm"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
               <div className={`h-32 bg-gradient-to-r ${
                 selectedPerson.gender === 'MALE' 
                   ? 'from-sky-400 to-blue-500' 
@@ -506,17 +515,17 @@ export default function TreePage() {
 
               {/* Action buttons */}
               <div className="mt-6 pt-4 border-t border-slate-200">
-                <h4 className="text-sm font-semibold text-slate-700 mb-3">Actions</h4>
-                <div className="grid grid-cols-2 gap-3">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Add Family Member</h4>
+                <div className="grid grid-cols-4 gap-3">
                   <button
                     onClick={() => {
                       setIsModalOpen(false);
                       handleAddChild(selectedPerson.id);
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-maroon-500 text-white rounded-xl hover:bg-maroon-600 transition-colors"
+                    className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-maroon-500 text-white rounded-xl hover:bg-maroon-600 transition-colors"
                   >
-                    <ChevronDown className="w-4 h-4" />
-                    <span className="font-medium">Add Child</span>
+                    <ChevronDown className="w-5 h-5" />
+                    <span className="text-xs font-medium">Child</span>
                   </button>
                   
                   <button
@@ -524,10 +533,10 @@ export default function TreePage() {
                       setIsModalOpen(false);
                       handleAddParent(selectedPerson.id);
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-800 transition-colors"
+                    className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-800 transition-colors"
                   >
-                    <ChevronUp className="w-4 h-4" />
-                    <span className="font-medium">Add Parent</span>
+                    <ChevronUp className="w-5 h-5" />
+                    <span className="text-xs font-medium">Parent</span>
                   </button>
                   
                   <button
@@ -535,30 +544,42 @@ export default function TreePage() {
                       setIsModalOpen(false);
                       handleAddSpouse(selectedPerson.id);
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-rose-500 text-white rounded-xl hover:bg-rose-600 transition-colors"
+                    className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-rose-500 text-white rounded-xl hover:bg-rose-600 transition-colors"
                   >
-                    <Heart className="w-4 h-4" />
-                    <span className="font-medium">Add Spouse</span>
+                    <Heart className="w-5 h-5" />
+                    <span className="text-xs font-medium">Spouse</span>
                   </button>
                   
                   <button
                     onClick={() => {
                       setIsModalOpen(false);
-                      router.push(`/person/${selectedPerson.id}`);
+                      router.push('/add-person');
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-slate-200 text-slate-700 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                    className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors"
                   >
-                    <Users className="w-4 h-4" />
-                    <span className="font-medium">View Full Profile</span>
+                    <UserPlus className="w-5 h-5" />
+                    <span className="text-xs font-medium">Relative</span>
                   </button>
                 </div>
+                
+                {/* View profile button */}
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    router.push(`/person/${selectedPerson.id}`);
+                  }}
+                  className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-slate-200 text-slate-700 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="font-medium">View Full Profile</span>
+                </button>
 
                 {isAuthenticated && (
                   <div className="flex gap-3 mt-3">
                     <button
                       onClick={() => {
-                setIsModalOpen(false);
-                router.push(`/person/${selectedPerson.id}/edit`);
+                        setIsModalOpen(false);
+                        router.push(`/person/${selectedPerson.id}/edit`);
                       }}
                       className="flex-1 text-sm text-slate-600 hover:text-maroon-600 py-2"
                     >
@@ -566,8 +587,8 @@ export default function TreePage() {
                     </button>
                     <button
                       onClick={() => {
-                setIsModalOpen(false);
-                router.push(`/corrections/new?personId=${selectedPerson.id}`);
+                        setIsModalOpen(false);
+                        router.push(`/corrections/new?personId=${selectedPerson.id}`);
                       }}
                       className="flex-1 text-sm text-slate-600 hover:text-maroon-600 py-2"
                     >
@@ -577,21 +598,21 @@ export default function TreePage() {
                 )}
               </div>
 
-            {!isAuthenticated && (
-              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <Lock className="w-5 h-5 text-amber-600" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-800">Want to contribute?</p>
-                    <p className="text-xs text-amber-600">
-                      <Link href="/login" className="underline hover:text-amber-800">Sign in</Link> or{' '}
+              {!isAuthenticated && (
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <Lock className="w-5 h-5 text-amber-600" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800">Want to contribute?</p>
+                      <p className="text-xs text-amber-600">
+                        <Link href="/login" className="underline hover:text-amber-800">Sign in</Link> or{' '}
                         <Link href="/register" className="underline hover:text-amber-800">create an account</Link> to add family members.
-                    </p>
+                      </p>
                     </div>
                   </div>
                 </div>
               )}
-              </div>
+            </div>
           </div>
         )}
       </Modal>

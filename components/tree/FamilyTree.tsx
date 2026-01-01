@@ -21,6 +21,10 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  
+  // Track if we should be listening for drag
+  const isPotentialDrag = useRef(false);
+  const startPos = useRef({ x: 0, y: 0 });
 
   // Center the tree on mount
   useEffect(() => {
@@ -45,14 +49,51 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
     }
   }, []);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // Check if click is on an interactive element
+  const isInteractiveElement = (target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof HTMLElement)) return false;
+    
+    // Check if target or any parent is a button or has role="button"
+    let element: HTMLElement | null = target;
+    while (element) {
+      if (
+        element.tagName === 'BUTTON' ||
+        element.tagName === 'A' ||
+        element.getAttribute('role') === 'button' ||
+        element.onclick !== null ||
+        element.dataset.clickable === 'true'
+      ) {
+        return true;
+      }
+      element = element.parentElement;
+    }
+    return false;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Don't start drag if clicking on an interactive element
+    if (isInteractiveElement(e.target)) {
+      return;
+    }
+    
     if (e.button === 0) {
-      setIsDragging(true);
+      isPotentialDrag.current = true;
+      startPos.current = { x: e.clientX, y: e.clientY };
       setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isPotentialDrag.current) return;
+
+    const dx = Math.abs(e.clientX - startPos.current.x);
+    const dy = Math.abs(e.clientY - startPos.current.y);
+    
+    // Start dragging only after moving 8+ pixels (like dnd-kit)
+    if (dx > 8 || dy > 8) {
+      setIsDragging(true);
+    }
+
     if (isDragging) {
       setTransform((prev) => ({
         ...prev,
@@ -62,7 +103,8 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
     }
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
+    isPotentialDrag.current = false;
     setIsDragging(false);
   };
 
@@ -106,7 +148,7 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
     <div className="relative w-full h-full overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100">
       {/* Subtle grid pattern */}
       <div 
-        className="absolute inset-0 opacity-[0.03]"
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage: `
             linear-gradient(to right, #94a3b8 1px, transparent 1px),
@@ -116,21 +158,22 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
         }}
       />
 
-      {/* Tree container */}
+      {/* Tree container - handles drag */}
       <div
         ref={containerRef}
-        className="absolute inset-0 cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        className={`absolute inset-0 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
         onWheel={handleWheel}
       >
         <div
-          className="absolute transition-transform duration-75"
+          className="absolute"
           style={{
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
             transformOrigin: '0 0',
+            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
           }}
         >
           <TreeNode
@@ -157,8 +200,8 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
       />
 
       {/* Drag hint */}
-      <div className="absolute bottom-4 left-4 text-xs text-slate-400 bg-white/80 px-3 py-1.5 rounded-full shadow-sm">
-        Drag to pan • Scroll to zoom
+      <div className="absolute bottom-4 left-4 text-xs text-slate-400 bg-white/80 px-3 py-1.5 rounded-full shadow-sm pointer-events-none">
+        Drag to pan • Scroll to zoom • Click person for details
       </div>
     </div>
   );
