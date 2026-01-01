@@ -11,7 +11,7 @@ import { TreeNode, PersonWithRelations, SessionUser } from '@/types';
 import { 
   Loader2, AlertCircle, Users, TreePine, Calendar, Heart, Lock, 
   Maximize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
-  ChevronUp, ChevronDown, X, UserPlus, Pencil, Save
+  ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -134,22 +134,46 @@ export default function TreePage() {
     
     setIsSavingFamilyName(true);
     try {
-      const response = await fetch('/api/family', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rootPersonId: data.data.rootPersonId,
-          name: editedFamilyName.trim(),
-        }),
-      });
-      
-      if (response.ok) {
-        // Refresh tree data to get updated family name
-        mutate();
-        setIsEditingFamilyName(false);
+      if (isAdmin) {
+        // Admin can save directly
+        const response = await fetch('/api/family', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rootPersonId: data.data.rootPersonId,
+            name: editedFamilyName.trim(),
+          }),
+        });
+        
+        if (response.ok) {
+          mutate();
+          setIsEditingFamilyName(false);
+        } else {
+          const result = await response.json();
+          alert(result.error || 'Failed to save family name');
+        }
       } else {
-        const result = await response.json();
-        alert(result.error || 'Failed to save family name');
+        // Regular user - submit for approval
+        const response = await fetch('/api/approvals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'UPDATE_FAMILY_NAME',
+            personId: data.data.rootPersonId, // Use root person as reference
+            currentData: { familyName: familyName },
+            proposedData: { familyName: editedFamilyName.trim() },
+            reason: `Proposed family name change: "${familyName}" → "${editedFamilyName.trim()}"`,
+            requiredApprovals: 2, // Requires 2 family member approvals or 1 admin
+          }),
+        });
+        
+        if (response.ok) {
+          setIsEditingFamilyName(false);
+          alert('Your family name change has been submitted for approval. It needs approval from 2 family members or an admin.');
+        } else {
+          const result = await response.json();
+          alert(result.error || 'Failed to submit family name change');
+        }
       }
     } catch (error) {
       console.error('Error saving family name:', error);
@@ -203,302 +227,253 @@ export default function TreePage() {
   const notablePersons = notableData?.data || [];
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      {/* Left Panel - Family Overview (wider) */}
-      <div className="w-[55%] min-w-[700px] max-w-[900px] bg-gradient-to-b from-slate-50 to-white border-r border-slate-200 overflow-y-auto flex-shrink-0">
-        <div className="p-8 space-y-8">
-          {/* Family Header */}
-          <div className="flex items-center gap-6">
-            <div className="flex items-center justify-center w-24 h-24 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-2xl shadow-lg">
-              <TreePine className="w-12 h-12 text-white" />
-            </div>
-            <div className="flex-1">
-              {isEditingFamilyName ? (
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={editedFamilyName}
-                    onChange={(e) => setEditedFamilyName(e.target.value)}
-                    className="flex-1 text-2xl font-bold text-slate-900 px-3 py-2 border-2 border-maroon-300 rounded-lg focus:border-maroon-500 focus:outline-none"
-                    placeholder="e.g., Sithole/Mutseyami Family"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleSaveFamilyName}
-                    disabled={isSavingFamilyName || !editedFamilyName.trim()}
-                    className="flex items-center gap-2 px-4 py-2 bg-maroon-600 text-white rounded-lg hover:bg-maroon-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isSavingFamilyName ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setIsEditingFamilyName(false)}
-                    className="px-4 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <h1 className="text-3xl font-bold text-slate-900">
-                    {familyName || 'Family'} Tree
-                  </h1>
-                  {isAdmin && (
-                    <button
-                      onClick={handleStartEditFamilyName}
-                      className="p-2 text-slate-400 hover:text-maroon-600 hover:bg-maroon-50 rounded-lg transition-colors"
-                      title="Edit family name"
-                    >
-                      <Pencil className="w-5 h-5" />
-                    </button>
-                  )}
-                </div>
-              )}
-              <p className="text-slate-500 mt-1">Family Heritage & Legacy</p>
-              {stats && (
-                <p className="text-sm text-maroon-600 mt-2">
-                  {stats.totalMembers} members across multiple generations
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Stats Grid - 6 columns for wider layout */}
-      {stats && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
-              <div className="grid grid-cols-6 gap-6 text-center">
-                <div className="p-3 bg-maroon-50 rounded-xl">
-                  <Users className="w-6 h-6 text-maroon-600 mx-auto mb-2" />
-                  <p className="text-3xl font-bold text-slate-900">{stats.totalMembers}</p>
-                  <p className="text-sm text-slate-500">Total Members</p>
-                </div>
-                <div className="p-3 bg-emerald-50 rounded-xl">
-                  <TreePine className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
-                  <p className="text-3xl font-bold text-slate-900">{stats.livingCount}</p>
-                  <p className="text-sm text-slate-500">Living</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-xl">
-                  <Calendar className="w-6 h-6 text-slate-600 mx-auto mb-2" />
-                  <p className="text-3xl font-bold text-slate-900">{stats.deceasedCount}</p>
-                  <p className="text-sm text-slate-500">Ancestors</p>
-                </div>
-                <div className="p-3 bg-rose-50 rounded-xl">
-                  <Heart className="w-6 h-6 text-rose-600 mx-auto mb-2" />
-                  <p className="text-3xl font-bold text-slate-900">{stats.marriageCount}</p>
-                  <p className="text-sm text-slate-500">Marriages</p>
-                </div>
-                <div className="p-3 bg-sky-50 rounded-xl">
-                  <div className="w-6 h-6 rounded-full bg-sky-400 mx-auto mb-2" />
-                  <p className="text-3xl font-bold text-slate-900">{stats.maleCount}</p>
-                  <p className="text-sm text-slate-500">Male</p>
-                </div>
-                <div className="p-3 bg-pink-50 rounded-xl">
-                  <div className="w-6 h-6 rounded-full bg-pink-400 mx-auto mb-2" />
-                  <p className="text-3xl font-bold text-slate-900">{stats.femaleCount}</p>
-                  <p className="text-sm text-slate-500">Female</p>
-                </div>
+    <div className="h-[calc(100vh-4rem)] flex flex-col bg-slate-50">
+      {/* Top Header Bar */}
+      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => router.push('/')}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5 text-slate-600" />
+          </button>
+          <div>
+            {isEditingFamilyName ? (
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={editedFamilyName}
+                  onChange={(e) => setEditedFamilyName(e.target.value)}
+                  className="text-xl font-bold text-slate-900 px-3 py-1 border-2 border-maroon-300 rounded-lg focus:border-maroon-500 focus:outline-none"
+                  placeholder="e.g., Sithole Family"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveFamilyName}
+                  disabled={isSavingFamilyName || !editedFamilyName.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-maroon-600 text-white text-sm rounded-lg hover:bg-maroon-700 disabled:opacity-50 transition-colors"
+                >
+                  {isSavingFamilyName ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {isAdmin ? 'Save' : 'Submit'}
+                </button>
+                <button
+                  onClick={() => setIsEditingFamilyName(false)}
+                  className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
-            </div>
-          )}
-
-          {/* Two column layout for Founding Ancestor and Quick Actions */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Founding Ancestor */}
-            {foundingAncestor && (
-              <div className="bg-gradient-to-br from-maroon-50 to-rose-50 rounded-xl p-5 border border-maroon-100">
-                <h3 className="text-xs font-semibold text-maroon-700 uppercase tracking-wide mb-4">
-                  Founding Ancestor
-                </h3>
-                <div className="flex items-start gap-4">
-                  <Avatar 
-                    src={foundingAncestor.profileImage || undefined}
-                    name={`${foundingAncestor.firstName} ${foundingAncestor.lastName}`}
-                    size="xl"
-                    className="ring-2 ring-white shadow-md"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-lg text-slate-900">
-                      {foundingAncestor.firstName} {foundingAncestor.lastName}
-                    </p>
-                    {foundingAncestor.birthYear && (
-                      <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-                        <Calendar className="w-4 h-4" />
-                        Born {foundingAncestor.birthYear}
-                      </p>
-                    )}
-                    {foundingAncestor.birthPlace && (
-                      <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-                        <MapPin className="w-4 h-4" />
-                        {foundingAncestor.birthPlace}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {foundingAncestor.biography && (
-                  <p className="text-sm text-slate-600 mt-4 leading-relaxed">
-                    {foundingAncestor.biography}
-                  </p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-slate-900">{familyName || 'Family'}</h1>
+                {isAuthenticated && (
+                  <button
+                    onClick={handleStartEditFamilyName}
+                    className="p-1.5 text-slate-400 hover:text-maroon-600 hover:bg-maroon-50 rounded-lg transition-colors"
+                    title={isAdmin ? "Edit family name" : "Propose family name change"}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
                 )}
               </div>
             )}
+            <p className="text-sm text-slate-500">
+              {stats ? `${stats.totalMembers} members • ${stats.marriageCount} marriages` : 'Loading...'}
+            </p>
+          </div>
+        </div>
+        
+        {!isAuthenticated && (
+          <Link
+            href="/login"
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <Lock className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-medium text-slate-700">Sign in to contribute</span>
+          </Link>
+        )}
+      </div>
 
-            {/* Quick Actions */}
-            <div className="space-y-4">
-              <Link 
-                href="/wiki"
-                className="flex items-center gap-4 p-4 bg-white rounded-xl border border-slate-200 hover:border-maroon-300 hover:bg-maroon-50 transition-all group"
-              >
-                <div className="p-3 bg-maroon-100 rounded-xl group-hover:bg-maroon-200 transition-colors">
-                  <BookOpen className="w-6 h-6 text-maroon-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-slate-900">Family Wiki</p>
-                  <p className="text-sm text-slate-500">Read stories, history & articles about your family</p>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-maroon-500" />
-              </Link>
-
-              <button
-                onClick={() => setIsExpandedViewOpen(true)}
-                className="w-full flex items-center gap-4 p-4 bg-white rounded-xl border border-slate-200 hover:border-maroon-300 hover:bg-maroon-50 transition-all group"
-              >
-                <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors">
-                  <Maximize2 className="w-6 h-6 text-slate-600" />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="font-semibold text-slate-900">Expanded View</p>
-                  <p className="text-sm text-slate-500">See complete family overview and details</p>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-maroon-500" />
-              </button>
-                </div>
-              </div>
-
-          {/* Notable Members - Cards */}
-          {notablePersons.length > 0 && (
-                    <div>
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2 mb-4">
-                <Award className="w-5 h-5 text-amber-500" />
-                Notable Family Members
-                <span className="text-xs text-slate-400 font-normal">({notablePersons.length})</span>
-              </h3>
-              <div className="grid grid-cols-3 gap-4">
-                {notablePersons.map((person) => (
-                  <div 
-                    key={person.id}
-                    className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-lg transition-shadow"
-                  >
-                    {/* Orange gradient header */}
-                    <div className="h-16 bg-gradient-to-r from-amber-400 to-orange-400 relative">
-                      {/* Avatar positioned at bottom of header */}
-                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
-                        <div className="relative">
-                          <Avatar 
-                            src={person.profileImage?.url}
-                            name={`${person.firstName} ${person.lastName}`}
-                            size="xl"
-                            className="ring-4 ring-white shadow-lg"
-                          />
-                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center border-2 border-white">
-                            <Award className="w-3 h-3 text-white" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Content */}
-                    <div className="pt-10 pb-4 px-4 text-center">
-                      <h4 className="font-bold text-slate-900">
-                        {person.firstName} {person.lastName}
-                      </h4>
-                      <p className="text-sm text-amber-600 font-medium mt-0.5">
-                        {person.notableTitle || 'Notable Member'}
-                      </p>
-                      
-                      {person.notableDescription && (
-                        <p className="text-xs text-slate-500 mt-3 line-clamp-3">
-                          {person.notableDescription}
-                        </p>
+      {/* Main Content - Two Panels */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Family Overview (20%) */}
+        <div className="w-1/5 min-w-[280px] border-r border-slate-200 flex flex-col bg-white">
+          {/* Panel Header */}
+          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-slate-600" />
+              <span className="font-semibold text-slate-900">Family Overview</span>
+            </div>
+            <button
+              onClick={() => setIsExpandedViewOpen(true)}
+              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Expand view"
+            >
+              <Maximize2 className="w-4 h-4 text-slate-500" />
+            </button>
+          </div>
+          
+          {/* Panel Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Founding Ancestor Card */}
+            {foundingAncestor && (
+              <div className="bg-gradient-to-br from-maroon-600 to-maroon-800 rounded-xl p-4 text-white">
+                <p className="text-[10px] font-medium text-maroon-200 uppercase tracking-wider mb-2">Founding Ancestor</p>
+                <div className="flex items-center gap-3">
+                  <Avatar 
+                    src={foundingAncestor.profileImage || undefined}
+                    name={`${foundingAncestor.firstName} ${foundingAncestor.lastName}`}
+                    size="lg"
+                    className="ring-2 ring-white/20 shadow-lg flex-shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-base font-bold truncate">{foundingAncestor.firstName} {foundingAncestor.lastName}</h2>
+                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-maroon-200 text-xs">
+                      {foundingAncestor.birthYear && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {foundingAncestor.birthYear}
+                        </span>
                       )}
-                      
-                      {/* Achievement tags */}
-                      {person.notableAchievements && (
-                        <div className="flex flex-wrap justify-center gap-1.5 mt-3">
-                          {(JSON.parse(person.notableAchievements) as string[]).slice(0, 3).map((achievement, idx) => (
-                            <span 
-                              key={idx}
-                              className="text-[10px] px-2 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-200"
-                            >
-                              {achievement}
-                            </span>
-                          ))}
-                        </div>
+                      {foundingAncestor.birthPlace && (
+                        <span className="flex items-center gap-1 truncate">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{foundingAncestor.birthPlace}</span>
+                        </span>
                       )}
-                      
-                      <button
-                        onClick={() => router.push(`/person/${person.id}`)}
-                        className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-amber-600 mt-4 font-medium"
-                      >
-                        View Profile
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Legend - Horizontal for wider layout */}
-          <div className="bg-slate-100/50 rounded-xl p-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-sky-400 border-2 border-sky-500" />
-                  <span className="text-sm text-slate-600">Male</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-pink-400 border-2 border-pink-500" />
-                  <span className="text-sm text-slate-600">Female</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-emerald-500" />
-                  <span className="text-sm text-slate-600">Living</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-slate-400" />
-                  <span className="text-sm text-slate-600">Deceased</span>
+            {/* Biography */}
+            {foundingAncestor?.biography && (
+              <p className="text-slate-600 leading-relaxed">
+                {foundingAncestor.biography}
+              </p>
+            )}
+
+            {/* Family Statistics */}
+            {stats && (
+                <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-4">
+                  <Users className="w-5 h-5 text-slate-600" />
+                  Family Statistics
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-center p-2 bg-slate-50 rounded-lg">
+                    <p className="text-xl font-bold text-maroon-600">{stats.totalMembers}</p>
+                    <p className="text-xs text-slate-500">Members</p>
+                  </div>
+                  <div className="text-center p-2 bg-slate-50 rounded-lg">
+                    <p className="text-xl font-bold text-emerald-600">{stats.livingCount}</p>
+                  <p className="text-xs text-slate-500">Living</p>
+                  </div>
+                  <div className="text-center p-2 bg-slate-50 rounded-lg">
+                    <p className="text-xl font-bold text-rose-500">{stats.marriageCount}</p>
+                    <p className="text-xs text-slate-500">Marriages</p>
+                  </div>
+                  <div className="text-center p-2 bg-slate-50 rounded-lg">
+                    <p className="text-xl font-bold text-slate-500">{stats.deceasedCount}</p>
+                    <p className="text-xs text-slate-500">Deceased</p>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <Heart className="w-4 h-4 text-rose-500" fill="currentColor" />
-                  <span className="text-sm text-slate-600">Marriage</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-purple-500 text-white text-[10px] rounded-full font-medium">née</span>
-                  <span className="text-sm text-slate-600">Birth Family</span>
+            )}
+
+            {/* Oldest Member */}
+            {stats?.oldestMember && (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Award className="w-5 h-5 text-amber-500" />
+                <span>Oldest:</span>
+                <span className="font-medium text-slate-900">{stats.oldestMember.name} ({stats.oldestMember.birthYear})</span>
+              </div>
+            )}
+
+            {/* Notable Members - Cards */}
+            {notablePersons.length > 0 && (
+                <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-4">
+                  <Award className="w-5 h-5 text-amber-500" />
+                  Notable Family Members
+                  <span className="text-xs text-slate-400 font-normal">({notablePersons.length})</span>
+                </h3>
+                <div className="space-y-3">
+                  {notablePersons.map((person) => (
+                    <button 
+                      key={person.id}
+                      onClick={() => router.push(`/person/${person.id}`)}
+                      className="w-full flex items-center gap-3 p-3 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors text-left border border-amber-200"
+                    >
+                      <div className="relative flex-shrink-0">
+                        <Avatar 
+                          src={person.profileImage?.url}
+                          name={`${person.firstName} ${person.lastName}`}
+                          size="md"
+                          className="ring-2 ring-amber-300"
+                        />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center border-2 border-white">
+                          <Award className="w-2 h-2 text-white" />
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-slate-900 text-sm truncate">
+                          {person.firstName} {person.lastName}
+                        </h4>
+                        <p className="text-xs text-amber-600 truncate">
+                          {person.notableTitle || 'Notable Member'}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    </button>
+                  ))}
                 </div>
               </div>
+            )}
+
+            {/* Quick Links */}
+            <div className="flex gap-3">
+              <Link 
+                href="/wiki"
+                className="flex-1 flex items-center justify-center gap-2 p-3 bg-maroon-50 text-maroon-700 rounded-xl hover:bg-maroon-100 transition-colors font-medium"
+              >
+                <BookOpen className="w-5 h-5" />
+                Family Wiki
+              </Link>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Right Panel - Family Tree (2/3) */}
-      <div className="flex-1 relative">
+        {/* Right Panel - Family Tree (80%) */}
+        <div className="w-4/5 flex flex-col bg-white">
+          {/* Panel Header */}
+          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TreePine className="w-5 h-5 text-slate-600" />
+              <span className="font-semibold text-slate-900">Family Tree</span>
+            </div>
+            <button
+              onClick={() => setIsExpandedViewOpen(true)}
+              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Expand view"
+            >
+              <Maximize2 className="w-4 h-4 text-slate-500" />
+            </button>
+          </div>
+          
+          {/* Tree Content */}
+          <div className="flex-1 relative">
       <FamilyTree
         data={tree}
         onNodeClick={handleNodeClick}
         onAddChild={handleAddChild}
         onAddSpouse={handleAddSpouse}
           onAddParent={handleAddParent}
-          onViewBirthFamily={handleViewBirthFamily}
+              onViewBirthFamily={handleViewBirthFamily}
       />
+          </div>
+        </div>
       </div>
 
       {/* Person Detail Modal */}
@@ -678,8 +653,8 @@ export default function TreePage() {
                   <div className="flex gap-3 mt-3">
                     <button
                       onClick={() => {
-                        setIsModalOpen(false);
-                        router.push(`/person/${selectedPerson.id}/edit`);
+                setIsModalOpen(false);
+                router.push(`/person/${selectedPerson.id}/edit`);
                       }}
                       className="flex-1 text-sm text-slate-600 hover:text-maroon-600 py-2"
                     >
@@ -687,8 +662,8 @@ export default function TreePage() {
                     </button>
                     <button
                       onClick={() => {
-                        setIsModalOpen(false);
-                        router.push(`/corrections/new?personId=${selectedPerson.id}`);
+                setIsModalOpen(false);
+                router.push(`/corrections/new?personId=${selectedPerson.id}`);
                       }}
                       className="flex-1 text-sm text-slate-600 hover:text-maroon-600 py-2"
                     >
@@ -698,21 +673,21 @@ export default function TreePage() {
                 )}
               </div>
 
-              {!isAuthenticated && (
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Lock className="w-5 h-5 text-amber-600" />
-                    <div>
-                      <p className="text-sm font-medium text-amber-800">Want to contribute?</p>
-                      <p className="text-xs text-amber-600">
-                        <Link href="/login" className="underline hover:text-amber-800">Sign in</Link> or{' '}
+            {!isAuthenticated && (
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Lock className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">Want to contribute?</p>
+                    <p className="text-xs text-amber-600">
+                      <Link href="/login" className="underline hover:text-amber-800">Sign in</Link> or{' '}
                         <Link href="/register" className="underline hover:text-amber-800">create an account</Link> to add family members.
-                      </p>
+                    </p>
                     </div>
                   </div>
                 </div>
               )}
-            </div>
+              </div>
           </div>
         )}
       </Modal>

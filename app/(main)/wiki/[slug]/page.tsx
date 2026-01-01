@@ -23,10 +23,46 @@ import {
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
-// Simple markdown renderer (basic implementation)
+// HTML escape function to prevent XSS
+function escapeHtml(text: string): string {
+  const htmlEntities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+  };
+  return text.replace(/[&<>"']/g, char => htmlEntities[char]);
+}
+
+// Validate URL to only allow safe protocols
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, 'https://example.com');
+    // Only allow http, https, and mailto protocols
+    return ['http:', 'https:', 'mailto:'].includes(parsed.protocol);
+  } catch {
+    // If URL parsing fails, check if it's a relative URL (starts with / or #)
+    return url.startsWith('/') || url.startsWith('#') || url.startsWith('./');
+  }
+}
+
+// Sanitize URL - returns safe URL or '#' for invalid ones
+function sanitizeUrl(url: string): string {
+  const trimmedUrl = url.trim();
+  if (isValidUrl(trimmedUrl)) {
+    return escapeHtml(trimmedUrl);
+  }
+  return '#';
+}
+
+// Simple markdown renderer with XSS protection
 function renderMarkdown(content: string): string {
-  return content
-    // Headers
+  // First, escape HTML in the content to prevent injection
+  let escaped = escapeHtml(content);
+  
+  return escaped
+    // Headers (content already escaped)
     .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold text-slate-900 mt-6 mb-3">$1</h3>')
     .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold text-slate-900 mt-8 mb-4">$1</h2>')
     .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold text-slate-900 mt-8 mb-4">$1</h1>')
@@ -34,12 +70,22 @@ function renderMarkdown(content: string): string {
     .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
     .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-maroon-600 hover:text-maroon-700 underline" target="_blank" rel="noopener">$1</a>')
-    // Images
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="rounded-lg my-4 max-w-full" />')
+    // Links - with URL validation
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
+      const safeUrl = sanitizeUrl(url);
+      return `<a href="${safeUrl}" class="text-maroon-600 hover:text-maroon-700 underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    })
+    // Images - with URL validation
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+      const safeUrl = sanitizeUrl(url);
+      // Only render image if URL is valid, otherwise show alt text
+      if (safeUrl === '#') {
+        return `[Image: ${alt}]`;
+      }
+      return `<img src="${safeUrl}" alt="${alt}" class="rounded-lg my-4 max-w-full" loading="lazy" />`;
+    })
     // Blockquotes
-    .replace(/^> (.*$)/gim, '<blockquote class="border-l-4 border-maroon-400 pl-4 py-2 my-4 bg-maroon-50 text-slate-700 italic">$1</blockquote>')
+    .replace(/^&gt; (.*$)/gim, '<blockquote class="border-l-4 border-maroon-400 pl-4 py-2 my-4 bg-maroon-50 text-slate-700 italic">$1</blockquote>')
     // Unordered lists
     .replace(/^\- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>')
     // Ordered lists

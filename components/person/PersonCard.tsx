@@ -34,7 +34,15 @@ export function PersonCard({
     ? calculateAge(new Date(person.birthDate), person.deathDate ? new Date(person.deathDate) : null)
     : null;
 
-  const facts = person.facts ? JSON.parse(person.facts) : [];
+  const facts = (() => {
+    if (!person.facts) return [];
+    try {
+      return JSON.parse(person.facts);
+    } catch {
+      console.error('Failed to parse facts JSON');
+      return [];
+    }
+  })();
 
   return (
     <Card className="overflow-hidden" padding="none">

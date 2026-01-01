@@ -186,10 +186,19 @@ interface NotablePersonCardProps {
   onClick?: () => void;
 }
 
+// Safe JSON parse with fallback
+function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
+  if (!json) return fallback;
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    console.error('Failed to parse JSON:', json);
+    return fallback;
+  }
+}
+
 function NotablePersonCard({ person, onClick }: NotablePersonCardProps) {
-  const achievements = person.notableAchievements 
-    ? JSON.parse(person.notableAchievements) 
-    : [];
+  const achievements = safeJsonParse<string[]>(person.notableAchievements, []);
 
   return (
     <div onClick={onClick} className="flex-shrink-0 w-80 snap-start cursor-pointer">

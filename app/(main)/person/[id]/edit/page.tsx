@@ -82,7 +82,15 @@ export default function EditPersonPage({ params }: PageProps) {
     deathDate: person.deathDate ? new Date(person.deathDate).toISOString().split('T')[0] : '',
     deathPlace: person.deathPlace || '',
     biography: person.biography || '',
-    facts: person.facts ? JSON.parse(person.facts) : [],
+    facts: (() => {
+      if (!person.facts) return [];
+      try {
+        return JSON.parse(person.facts);
+      } catch {
+        console.error('Failed to parse facts JSON');
+        return [];
+      }
+    })(),
     email: person.email || '',
     phone: person.phone || '',
     address: person.address || '',

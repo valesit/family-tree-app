@@ -24,6 +24,11 @@ import {
   Send,
   Mail,
   UserCheck,
+  LinkIcon,
+  Unlink,
+  CheckCircle2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -44,6 +49,14 @@ export default function PersonDetailPage({ params }: PageProps) {
   const [notableTitle, setNotableTitle] = useState('');
   const [notableDescription, setNotableDescription] = useState('');
   const [isSubmittingNotable, setIsSubmittingNotable] = useState(false);
+  
+  // Claim profile state
+  const [isClaimingProfile, setIsClaimingProfile] = useState(false);
+  
+  // Dispute profile state
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
@@ -164,6 +177,106 @@ export default function PersonDetailPage({ params }: PageProps) {
     }
   };
 
+  // Handle claiming profile
+  const handleClaimProfile = async () => {
+    if (!confirm(`Are you ${person.firstName} ${person.lastName}? This will link your account to this profile in the family tree.`)) {
+      return;
+    }
+
+    setIsClaimingProfile(true);
+    try {
+      const response = await fetch(`/api/persons/${id}/claim`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        mutate();
+        alert(result.message);
+      } else {
+        alert(result.error || 'Failed to claim profile');
+      }
+    } catch (error) {
+      console.error('Error claiming profile:', error);
+      alert('Failed to claim profile. Please try again.');
+    } finally {
+      setIsClaimingProfile(false);
+    }
+  };
+
+  // Handle unlinking profile (admin or self)
+  const handleUnlinkProfile = async () => {
+    if (!confirm('Are you sure you want to unlink this profile from the associated account?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/persons/${id}/claim`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        mutate();
+        alert('Profile unlinked successfully');
+      } else {
+        alert(result.error || 'Failed to unlink profile');
+      }
+    } catch (error) {
+      console.error('Error unlinking profile:', error);
+      alert('Failed to unlink profile');
+    }
+  };
+
+  // Check if current user is linked to this person
+  const isLinkedToCurrentUser = person?.userId === user?.id;
+
+  // Handle dispute submission
+  const handleSubmitDispute = async () => {
+    if (!disputeReason.trim()) {
+      alert('Please explain why you believe this is your profile');
+      return;
+    }
+
+    setIsSubmittingDispute(true);
+    try {
+      // Create a correction request for the dispute
+      const response = await fetch('/api/corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personId: id,
+          currentData: {
+            linkedUserId: person.userId,
+            disputeType: 'PROFILE_CLAIM_DISPUTE',
+          },
+          proposedData: {
+            requestedUserId: user?.id,
+            requestedUserEmail: user?.email,
+            requestedUserName: user?.name,
+          },
+          reason: `PROFILE DISPUTE: ${disputeReason}`,
+        }),
+      });
+
+      if (response.ok) {
+        setShowDisputeForm(false);
+        setDisputeReason('');
+        alert('Your dispute has been submitted. An admin will review it and contact you.');
+      } else {
+        const result = await response.json();
+        alert(result.error || 'Failed to submit dispute');
+      }
+    } catch (error) {
+      console.error('Error submitting dispute:', error);
+      alert('Failed to submit dispute. Please try again.');
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
   // Get family relationships
   const parents = person.parentRelations?.map(r => r.parent).filter(Boolean) || [];
   const children = person.childRelations?.map(r => r.child).filter(Boolean) || [];
@@ -251,6 +364,115 @@ export default function PersonDetailPage({ params }: PageProps) {
 
           {/* Sidebar - Family connections */}
           <div className="space-y-6">
+            {/* Claim / Link Profile Card */}
+            <Card className={`${
+              isLinkedToCurrentUser 
+                ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'
+                : person.userId
+                ? 'bg-slate-50 border-slate-200'
+                : 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200'
+            }`}>
+              <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                <LinkIcon className={`w-5 h-5 ${
+                  isLinkedToCurrentUser ? 'text-green-500' : person.userId ? 'text-slate-400' : 'text-purple-500'
+                }`} />
+                Profile Link
+              </h3>
+
+              {isLinkedToCurrentUser ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="text-sm font-medium">This is your profile</span>
+                  </div>
+                  <p className="text-xs text-green-600">
+                    Your account is linked to this family tree entry. You can receive messages from relatives.
+                  </p>
+                  <button
+                    onClick={handleUnlinkProfile}
+                    className="text-xs text-slate-500 hover:text-red-500 transition-colors flex items-center gap-1"
+                  >
+                    <Unlink className="w-3 h-3" />
+                    Unlink my account
+                  </button>
+                </div>
+              ) : person.userId ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-slate-600">
+                    This profile is linked to another account.
+                  </p>
+                  {isAdmin ? (
+                    <button
+                      onClick={handleUnlinkProfile}
+                      className="text-xs text-slate-500 hover:text-red-500 transition-colors flex items-center gap-1"
+                    >
+                      <Unlink className="w-3 h-3" />
+                      Unlink profile (Admin)
+                    </button>
+                  ) : isAuthenticated && (
+                    <button
+                      onClick={() => setShowDisputeForm(true)}
+                      className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      Is this actually you? Report an issue
+                    </button>
+                  )}
+                </div>
+              ) : isAuthenticated ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Is this you? Link your account to this profile to:
+                  </p>
+                  <ul className="text-xs text-slate-500 space-y-1 ml-4">
+                    <li>• Receive messages from relatives</li>
+                    <li>• Get notified of family updates</li>
+                    <li>• Easily edit your own information</li>
+                  </ul>
+                  <Button
+                    fullWidth
+                    onClick={handleClaimProfile}
+                    isLoading={isClaimingProfile}
+                    className="bg-purple-500 hover:bg-purple-600"
+                  >
+                    <LinkIcon className="w-4 h-4 mr-2" />
+                    This is Me - Link My Account
+                  </Button>
+                  <p className="text-xs text-green-600 text-center">
+                    ✓ Instant linking - no approval needed
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Is this you in the family tree?
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Create an account to claim this profile and connect with your family.
+                  </p>
+                  <ul className="text-xs text-slate-500 space-y-1 ml-4">
+                    <li>• Receive messages from relatives</li>
+                    <li>• Get notified of family updates</li>
+                    <li>• Easily edit your own information</li>
+                  </ul>
+                  <Link href={`/register?claimPersonId=${id}&name=${encodeURIComponent(person.firstName + ' ' + person.lastName)}`}>
+                    <Button
+                      fullWidth
+                      className="bg-purple-500 hover:bg-purple-600"
+                    >
+                      <UserCheck className="w-4 h-4 mr-2" />
+                      Create Account & Claim Profile
+                    </Button>
+                  </Link>
+                  <p className="text-xs text-slate-400 text-center">
+                    Already have an account?{' '}
+                    <Link href={`/login?callbackUrl=/person/${id}`} className="text-purple-600 hover:underline">
+                      Sign in
+                    </Link>
+                  </p>
+                </div>
+              )}
+            </Card>
+
             {/* Contact / Message Card */}
             <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
               <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
@@ -559,6 +781,83 @@ export default function PersonDetailPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {/* Dispute Profile Modal */}
+      {showDisputeForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Dispute Profile Link</h3>
+                    <p className="text-xs text-slate-500">Report incorrect profile ownership</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowDisputeForm(false);
+                    setDisputeReason('');
+                  }}
+                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-slate-50 rounded-lg text-sm text-slate-600">
+                  <p>
+                    This profile is currently linked to another account. If you believe this is 
+                    actually your profile in the family tree, please explain why and an admin 
+                    will review your request.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Why do you believe this is your profile?
+                  </label>
+                  <textarea
+                    value={disputeReason}
+                    onChange={(e) => setDisputeReason(e.target.value)}
+                    placeholder="e.g., This is my name and birth date. I can verify my identity with..."
+                    rows={4}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setShowDisputeForm(false);
+                      setDisputeReason('');
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSubmitDispute}
+                    isLoading={isSubmittingDispute}
+                    className="flex-1 bg-amber-500 hover:bg-amber-600"
+                  >
+                    Submit Dispute
+                  </Button>
+                </div>
+
+                <p className="text-xs text-slate-400 text-center">
+                  An admin will review your request and may contact you for verification.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

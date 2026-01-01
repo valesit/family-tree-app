@@ -1,16 +1,23 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Mail, Phone, Lock, User, TreePine, CheckCircle } from 'lucide-react';
+import { Mail, Phone, Lock, User, TreePine, CheckCircle, LinkIcon } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
 import { registerSchema, RegisterInput } from '@/lib/validators';
+import { signIn } from 'next-auth/react';
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Check if user is claiming a profile
+  const claimPersonId = searchParams.get('claimPersonId');
+  const claimPersonName = searchParams.get('name');
+  
   const [registerMethod, setRegisterMethod] = useState<'email' | 'phone'>('email');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,7 +34,7 @@ export default function RegisterPage() {
       phone: '',
       password: '',
       confirmPassword: '',
-      name: '',
+      name: claimPersonName || '',
     },
   });
 
@@ -36,6 +43,7 @@ export default function RegisterPage() {
     setError(null);
 
     try {
+      // Register the user
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -43,6 +51,7 @@ export default function RegisterPage() {
           ...data,
           email: registerMethod === 'email' ? data.email : undefined,
           phone: registerMethod === 'phone' ? data.phone : undefined,
+          claimPersonId, // Pass the person ID to claim
         }),
       });
 
@@ -53,9 +62,35 @@ export default function RegisterPage() {
       }
 
       setSuccess(true);
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
+      
+      // If claiming a profile, sign in and redirect to the profile
+      if (claimPersonId) {
+        const signInResult = await signIn('credentials', {
+          email: registerMethod === 'email' ? data.email : undefined,
+          phone: registerMethod === 'phone' ? data.phone : undefined,
+          password: data.password,
+          redirect: false,
+        });
+
+        if (signInResult?.ok) {
+          // Claim the profile
+          await fetch(`/api/persons/${claimPersonId}/claim`, {
+            method: 'POST',
+          });
+          
+          setTimeout(() => {
+            router.push(`/person/${claimPersonId}`);
+          }, 1500);
+        } else {
+          setTimeout(() => {
+            router.push('/login');
+          }, 2000);
+        }
+      } else {
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -67,12 +102,17 @@ export default function RegisterPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-rose-50 to-amber-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-maroon-100 rounded-full mb-4">
-            <CheckCircle className="w-8 h-8 text-maroon-600" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+            <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Account Created!</h2>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">
+            {claimPersonId ? 'Welcome to the Family!' : 'Account Created!'}
+          </h2>
           <p className="text-slate-500">
-            Your account has been created successfully. Redirecting you to login...
+            {claimPersonId 
+              ? `Your account has been created and linked to ${claimPersonName || 'your profile'}. Redirecting...`
+              : 'Your account has been created successfully. Redirecting you to login...'
+            }
           </p>
         </Card>
       </div>
@@ -88,13 +128,37 @@ export default function RegisterPage() {
       </div>
 
       <Card className="w-full max-w-md relative z-10 shadow-2xl border-0">
+        {/* Claiming profile banner */}
+        {claimPersonId && (
+          <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                <LinkIcon className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-purple-900">Claiming Profile</p>
+                <p className="text-xs text-purple-600">
+                  Creating account for <strong>{claimPersonName || 'family member'}</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Logo */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-2xl mb-4 shadow-lg shadow-maroon-500/30">
             <TreePine className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Join Your Family Tree</h1>
-          <p className="text-slate-500 mt-1">Create an account to get started</p>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {claimPersonId ? 'Create Your Account' : 'Join Your Family Tree'}
+          </h1>
+          <p className="text-slate-500 mt-1">
+            {claimPersonId 
+              ? 'Sign up to connect with your family'
+              : 'Create an account to get started'
+            }
+          </p>
         </div>
 
         {/* Register method toggle */}
@@ -205,12 +269,29 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-maroon-600 hover:text-maroon-700 font-medium">
+          <Link 
+            href={claimPersonId ? `/login?callbackUrl=/person/${claimPersonId}` : '/login'} 
+            className="text-maroon-600 hover:text-maroon-700 font-medium"
+          >
             Sign in
           </Link>
         </p>
       </Card>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-rose-50 to-amber-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <div className="animate-pulse">Loading...</div>
+        </Card>
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }
 
