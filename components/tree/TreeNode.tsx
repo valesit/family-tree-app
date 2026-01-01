@@ -1,6 +1,6 @@
 'use client';
 
-import { TreeNode as TreeNodeType } from '@/types';
+import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
 import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink } from 'lucide-react';
@@ -57,11 +57,32 @@ export function TreeNode({
     );
   };
 
-  const spouseHasBirthFamily = node.spouse?.attributes?.maidenName && 
-    node.spouse.attributes.maidenName !== node.spouse.lastName;
+  // Get all spouses (multiple wives/husbands support)
+  const allSpouses = node.spouses || (node.spouse ? [node.spouse] : []);
+  const hasMultipleSpouses = allSpouses.length > 1;
+
+  // Check if a spouse has birth family info
+  const checkBirthFamily = (spouse: TreeNodeType) => 
+    spouse.attributes?.maidenName && spouse.attributes.maidenName !== spouse.lastName;
+
+  // Get marriage order label
+  const getMarriageLabel = (order?: number, totalSpouses?: number) => {
+    if (!order || !totalSpouses || totalSpouses <= 1) return null;
+    const ordinalSuffixes = ['', '1st', '2nd', '3rd', '4th', '5th'];
+    return ordinalSuffixes[order] || `${order}th`;
+  };
 
   // Person Card Component
-  const PersonCard = ({ person, isSpouse = false }: { person: TreeNodeType; isSpouse?: boolean }) => (
+  const PersonCard = ({ person, isSpouse = false, marriageOrder, totalSpouses }: { 
+    person: TreeNodeType | SpouseNode; 
+    isSpouse?: boolean;
+    marriageOrder?: number;
+    totalSpouses?: number;
+  }) => {
+    const spouseHasBirthFamily = isSpouse && checkBirthFamily(person);
+    const marriageLabel = getMarriageLabel(marriageOrder, totalSpouses);
+    
+    return (
     <button
       type="button"
       data-clickable="true"
@@ -83,8 +104,15 @@ export function TreeNode({
         </div>
       )}
 
+      {/* Marriage order badge for multiple spouses */}
+      {isSpouse && marriageLabel && (
+        <div className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[8px] font-bold rounded-full z-10">
+          {marriageLabel}
+        </div>
+      )}
+
       {/* Birth family badge for spouse */}
-      {isSpouse && spouseHasBirthFamily && (
+      {spouseHasBirthFamily && (
         <div 
           className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-purple-500 text-white text-[8px] font-medium rounded-full whitespace-nowrap cursor-pointer hover:bg-purple-600 flex items-center gap-0.5 z-10"
           onClick={(e) => {
@@ -118,9 +146,16 @@ export function TreeNode({
             {person.attributes.deathYear && ` - ${person.attributes.deathYear}`}
           </p>
         )}
+        {/* Marriage date for spouses */}
+        {isSpouse && 'marriageDate' in person && person.marriageDate && (
+          <p className="text-rose-400 text-[9px] mt-0.5">
+            m. {new Date(person.marriageDate).getFullYear()}
+          </p>
+        )}
       </div>
     </button>
   );
+  };
 
   return (
     <div className="flex flex-col items-center">
@@ -142,7 +177,7 @@ export function TreeNode({
         </div>
       )}
 
-      {/* Couple container */}
+      {/* Couple container - supports multiple spouses */}
       <div className="flex items-center gap-2">
         {/* Main person */}
         <div className="relative">
@@ -160,37 +195,56 @@ export function TreeNode({
           </button>
         </div>
 
-        {/* Marriage connector */}
-        {node.spouse && (
-          <>
+        {/* Render all spouses with marriage connectors */}
+        {allSpouses.map((spouse, index) => (
+          <div key={spouse.id} className="flex items-center">
+            {/* Marriage connector */}
             <div className="flex items-center">
               <svg width="20" height="2">
                 <line x1="0" y1="1" x2="20" y2="1" stroke="#f43f5e" strokeWidth="2" />
               </svg>
-              <Heart className="w-5 h-5 text-rose-500 mx-0.5" fill="currentColor" />
+              <div className="relative">
+                <Heart className="w-5 h-5 text-rose-500 mx-0.5" fill="currentColor" />
+                {/* Show marriage number if multiple spouses */}
+                {hasMultipleSpouses && (
+                  <span className="absolute -top-1 -right-1 text-[8px] font-bold text-rose-600">
+                    {index + 1}
+                  </span>
+                )}
+              </div>
               <svg width="20" height="2">
                 <line x1="0" y1="1" x2="20" y2="1" stroke="#f43f5e" strokeWidth="2" />
               </svg>
             </div>
-            <PersonCard person={node.spouse} isSpouse />
-          </>
-        )}
+            <PersonCard 
+              person={spouse} 
+              isSpouse 
+              marriageOrder={'marriageOrder' in spouse ? spouse.marriageOrder : index + 1}
+              totalSpouses={allSpouses.length}
+            />
+          </div>
+        ))}
 
-        {/* Add spouse placeholder */}
-        {!node.spouse && (
-          <>
-            <svg width="16" height="2">
-              <line x1="0" y1="1" x2="16" y2="1" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
-            </svg>
-            <button
-              onClick={() => onAddSpouse(node.id)}
-              className="flex flex-col items-center justify-center w-[100px] h-[100px] border-2 border-dashed border-slate-300 rounded-xl text-slate-400 hover:border-maroon-400 hover:text-maroon-500 transition-colors bg-slate-50/50"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="text-[10px] mt-1">Spouse</span>
-            </button>
-          </>
-        )}
+        {/* Add spouse button - always visible to allow adding more spouses */}
+        <div className="flex items-center">
+          <svg width="16" height="2">
+            <line x1="0" y1="1" x2="16" y2="1" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
+          </svg>
+          <button
+            onClick={() => onAddSpouse(node.id)}
+            className={clsx(
+              'flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-colors bg-slate-50/50',
+              'hover:border-maroon-400 hover:text-maroon-500',
+              allSpouses.length === 0 
+                ? 'w-[100px] h-[100px] border-slate-300 text-slate-400'
+                : 'w-14 h-14 border-slate-200 text-slate-300'
+            )}
+            title={allSpouses.length > 0 ? "Add another spouse" : "Add spouse"}
+          >
+            <Plus className={allSpouses.length === 0 ? "w-4 h-4" : "w-3 h-3"} />
+            {allSpouses.length === 0 && <span className="text-[10px] mt-1">Spouse</span>}
+          </button>
+        </div>
       </div>
 
       {/* Children section */}

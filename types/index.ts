@@ -98,7 +98,8 @@ export interface TreeNode {
   profileImage?: string;
   isLiving: boolean;
   children?: TreeNode[];
-  spouse?: TreeNode;
+  spouse?: TreeNode;  // Legacy single spouse (for backward compatibility)
+  spouses?: SpouseNode[];  // Multiple spouses support
   attributes?: {
     birthYear?: string;
     deathYear?: string;
@@ -106,6 +107,14 @@ export interface TreeNode {
     maidenName?: string;
     birthFamilyId?: string;
   };
+}
+
+// Spouse with marriage details
+export interface SpouseNode extends TreeNode {
+  marriageDate?: string;
+  divorceDate?: string;
+  marriageOrder?: number;  // 1 = first wife, 2 = second wife, etc.
+  marriageNotes?: string;
 }
 
 export interface FamilyTreeData {

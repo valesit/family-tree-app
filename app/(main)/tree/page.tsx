@@ -11,7 +11,7 @@ import { TreeNode, PersonWithRelations, SessionUser } from '@/types';
 import { 
   Loader2, AlertCircle, Users, TreePine, Calendar, Heart, Lock, 
   Maximize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
-  ChevronUp, ChevronDown, X, UserPlus
+  ChevronUp, ChevronDown, X, UserPlus, Pencil, Save
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -44,9 +44,15 @@ export default function TreePage() {
   const [selectedPerson, setSelectedPerson] = useState<PersonWithRelations | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExpandedViewOpen, setIsExpandedViewOpen] = useState(false);
+  
+  // Family name edit state
+  const [isEditingFamilyName, setIsEditingFamilyName] = useState(false);
+  const [editedFamilyName, setEditedFamilyName] = useState('');
+  const [isSavingFamilyName, setIsSavingFamilyName] = useState(false);
 
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
+  const isAdmin = user?.role === 'ADMIN';
 
   const { data, error, isLoading, mutate } = useSWR<{
     success: boolean;
@@ -118,6 +124,43 @@ export default function TreePage() {
     }
   };
 
+  // Handle saving edited family name
+  const handleSaveFamilyName = async () => {
+    if (!data?.data?.rootPersonId || !editedFamilyName.trim()) return;
+    
+    setIsSavingFamilyName(true);
+    try {
+      const response = await fetch('/api/family', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rootPersonId: data.data.rootPersonId,
+          name: editedFamilyName.trim(),
+        }),
+      });
+      
+      if (response.ok) {
+        // Refresh tree data to get updated family name
+        mutate();
+        setIsEditingFamilyName(false);
+      } else {
+        const result = await response.json();
+        alert(result.error || 'Failed to save family name');
+      }
+    } catch (error) {
+      console.error('Error saving family name:', error);
+      alert('Failed to save family name');
+    } finally {
+      setIsSavingFamilyName(false);
+    }
+  };
+
+  // Start editing family name
+  const handleStartEditFamilyName = () => {
+    setEditedFamilyName(familyName || '');
+    setIsEditingFamilyName(true);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
@@ -165,10 +208,52 @@ export default function TreePage() {
             <div className="flex items-center justify-center w-24 h-24 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-2xl shadow-lg">
               <TreePine className="w-12 h-12 text-white" />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">
-                {familyName || 'Family'} Tree
-              </h1>
+            <div className="flex-1">
+              {isEditingFamilyName ? (
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={editedFamilyName}
+                    onChange={(e) => setEditedFamilyName(e.target.value)}
+                    className="flex-1 text-2xl font-bold text-slate-900 px-3 py-2 border-2 border-maroon-300 rounded-lg focus:border-maroon-500 focus:outline-none"
+                    placeholder="e.g., Sithole/Mutseyami Family"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSaveFamilyName}
+                    disabled={isSavingFamilyName || !editedFamilyName.trim()}
+                    className="flex items-center gap-2 px-4 py-2 bg-maroon-600 text-white rounded-lg hover:bg-maroon-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSavingFamilyName ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditingFamilyName(false)}
+                    className="px-4 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <h1 className="text-3xl font-bold text-slate-900">
+                    {familyName || 'Family'} Tree
+                  </h1>
+                  {isAdmin && (
+                    <button
+                      onClick={handleStartEditFamilyName}
+                      className="p-2 text-slate-400 hover:text-maroon-600 hover:bg-maroon-50 rounded-lg transition-colors"
+                      title="Edit family name"
+                    >
+                      <Pencil className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              )}
               <p className="text-slate-500 mt-1">Family Heritage & Legacy</p>
               {stats && (
                 <p className="text-sm text-maroon-600 mt-2">

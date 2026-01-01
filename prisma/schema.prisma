@@ -406,6 +406,26 @@ enum ActivityType {
 }
 
 // ============================================
+// FAMILY METADATA
+// ============================================
+
+// Family metadata for customizable family information
+model Family {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Sithole/Mutseyami Family"
+  description String?  @db.Text
+  motto       String?
+  crestImage  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Link to the root/founding person of this family tree
+  rootPersonId String  @unique
+  
+  @@index([rootPersonId])
+}
+
+// ============================================
 // FAMILY WIKI
 // ============================================
 

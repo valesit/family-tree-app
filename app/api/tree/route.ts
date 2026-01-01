@@ -70,16 +70,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get spouse surname for family name
-    const spouseRelation = relationships.find(
-      r => r.type === 'SPOUSE' && (r.spouse1Id === rootId || r.spouse2Id === rootId)
-    );
-    let familyName = rootPerson.lastName;
-    if (spouseRelation) {
-      const spouseId = spouseRelation.spouse1Id === rootId ? spouseRelation.spouse2Id : spouseRelation.spouse1Id;
-      const spouse = persons.find(p => p.id === spouseId);
-      if (spouse && spouse.lastName !== rootPerson.lastName) {
-        familyName = `${rootPerson.lastName}/${spouse.lastName}`;
+    // Check for custom family name first
+    const familySettings = await prisma.family.findUnique({
+      where: { rootPersonId: rootId },
+    });
+
+    let familyName = familySettings?.name || null;
+
+    // If no custom name, generate from surnames
+    if (!familyName) {
+      const spouseRelation = relationships.find(
+        r => r.type === 'SPOUSE' && (r.spouse1Id === rootId || r.spouse2Id === rootId)
+      );
+      familyName = rootPerson.lastName;
+      if (spouseRelation) {
+        const spouseId = spouseRelation.spouse1Id === rootId ? spouseRelation.spouse2Id : spouseRelation.spouse1Id;
+        const spouse = persons.find(p => p.id === spouseId);
+        if (spouse && spouse.lastName !== rootPerson.lastName) {
+          familyName = `${rootPerson.lastName}/${spouse.lastName}`;
+        }
       }
     }
 
