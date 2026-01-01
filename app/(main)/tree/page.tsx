@@ -590,7 +590,7 @@ export default function TreePage() {
               )}
 
               {/* Notable info if applicable */}
-              {selectedPerson.isNotable && (
+              {selectedPerson.isNotable ? (
                 <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200">
                   <div className="flex items-center gap-2 mb-2">
                     <Award className="w-5 h-5 text-amber-500" />
@@ -600,6 +600,17 @@ export default function TreePage() {
                     <p className="text-sm text-amber-700">{selectedPerson.notableDescription}</p>
                   )}
                 </div>
+              ) : isAdmin && (
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    router.push(`/person/${selectedPerson.id}#notable`);
+                  }}
+                  className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl hover:bg-amber-100 transition-colors text-sm"
+                >
+                  <Award className="w-4 h-4" />
+                  Mark as Notable Person
+                </button>
               )}
 
               {/* Action buttons */}
