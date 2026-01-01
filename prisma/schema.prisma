@@ -35,6 +35,13 @@ model User {
   notifications     Notification[]
   activities        Activity[]
 
+  // Wiki relations
+  wikiArticles      WikiArticle[]     @relation("WikiAuthor")
+  wikiComments      WikiComment[]     @relation("WikiCommentAuthor")
+  
+  // Notable nominations
+  notableNominations NotableNomination[] @relation("NominationCreator")
+
   @@index([email])
   @@index([phone])
 }
@@ -106,6 +113,12 @@ model Person {
   updatedAt   DateTime  @updatedAt
   createdById String?
 
+  // Notable person fields (set when nomination is approved)
+  isNotable          Boolean  @default(false)
+  notableTitle       String?  // e.g., "Community Leader", "Philanthropist"
+  notableDescription String?  @db.Text
+  notableAchievements String? @db.Text // JSON array of achievements
+
   // Link to user account (optional)
   userId String? @unique
   user   User?   @relation("UserPerson", fields: [userId], references: [id])
@@ -122,9 +135,12 @@ model Person {
   spouseRelations2  Relationship[]      @relation("Spouse2Relation")
   pendingChanges    PendingChange[]
   corrections       CorrectionRequest[]
+  wikiArticles      WikiArticle[]       @relation("PersonWikiArticles")
+  notableNominations NotableNomination[] @relation("NotableNominations")
 
   @@index([firstName, lastName])
   @@index([userId])
+  @@index([isNotable])
 }
 
 enum Gender {
@@ -354,6 +370,12 @@ enum NotificationType {
   NEW_MESSAGE
   NEW_FAMILY_MEMBER
   WELCOME
+  WIKI_ARTICLE_PUBLISHED
+  WIKI_COMMENT_REPLY
+  NOTABLE_NOMINATION_SUBMITTED
+  NOTABLE_NOMINATION_APPROVED
+  NOTABLE_NOMINATION_REJECTED
+  RELATIVE_SUGGESTION
 }
 
 // Activity log for the family tree
@@ -378,4 +400,119 @@ enum ActivityType {
   IMAGE_UPLOADED
   USER_JOINED
   APPROVAL_COMPLETED
+  WIKI_ARTICLE_CREATED
+  WIKI_ARTICLE_UPDATED
+  NOTABLE_NOMINATION
+}
+
+// ============================================
+// FAMILY WIKI
+// ============================================
+
+// Wiki articles for the family
+model WikiArticle {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  content     String   @db.Text
+  excerpt     String?  @db.Text
+  coverImage  String?
+  isPublished Boolean  @default(false)
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Author
+  authorId String
+  author   User   @relation("WikiAuthor", fields: [authorId], references: [id])
+
+  // Optional: Link to a specific person this article is about
+  aboutPersonId String?
+  aboutPerson   Person? @relation("PersonWikiArticles", fields: [aboutPersonId], references: [id], onDelete: SetNull)
+
+  // Relations
+  comments WikiComment[]
+  tags     WikiTag[]
+
+  @@index([authorId])
+  @@index([aboutPersonId])
+  @@index([isPublished])
+  @@index([createdAt])
+}
+
+// Comments on wiki articles
+model WikiComment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Author
+  authorId String
+  author   User   @relation("WikiCommentAuthor", fields: [authorId], references: [id])
+
+  // Article
+  articleId String
+  article   WikiArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  // Parent comment for replies
+  parentId String?
+  parent   WikiComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  WikiComment[] @relation("CommentReplies")
+
+  @@index([authorId])
+  @@index([articleId])
+  @@index([parentId])
+}
+
+// Tags for wiki articles
+model WikiTag {
+  id       String        @id @default(cuid())
+  name     String        @unique
+  articles WikiArticle[]
+}
+
+// ============================================
+// NOTABLE PERSONS
+// ============================================
+
+// Nominations for notable family members (requires approval)
+model NotableNomination {
+  id          String         @id @default(cuid())
+  title       String         // e.g., "Community Leader", "Philanthropist"
+  description String         @db.Text
+  achievements String?       @db.Text // JSON array of achievements
+  status      ApprovalStatus @default(PENDING)
+  adminComment String?       @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Who nominated
+  nominatedById String
+  nominatedBy   User   @relation("NominationCreator", fields: [nominatedById], references: [id])
+
+  // Who is being nominated
+  personId String
+  person   Person @relation("NotableNominations", fields: [personId], references: [id], onDelete: Cascade)
+
+  // Images showcasing their work/achievements
+  images NotableImage[]
+
+  @@index([nominatedById])
+  @@index([personId])
+  @@index([status])
+}
+
+// Images for notable person nominations
+model NotableImage {
+  id          String   @id @default(cuid())
+  url         String
+  caption     String?
+  displayOrder Int     @default(0)
+  uploadedAt  DateTime @default(now())
+
+  nominationId String
+  nomination   NotableNomination @relation(fields: [nominationId], references: [id], onDelete: Cascade)
+
+  @@index([nominationId])
 }

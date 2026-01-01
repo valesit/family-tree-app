@@ -44,7 +44,7 @@ export default function PersonDetailPage({ params }: PageProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
       </div>
     );
   }
@@ -255,7 +255,7 @@ export default function PersonDetailPage({ params }: PageProps) {
             {children.length > 0 && (
               <Card>
                 <h3 className="font-semibold text-slate-900 mb-4 flex items-center">
-                  <Users className="w-5 h-5 mr-2 text-emerald-400" />
+                  <Users className="w-5 h-5 mr-2 text-maroon-400" />
                   Children ({children.length})
                 </h3>
                 <div className="space-y-2">
@@ -287,8 +287,8 @@ export default function PersonDetailPage({ params }: PageProps) {
 
             {/* Add family member (authenticated only) */}
             {isAuthenticated && (
-              <Card className="bg-emerald-50 border-emerald-200">
-                <h3 className="font-semibold text-emerald-900 mb-3">
+              <Card className="bg-maroon-50 border-maroon-200">
+                <h3 className="font-semibold text-maroon-900 mb-3">
                   Add Family Member
                 </h3>
                 <div className="space-y-2">

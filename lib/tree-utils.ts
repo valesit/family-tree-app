@@ -36,6 +36,7 @@ export function buildFamilyTree(
         birthYear: person.birthDate ? new Date(person.birthDate).getFullYear().toString() : undefined,
         deathYear: person.deathDate ? new Date(person.deathDate).getFullYear().toString() : undefined,
         occupation: person.occupation || undefined,
+        maidenName: person.maidenName || undefined,
       },
     };
 
@@ -77,6 +78,12 @@ export function buildFamilyTree(
             deathDate: spousePerson.deathDate?.toISOString(),
             profileImage: spousePerson.profileImage?.url,
             isLiving: spousePerson.isLiving,
+            attributes: {
+              birthYear: spousePerson.birthDate ? new Date(spousePerson.birthDate).getFullYear().toString() : undefined,
+              deathYear: spousePerson.deathDate ? new Date(spousePerson.deathDate).getFullYear().toString() : undefined,
+              occupation: spousePerson.occupation || undefined,
+              maidenName: spousePerson.maidenName || undefined,
+            },
           };
         }
       }

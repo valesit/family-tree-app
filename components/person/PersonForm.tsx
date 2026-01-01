@@ -111,7 +111,7 @@ export function PersonForm({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute bottom-0 right-0 p-2 bg-emerald-500 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-colors"
+              className="absolute bottom-0 right-0 p-2 bg-maroon-500 text-white rounded-full shadow-lg hover:bg-maroon-600 transition-colors"
             >
               <Camera className="w-4 h-4" />
             </button>
@@ -197,7 +197,7 @@ export function PersonForm({
             <input
               type="checkbox"
               id="isLiving"
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
               {...register('isLiving')}
             />
             <label htmlFor="isLiving" className="ml-2 text-sm text-slate-600">
@@ -265,7 +265,7 @@ export function PersonForm({
             <input
               type="checkbox"
               id="isPrivate"
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
               {...register('isPrivate')}
             />
             <label htmlFor="isPrivate" className="ml-2 text-sm text-slate-600">

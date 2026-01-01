@@ -29,11 +29,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variants = {
       primary:
-        'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 focus:ring-emerald-500 shadow-lg shadow-emerald-500/25',
+        'bg-gradient-to-r from-maroon-500 to-maroon-700 text-white hover:from-maroon-600 hover:to-maroon-800 focus:ring-maroon-500 shadow-lg shadow-maroon-500/25',
       secondary:
         'bg-slate-800 text-white hover:bg-slate-700 focus:ring-slate-500',
       outline:
-        'border-2 border-emerald-600 text-emerald-600 hover:bg-emerald-50 focus:ring-emerald-500',
+        'border-2 border-maroon-500 text-maroon-500 hover:bg-maroon-50 focus:ring-maroon-500',
       ghost:
         'text-slate-600 hover:bg-slate-100 focus:ring-slate-500',
       danger:

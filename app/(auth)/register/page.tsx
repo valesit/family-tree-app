@@ -65,10 +65,10 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-rose-50 to-amber-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-4">
-            <CheckCircle className="w-8 h-8 text-emerald-600" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-maroon-100 rounded-full mb-4">
+            <CheckCircle className="w-8 h-8 text-maroon-600" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">Account Created!</h2>
           <p className="text-slate-500">
@@ -80,17 +80,17 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-rose-50 to-amber-50 flex items-center justify-center p-4">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse animation-delay-2000" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-maroon-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-maroon-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse animation-delay-2000" />
       </div>
 
       <Card className="w-full max-w-md relative z-10 shadow-2xl border-0">
         {/* Logo */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl mb-4 shadow-lg shadow-emerald-500/30">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-2xl mb-4 shadow-lg shadow-maroon-500/30">
             <TreePine className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Join Your Family Tree</h1>
@@ -183,16 +183,16 @@ export default function RegisterPage() {
           <div className="flex items-start">
             <input
               type="checkbox"
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 mt-0.5"
+              className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500 mt-0.5"
               required
             />
             <span className="ml-2 text-sm text-slate-600">
               I agree to the{' '}
-              <Link href="/terms" className="text-emerald-600 hover:text-emerald-700">
+              <Link href="/terms" className="text-maroon-600 hover:text-maroon-700">
                 Terms of Service
               </Link>{' '}
               and{' '}
-              <Link href="/privacy" className="text-emerald-600 hover:text-emerald-700">
+              <Link href="/privacy" className="text-maroon-600 hover:text-maroon-700">
                 Privacy Policy
               </Link>
             </span>
@@ -205,7 +205,7 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-emerald-600 hover:text-emerald-700 font-medium">
+          <Link href="/login" className="text-maroon-600 hover:text-maroon-700 font-medium">
             Sign in
           </Link>
         </p>

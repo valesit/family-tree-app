@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
-import { MessageList, MessageInput } from '@/components/messages';
+import { MessageList, MessageInput, RelativeDiscovery } from '@/components/messages';
 import { Card, Avatar, Input } from '@/components/ui';
 import { MessageWithUsers, SessionUser } from '@/types';
 import { 
@@ -147,7 +147,7 @@ function MessagesContent() {
                   key={contact.user.id}
                   onClick={() => setSelectedContact(contact.user)}
                   className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors ${
-                    selectedContact?.id === contact.user.id ? 'bg-emerald-50' : ''
+                    selectedContact?.id === contact.user.id ? 'bg-maroon-50' : ''
                   }`}
                 >
                   <div className="relative">
@@ -156,7 +156,7 @@ function MessagesContent() {
                       name={contact.user.name || 'User'}
                       size="md"
                     />
-                    <Circle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-emerald-500 fill-emerald-500" />
+                    <Circle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-maroon-500 fill-maroon-500" />
                   </div>
                   <div className="flex-1 text-left min-w-0">
                     <div className="flex items-center justify-between">
@@ -172,12 +172,30 @@ function MessagesContent() {
                     </p>
                   </div>
                   {!contact.lastMessage.isRead && (
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                    <div className="w-2 h-2 bg-maroon-500 rounded-full" />
                   )}
                 </button>
               ))}
             </div>
           )}
+
+          {/* Relative Discovery */}
+          <div className="p-4 border-t border-slate-200">
+            <RelativeDiscovery
+              onStartConversation={(userId) => {
+                // Find the user from the available users
+                const targetUser = availableUsers.find(u => u.id === userId);
+                if (targetUser) {
+                  setSelectedContact({
+                    id: targetUser.id,
+                    name: targetUser.name,
+                    email: null,
+                    image: targetUser.image || null,
+                  });
+                }
+              }}
+            />
+          </div>
 
           {/* New conversation section */}
           {availableUsers.length > 0 && (
@@ -226,7 +244,7 @@ function MessagesContent() {
                 <h2 className="font-semibold text-slate-900">
                   {selectedContact.name}
                 </h2>
-                <p className="text-xs text-emerald-600">Online</p>
+                <p className="text-xs text-maroon-600">Online</p>
               </div>
             </div>
 
@@ -242,8 +260,8 @@ function MessagesContent() {
         ) : (
           <div className="flex-1 flex items-center justify-center bg-slate-50">
             <div className="text-center">
-              <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MessageSquare className="w-10 h-10 text-emerald-500" />
+              <div className="w-20 h-20 bg-maroon-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-10 h-10 text-maroon-500" />
               </div>
               <h2 className="text-xl font-semibold text-slate-900 mb-2">
                 Your Messages
@@ -262,7 +280,7 @@ function MessagesContent() {
 function MessagesFallback() {
   return (
     <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+      <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
     </div>
   );
 }

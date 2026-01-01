@@ -39,7 +39,7 @@ export function PersonCard({
   return (
     <Card className="overflow-hidden" padding="none">
       {/* Header with gradient */}
-      <div className="relative h-32 bg-gradient-to-br from-emerald-500 to-teal-600">
+      <div className="relative h-32 bg-gradient-to-br from-maroon-500 to-maroon-600">
         <div className="absolute inset-0 bg-black/10" />
         {showActions && (
           <div className="absolute top-4 right-4 flex space-x-2">
@@ -72,7 +72,7 @@ export function PersonCard({
           className="ring-4 ring-white shadow-lg"
         />
         {person.isLiving ? (
-          <div className="absolute bottom-2 left-24 w-5 h-5 bg-emerald-500 rounded-full border-3 border-white" />
+          <div className="absolute bottom-2 left-24 w-5 h-5 bg-maroon-500 rounded-full border-3 border-white" />
         ) : (
           <div className="absolute bottom-2 left-24 w-5 h-5 bg-slate-400 rounded-full border-3 border-white flex items-center justify-center">
             <span className="text-white text-[10px]">†</span>
@@ -148,7 +148,7 @@ export function PersonCard({
               {person.email && (
                 <div className="flex items-center text-sm text-slate-600">
                   <Mail className="w-4 h-4 mr-3 text-slate-400" />
-                  <a href={`mailto:${person.email}`} className="text-emerald-600 hover:underline">
+                  <a href={`mailto:${person.email}`} className="text-maroon-600 hover:underline">
                     {person.email}
                   </a>
                 </div>
@@ -157,7 +157,7 @@ export function PersonCard({
               {person.phone && (
                 <div className="flex items-center text-sm text-slate-600">
                   <Phone className="w-4 h-4 mr-3 text-slate-400" />
-                  <a href={`tel:${person.phone}`} className="text-emerald-600 hover:underline">
+                  <a href={`tel:${person.phone}`} className="text-maroon-600 hover:underline">
                     {person.phone}
                   </a>
                 </div>
@@ -183,7 +183,7 @@ export function PersonCard({
             <ul className="space-y-2">
               {facts.map((fact: string, index: number) => (
                 <li key={index} className="flex items-start text-sm text-slate-600">
-                  <span className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
+                  <span className="w-5 h-5 bg-maroon-100 text-maroon-600 rounded-full flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
                     {index + 1}
                   </span>
                   {fact}

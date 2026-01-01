@@ -94,7 +94,7 @@ export function NotificationBell() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
+                  className="text-xs text-maroon-600 hover:text-maroon-700 font-medium flex items-center gap-1"
                 >
                   <CheckCheck className="w-4 h-4" />
                   Mark all read
@@ -128,7 +128,7 @@ export function NotificationBell() {
                         }}
                         className={clsx(
                           'block px-4 py-3 hover:bg-slate-50 transition-colors',
-                          !notification.isRead && 'bg-emerald-50/50'
+                          !notification.isRead && 'bg-maroon-50/50'
                         )}
                       >
                         <div className="flex items-start gap-3">
@@ -150,7 +150,7 @@ export function NotificationBell() {
                             </p>
                           </div>
                           {!notification.isRead && (
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2" />
+                            <div className="w-2 h-2 bg-maroon-500 rounded-full mt-2" />
                           )}
                         </div>
                       </Link>
@@ -165,7 +165,7 @@ export function NotificationBell() {
               <Link
                 href="/notifications"
                 onClick={() => setIsOpen(false)}
-                className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                className="text-sm text-maroon-600 hover:text-maroon-700 font-medium"
               >
                 View all notifications
               </Link>
