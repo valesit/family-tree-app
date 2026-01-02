@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
     const relativesMap = await findRelatives(userPerson.linkedPerson.id, maxDistance);
 
     // Get person details for relatives
-    const relativeIds = Array.from(relativesMap.keys()).filter((id) => {
+    const relativeIds = Array.from(relativesMap.keys()).filter((id: string) => {
       const rel = relativesMap.get(id)!;
       return rel.distance >= minDistance && rel.distance <= maxDistance;
     });

@@ -44,11 +44,11 @@ export function buildFamilyTree(
     // Get children if showing descendants
     if (direction === 'descendants' || direction === 'both') {
       const childRelations = relationships.filter(
-        r => r.type === 'PARENT_CHILD' && r.parentId === personId
+        (r: Relationship) => r.type === 'PARENT_CHILD' && r.parentId === personId
       );
       
       const children = childRelations
-        .map(r => buildNode(r.childId!, depth + 1))
+        .map((r: Relationship) => buildNode(r.childId!, depth + 1))
         .filter((c): c is TreeNode => c !== null);
 
       if (children.length > 0) {
@@ -58,8 +58,8 @@ export function buildFamilyTree(
 
     // Get ALL spouses (supports polygamy)
     const spouseRelations = relationships
-      .filter(r => r.type === 'SPOUSE' && (r.spouse1Id === personId || r.spouse2Id === personId))
-      .sort((a, b) => {
+      .filter((r: Relationship) => r.type === 'SPOUSE' && (r.spouse1Id === personId || r.spouse2Id === personId))
+      .sort((a: Relationship, b: Relationship) => {
         // Sort by marriage date if available
         if (a.startDate && b.startDate) {
           return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
@@ -280,25 +280,25 @@ function getDirectConnections(personId: string, relationships: Relationship[]): 
  * Calculate statistics for the family tree
  */
 export function calculateTreeStats(persons: Person[], relationships: Relationship[]) {
-  const livingCount = persons.filter(p => p.isLiving).length;
-  const deceasedCount = persons.filter(p => !p.isLiving).length;
+  const livingCount = persons.filter((p: Person) => p.isLiving).length;
+  const deceasedCount = persons.filter((p: Person) => !p.isLiving).length;
   
-  const maleCount = persons.filter(p => p.gender === 'MALE').length;
-  const femaleCount = persons.filter(p => p.gender === 'FEMALE').length;
+  const maleCount = persons.filter((p: Person) => p.gender === 'MALE').length;
+  const femaleCount = persons.filter((p: Person) => p.gender === 'FEMALE').length;
   
-  const marriageCount = relationships.filter(r => r.type === 'SPOUSE').length;
+  const marriageCount = relationships.filter((r: Relationship) => r.type === 'SPOUSE').length;
   
   // Find oldest and youngest
-  const withBirthDate = persons.filter(p => p.birthDate);
-  const oldest = withBirthDate.reduce((oldest, current) => {
+  const withBirthDate = persons.filter((p: Person) => p.birthDate);
+  const oldest = withBirthDate.reduce((oldest: Person, current: Person) => {
     if (!oldest.birthDate) return current;
     if (!current.birthDate) return oldest;
     return current.birthDate < oldest.birthDate ? current : oldest;
   }, withBirthDate[0]);
   
   const youngestLiving = withBirthDate
-    .filter(p => p.isLiving)
-    .reduce((youngest, current) => {
+    .filter((p: Person) => p.isLiving)
+    .reduce((youngest: Person | null, current: Person) => {
       if (!youngest?.birthDate) return current;
       if (!current.birthDate) return youngest;
       return current.birthDate > youngest.birthDate ? current : youngest;
