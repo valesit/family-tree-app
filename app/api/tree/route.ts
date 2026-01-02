@@ -80,7 +80,8 @@ export async function GET(request: NextRequest) {
     // If no custom name, generate from surnames
     if (!familyName) {
       const spouseRelation = relationships.find(
-        r => r.type === 'SPOUSE' && (r.spouse1Id === rootId || r.spouse2Id === rootId)
+        (r: { type: string; spouse1Id: string | null; spouse2Id: string | null }) =>
+          r.type === 'SPOUSE' && (r.spouse1Id === rootId || r.spouse2Id === rootId)
       );
       familyName = rootPerson.lastName;
       if (spouseRelation) {
