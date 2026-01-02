@@ -277,12 +277,26 @@ export default function PersonDetailPage({ params }: PageProps) {
     }
   };
 
-  // Get family relationships
-  const parents = person.parentRelations?.map(r => r.parent).filter(Boolean) || [];
-  const children = person.childRelations?.map(r => r.child).filter(Boolean) || [];
+  // Get family relationships - using explicit types to satisfy TypeScript strict mode
+  type RelatedPerson = { 
+    id: string; 
+    firstName: string; 
+    lastName: string; 
+    profileImage?: { url: string } | null;
+    isLiving?: boolean;
+    birthDate?: Date | string | null;
+    deathDate?: Date | string | null;
+  };
+  type ParentRelation = { parent?: RelatedPerson | null };
+  type ChildRelation = { child?: RelatedPerson | null };
+  type SpouseRelation1 = { spouse2?: RelatedPerson | null };
+  type SpouseRelation2 = { spouse1?: RelatedPerson | null };
+  
+  const parents = person.parentRelations?.map((r: ParentRelation) => r.parent).filter(Boolean) || [];
+  const children = person.childRelations?.map((r: ChildRelation) => r.child).filter(Boolean) || [];
   const spouses = [
-    ...(person.spouseRelations1?.map(r => r.spouse2) || []),
-    ...(person.spouseRelations2?.map(r => r.spouse1) || []),
+    ...(person.spouseRelations1?.map((r: SpouseRelation1) => r.spouse2) || []),
+    ...(person.spouseRelations2?.map((r: SpouseRelation2) => r.spouse1) || []),
   ].filter(Boolean);
 
   return (
