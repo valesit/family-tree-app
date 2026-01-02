@@ -359,7 +359,7 @@ export default function PersonDetailPage({ params }: PageProps) {
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  {person.images.map((image) => (
+                  {person.images.map((image: { id: string; url: string; caption?: string | null }) => (
                     <div
                       key={image.id}
                       className="aspect-square rounded-lg overflow-hidden bg-slate-100"
