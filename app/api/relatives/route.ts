@@ -226,7 +226,7 @@ export async function GET(request: NextRequest) {
           hasAccount: !!person.user,
         };
       })
-      .sort((a, b) => {
+      .sort((a: RelativeSuggestion, b: RelativeSuggestion) => {
         // Prioritize those with accounts, then by distance
         if (a.hasAccount !== b.hasAccount) return a.hasAccount ? -1 : 1;
         return a.distance - b.distance;

@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       
       if (potentialRoots.length > 0) {
         // Sort by birth date (oldest first) or just take first one
-        const sorted = potentialRoots.sort((a, b) => {
+        const sorted = potentialRoots.sort((a: (typeof potentialRoots)[number], b: (typeof potentialRoots)[number]) => {
           if (!a.birthDate) return 1;
           if (!b.birthDate) return -1;
           return a.birthDate.getTime() - b.birthDate.getTime();
