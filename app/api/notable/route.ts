@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
     });
 
     await prisma.notification.createMany({
-      data: admins.map((admin) => ({
+      data: admins.map((admin: { id: string }) => ({
         type: 'NOTABLE_NOMINATION_SUBMITTED' as const,
         title: 'New Notable Person Nomination',
         message: `${user.name || 'A user'} nominated ${person.firstName} ${person.lastName} as "${title}"`,

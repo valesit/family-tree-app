@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     if (admins.length > 0) {
       await prisma.notification.createMany({
-        data: admins.map(admin => ({
+        data: admins.map((admin: { id: string }) => ({
           userId: admin.id,
           type: 'CORRECTION_REQUEST',
           title: 'New Correction Request',

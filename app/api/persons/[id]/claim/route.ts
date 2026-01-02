@@ -72,7 +72,7 @@ export async function POST(
 
     if (admins.length > 0) {
       await prisma.notification.createMany({
-        data: admins.map(admin => ({
+        data: admins.map((admin: { id: string }) => ({
           userId: admin.id,
           type: 'NEW_FAMILY_MEMBER',
           title: 'Profile Claimed',

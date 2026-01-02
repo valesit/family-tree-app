@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
       // Find the oldest person with no parents as root
       const childIds = new Set(
         relationships
-          .filter(r => r.type === 'PARENT_CHILD')
-          .map(r => r.childId)
+          .filter((r: { type: string }) => r.type === 'PARENT_CHILD')
+          .map((r: { childId: string | null }) => r.childId)
           .filter(Boolean)
       );
 

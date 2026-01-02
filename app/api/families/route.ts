@@ -55,7 +55,7 @@ export async function GET() {
         });
 
         // Get spouse surnames for the family name
-        const spouseSurnames = await getSpouseSurnames(founders.map(f => f.id), lastName);
+        const spouseSurnames = await getSpouseSurnames(founders.map((f: { id: string }) => f.id), lastName);
 
         // Create family name (e.g., "Sithole" or "Sithole/Moyo")
         const familyName = spouseSurnames.length > 0 
