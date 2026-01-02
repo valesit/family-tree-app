@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree, ExpandedTreeView } from '@/components/tree';
@@ -40,7 +40,6 @@ interface FoundingAncestor {
 
 export default function TreePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [selectedPerson, setSelectedPerson] = useState<PersonWithRelations | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,9 +54,6 @@ export default function TreePage() {
   const isAuthenticated = status === 'authenticated';
   const isAdmin = user?.role === 'ADMIN';
 
-  const rootIdParam = searchParams.get('rootId') || searchParams.get('rootPersonId');
-  const treeApiUrl = rootIdParam ? `/api/tree?rootId=${encodeURIComponent(rootIdParam)}` : '/api/tree';
-
   const { data, error, isLoading, mutate } = useSWR<{
     success: boolean;
     data: {
@@ -67,7 +63,7 @@ export default function TreePage() {
       familyName: string;
       foundingAncestor: FoundingAncestor | null;
     };
-  }>(treeApiUrl, fetcher, {
+  }>('/api/tree', fetcher, {
     revalidateOnFocus: false,
   });
 
