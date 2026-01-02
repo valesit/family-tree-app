@@ -672,7 +672,7 @@ export default function PersonDetailPage({ params }: PageProps) {
                   Parents
                 </h3>
                 <div className="space-y-2">
-                  {parents.map((parent) => (
+                  {parents.map((parent: RelatedPerson | null | undefined) => (
                     <Link
                       key={parent!.id}
                       href={`/person/${parent!.id}`}
@@ -706,7 +706,7 @@ export default function PersonDetailPage({ params }: PageProps) {
                   Spouse(s)
                 </h3>
                 <div className="space-y-2">
-                  {spouses.map((spouse) => (
+                  {spouses.map((spouse: RelatedPerson | null | undefined) => (
                     <Link
                       key={spouse!.id}
                       href={`/person/${spouse!.id}`}
@@ -740,7 +740,7 @@ export default function PersonDetailPage({ params }: PageProps) {
                   Children ({children.length})
                 </h3>
                 <div className="space-y-2">
-                  {children.map((child) => (
+                  {children.map((child: RelatedPerson | null | undefined) => (
                     <Link
                       key={child!.id}
                       href={`/person/${child!.id}`}
