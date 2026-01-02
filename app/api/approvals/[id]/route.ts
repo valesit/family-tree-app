@@ -80,8 +80,8 @@ export async function POST(
       where: { pendingChangeId: id },
     });
 
-    const allApproved = updatedApprovals.every(a => a.status === 'APPROVED');
-    const anyRejected = updatedApprovals.some(a => a.status === 'REJECTED');
+    const allApproved = updatedApprovals.every((a: { status: string }) => a.status === 'APPROVED');
+    const anyRejected = updatedApprovals.some((a: { status: string }) => a.status === 'REJECTED');
     const shouldProcess = isAdmin || allApproved || anyRejected;
 
     if (shouldProcess) {

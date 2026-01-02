@@ -57,10 +57,12 @@ export type RelationshipWithPersons = Relationship & {
   spouse2?: PersonWithImage | null;
 };
 
+export type ApprovalWithApprover = Approval & { approver: User };
+
 export type PendingChangeWithDetails = PendingChange & {
   createdBy: User;
   person?: Person | null;
-  approvals: (Approval & { approver: User })[];
+  approvals: ApprovalWithApprover[];
 };
 
 export type CorrectionWithDetails = CorrectionRequest & {

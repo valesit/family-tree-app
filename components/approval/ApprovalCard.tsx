@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PendingChangeWithDetails } from '@/types';
+import { PendingChangeWithDetails, ApprovalWithApprover } from '@/types';
 import { Card, Button, Badge, Avatar, Textarea } from '@/components/ui';
 import { format } from 'date-fns';
 import {
@@ -163,7 +163,7 @@ export function ApprovalCard({ change, onApprove, onReject, isProcessing }: Appr
             <div className="mt-4">
               <h4 className="text-sm font-medium text-slate-700 mb-2">Approvers</h4>
               <div className="space-y-2">
-                {change.approvals.map((approval) => (
+                {change.approvals.map((approval: ApprovalWithApprover) => (
                   <div
                     key={approval.id}
                     className="flex items-center justify-between p-2 bg-slate-50 rounded-lg"

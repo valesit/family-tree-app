@@ -75,7 +75,7 @@ function CommentItem({ comment, currentUser, onReply, onDelete, isReply = false 
         {/* Replies */}
         {comment.replies && comment.replies.length > 0 && (
           <div className="mt-3 space-y-3">
-            {comment.replies.map((reply) => (
+            {comment.replies.map((reply: WikiCommentWithAuthor) => (
               <CommentItem
                 key={reply.id}
                 comment={reply}

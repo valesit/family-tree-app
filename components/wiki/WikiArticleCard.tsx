@@ -45,7 +45,7 @@ export function WikiArticleCard({ article, variant = 'default' }: WikiArticleCar
           {/* Tags */}
           {article.tags && article.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {article.tags.slice(0, 3).map((tag) => (
+              {article.tags.slice(0, 3).map((tag: { id: string; name: string }) => (
                 <span
                   key={tag.id}
                   className="px-2 py-0.5 text-xs font-medium bg-maroon-100 text-maroon-700 rounded-full"
