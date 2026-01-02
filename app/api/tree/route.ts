@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       );
 
       // Find people who are not children of anyone (root ancestors)
-      const potentialRoots = persons.filter(p => !childIds.has(p.id));
+      const potentialRoots = persons.filter((p: { id: string }) => !childIds.has(p.id));
       
       if (potentialRoots.length > 0) {
         // Sort by birth date (oldest first) or just take first one
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the root person details
-    const rootPerson = persons.find(p => p.id === rootId);
+    const rootPerson = persons.find((p: { id: string }) => p.id === rootId);
     if (!rootPerson) {
       return NextResponse.json(
         { success: false, error: 'Root person not found' },
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       familyName = rootPerson.lastName;
       if (spouseRelation) {
         const spouseId = spouseRelation.spouse1Id === rootId ? spouseRelation.spouse2Id : spouseRelation.spouse1Id;
-        const spouse = persons.find(p => p.id === spouseId);
+        const spouse = persons.find((p: { id: string }) => p.id === spouseId);
         if (spouse && spouse.lastName !== rootPerson.lastName) {
           familyName = `${rootPerson.lastName}/${spouse.lastName}`;
         }

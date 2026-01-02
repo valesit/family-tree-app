@@ -13,28 +13,28 @@ function getRelationshipLabel(distance: number, path: string[]): string {
     return 'Immediate Family';
   }
   if (distance === 2) {
-    if (path.filter(p => p === 'parent').length === 2) return 'Grandparent';
-    if (path.filter(p => p === 'child').length === 2) return 'Grandchild';
+    if (path.filter((p: string) => p === 'parent').length === 2) return 'Grandparent';
+    if (path.filter((p: string) => p === 'child').length === 2) return 'Grandchild';
     if (path.includes('parent') && path.includes('child')) return 'Sibling';
     return 'Close Family';
   }
   if (distance === 3) {
-    if (path.filter(p => p === 'parent').length === 3) return 'Great-Grandparent';
-    if (path.filter(p => p === 'child').length === 3) return 'Great-Grandchild';
+    if (path.filter((p: string) => p === 'parent').length === 3) return 'Great-Grandparent';
+    if (path.filter((p: string) => p === 'child').length === 3) return 'Great-Grandchild';
     // Aunt/Uncle: parent's sibling
-    if (path.includes('parent') && path.filter(p => p === 'parent').length === 2 && path.includes('child')) {
+    if (path.includes('parent') && path.filter((p: string) => p === 'parent').length === 2 && path.includes('child')) {
       return 'Aunt/Uncle';
     }
     // Niece/Nephew: sibling's child
-    if (path.includes('child') && path.filter(p => p === 'child').length === 2 && path.includes('parent')) {
+    if (path.includes('child') && path.filter((p: string) => p === 'child').length === 2 && path.includes('parent')) {
       return 'Niece/Nephew';
     }
     return 'Extended Family';
   }
   if (distance === 4) {
     // First cousin: parent's sibling's child
-    const parentCount = path.filter(p => p === 'parent').length;
-    const childCount = path.filter(p => p === 'child').length;
+    const parentCount = path.filter((p: string) => p === 'parent').length;
+    const childCount = path.filter((p: string) => p === 'child').length;
     if (parentCount === 2 && childCount === 2) return '1st Cousin';
     if (parentCount === 3 && childCount === 1) return 'Great-Aunt/Uncle';
     if (parentCount === 1 && childCount === 3) return 'Grand-Niece/Nephew';

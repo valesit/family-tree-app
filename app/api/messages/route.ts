@@ -121,8 +121,9 @@ export async function GET(request: NextRequest) {
     });
 
     // Process to get unique contacts
+    type RecentDM = typeof recentDMs[number];
     const contactMap = new Map();
-    recentDMs.forEach(msg => {
+    recentDMs.forEach((msg: RecentDM) => {
       const contact = msg.senderId === user.id ? msg.receiver : msg.sender;
       if (contact && !contactMap.has(contact.id)) {
         contactMap.set(contact.id, {
