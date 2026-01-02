@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { SessionUser } from '@/types';
 
 // GET - Fetch family settings by root person ID
 export async function GET(request: NextRequest) {
@@ -33,13 +34,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true },
-    });
+    const sessionUser = session.user as SessionUser;
 
-    if (user?.role !== 'ADMIN') {
+    // Check if user is admin
+    if (sessionUser.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
     }
 

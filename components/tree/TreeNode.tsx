@@ -234,7 +234,7 @@ export function TreeNode({
             <PersonCard 
               person={spouse} 
               isSpouse 
-              marriageOrder={'marriageOrder' in spouse ? spouse.marriageOrder : index + 1}
+              marriageOrder={'marriageOrder' in spouse ? (spouse.marriageOrder as number) : index + 1}
               totalSpouses={allSpouses.length}
             />
           </div>
