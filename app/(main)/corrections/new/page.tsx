@@ -84,7 +84,7 @@ function NewCorrectionContent() {
   if (success) {
     return (
       <Card className="max-w-md w-full text-center mx-auto">
-        <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
+        <CheckCircle className="w-16 h-16 text-maroon-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-slate-900 mb-2">
           Correction Submitted!
         </h2>
@@ -243,7 +243,7 @@ function NewCorrectionContent() {
 function NewCorrectionFallback() {
   return (
     <div className="flex items-center justify-center min-h-[50vh]">
-      <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+      <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
     </div>
   );
 }

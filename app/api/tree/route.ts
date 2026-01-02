@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import prisma from '@/lib/db';
-import { authOptions } from '@/lib/auth';
 import { buildFamilyTree, calculateTreeStats } from '@/lib/tree-utils';
 
 // GET /api/tree - Get the family tree data (public - no auth required)
 export async function GET(request: NextRequest) {
   try {
-    // Tree viewing is public - no authentication required
-
     const { searchParams } = new URL(request.url);
-    const rootPersonId = searchParams.get('rootPersonId');
+    // Support both rootPersonId and rootId parameters
+    const rootPersonId = searchParams.get('rootPersonId') || searchParams.get('rootId');
     const direction = (searchParams.get('direction') || 'both') as 'ancestors' | 'descendants' | 'both';
     const maxDepth = parseInt(searchParams.get('maxDepth') || '10');
 
@@ -30,6 +27,8 @@ export async function GET(request: NextRequest) {
         data: {
           tree: null,
           stats: null,
+          familyName: null,
+          foundingAncestor: null,
         },
       });
     }
@@ -38,7 +37,6 @@ export async function GET(request: NextRequest) {
     let rootId = rootPersonId;
     if (!rootId) {
       // Find the oldest person with no parents as root
-      const personIds = new Set(persons.map(p => p.id));
       const childIds = new Set(
         relationships
           .filter(r => r.type === 'PARENT_CHILD')
@@ -63,6 +61,37 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Get the root person details
+    const rootPerson = persons.find(p => p.id === rootId);
+    if (!rootPerson) {
+      return NextResponse.json(
+        { success: false, error: 'Root person not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check for custom family name first
+    const familySettings = await prisma.family.findUnique({
+      where: { rootPersonId: rootId },
+    });
+
+    let familyName = familySettings?.name || null;
+
+    // If no custom name, generate from surnames
+    if (!familyName) {
+      const spouseRelation = relationships.find(
+        r => r.type === 'SPOUSE' && (r.spouse1Id === rootId || r.spouse2Id === rootId)
+      );
+      familyName = rootPerson.lastName;
+      if (spouseRelation) {
+        const spouseId = spouseRelation.spouse1Id === rootId ? spouseRelation.spouse2Id : spouseRelation.spouse1Id;
+        const spouse = persons.find(p => p.id === spouseId);
+        if (spouse && spouse.lastName !== rootPerson.lastName) {
+          familyName = `${rootPerson.lastName}/${spouse.lastName}`;
+        }
+      }
+    }
+
     // Build the tree
     const tree = buildFamilyTree(rootId, persons, relationships, direction, maxDepth);
     const stats = calculateTreeStats(persons, relationships);
@@ -73,6 +102,16 @@ export async function GET(request: NextRequest) {
         tree,
         stats,
         rootPersonId: rootId,
+        familyName,
+        foundingAncestor: {
+          id: rootPerson.id,
+          firstName: rootPerson.firstName,
+          lastName: rootPerson.lastName,
+          profileImage: rootPerson.profileImage?.url || null,
+          birthYear: rootPerson.birthDate ? new Date(rootPerson.birthDate).getFullYear() : null,
+          birthPlace: rootPerson.birthPlace,
+          biography: rootPerson.biography,
+        },
       },
     });
   } catch (error) {
@@ -83,4 +122,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

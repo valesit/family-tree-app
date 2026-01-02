@@ -4,53 +4,96 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { TreeNode as TreeNodeType } from '@/types';
 import { TreeNode } from './TreeNode';
 import { TreeControls } from './TreeControls';
-import { ZoomIn, ZoomOut, Maximize, Move } from 'lucide-react';
+import { Move } from 'lucide-react';
 
 interface FamilyTreeProps {
   data: TreeNodeType | null;
   onNodeClick: (node: TreeNodeType) => void;
   onAddChild: (parentId: string) => void;
   onAddSpouse: (personId: string) => void;
+  onAddParent?: (childId: string) => void;
+  onViewBirthFamily?: (personId: string, maidenName?: string) => void;
 }
 
-export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse }: FamilyTreeProps) {
+export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddParent, onViewBirthFamily }: FamilyTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.85 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  
+  // Track if we should be listening for drag
+  const isPotentialDrag = useRef(false);
+  const startPos = useRef({ x: 0, y: 0 });
 
   // Center the tree on mount
   useEffect(() => {
     if (containerRef.current) {
       const { width } = containerRef.current.getBoundingClientRect();
-      setTransform((prev) => ({ ...prev, x: width / 2 - 100 }));
+      setTransform((prev) => ({ ...prev, x: width / 3, y: 60 }));
     }
   }, [data]);
 
   const handleZoomIn = useCallback(() => {
-    setTransform((prev) => ({ ...prev, scale: Math.min(prev.scale + 0.2, 2) }));
+    setTransform((prev) => ({ ...prev, scale: Math.min(prev.scale + 0.15, 1.5) }));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setTransform((prev) => ({ ...prev, scale: Math.max(prev.scale - 0.2, 0.4) }));
+    setTransform((prev) => ({ ...prev, scale: Math.max(prev.scale - 0.15, 0.3) }));
   }, []);
 
   const handleReset = useCallback(() => {
     if (containerRef.current) {
       const { width } = containerRef.current.getBoundingClientRect();
-      setTransform({ x: width / 2 - 100, y: 50, scale: 1 });
+      setTransform({ x: width / 3, y: 60, scale: 0.85 });
     }
   }, []);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // Check if click is on an interactive element
+  const isInteractiveElement = (target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof HTMLElement)) return false;
+    
+    // Check if target or any parent is a button or has role="button"
+    let element: HTMLElement | null = target;
+    while (element) {
+      if (
+        element.tagName === 'BUTTON' ||
+        element.tagName === 'A' ||
+        element.getAttribute('role') === 'button' ||
+        element.onclick !== null ||
+        element.dataset.clickable === 'true'
+      ) {
+        return true;
+      }
+      element = element.parentElement;
+    }
+    return false;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Don't start drag if clicking on an interactive element
+    if (isInteractiveElement(e.target)) {
+      return;
+    }
+    
     if (e.button === 0) {
-      setIsDragging(true);
+      isPotentialDrag.current = true;
+      startPos.current = { x: e.clientX, y: e.clientY };
       setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isPotentialDrag.current) return;
+
+    const dx = Math.abs(e.clientX - startPos.current.x);
+    const dy = Math.abs(e.clientY - startPos.current.y);
+    
+    // Start dragging only after moving 8+ pixels (like dnd-kit)
+    if (dx > 8 || dy > 8) {
+      setIsDragging(true);
+    }
+
     if (isDragging) {
       setTransform((prev) => ({
         ...prev,
@@ -60,16 +103,17 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse }: Famil
     }
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
+    isPotentialDrag.current = false;
     setIsDragging(false);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    const delta = e.deltaY > 0 ? -0.08 : 0.08;
     setTransform((prev) => ({
       ...prev,
-      scale: Math.max(0.4, Math.min(2, prev.scale + delta)),
+      scale: Math.max(0.3, Math.min(1.5, prev.scale + delta)),
     }));
   };
 
@@ -87,7 +131,7 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse }: Famil
 
   if (!data) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)] text-slate-500">
+      <div className="flex flex-col items-center justify-center h-full text-slate-500">
         <div className="w-24 h-24 mb-6 bg-slate-100 rounded-full flex items-center justify-center">
           <Move className="w-12 h-12 text-slate-300" />
         </div>
@@ -101,31 +145,35 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse }: Famil
   }
 
   return (
-    <div className="relative w-full h-[calc(100vh-8rem)] overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Background pattern */}
+    <div className="relative w-full h-full overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      {/* Subtle grid pattern */}
       <div 
-        className="absolute inset-0 opacity-[0.02]"
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
-          backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`,
-          backgroundSize: '24px 24px',
+          backgroundImage: `
+            linear-gradient(to right, #94a3b8 1px, transparent 1px),
+            linear-gradient(to bottom, #94a3b8 1px, transparent 1px)
+          `,
+          backgroundSize: '40px 40px',
         }}
       />
 
-      {/* Tree container */}
+      {/* Tree container - handles drag */}
       <div
         ref={containerRef}
-        className="absolute inset-0 cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        className={`absolute inset-0 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
         onWheel={handleWheel}
       >
         <div
-          className="absolute transition-transform duration-75"
+          className="absolute"
           style={{
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
             transformOrigin: '0 0',
+            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
           }}
         >
           <TreeNode
@@ -133,14 +181,17 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse }: Famil
             onNodeClick={onNodeClick}
             onAddChild={onAddChild}
             onAddSpouse={onAddSpouse}
+            onAddParent={onAddParent}
+            onViewBirthFamily={onViewBirthFamily}
             expandedNodes={expandedNodes}
             toggleExpanded={toggleExpanded}
             level={0}
+            isRoot={true}
           />
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Controls - positioned in bottom right */}
       <TreeControls
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
@@ -148,29 +199,10 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse }: Famil
         scale={transform.scale}
       />
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-slate-200">
-        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Legend</h4>
-        <div className="space-y-1.5">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-500" />
-            <span className="text-xs text-slate-600">Living</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-slate-400" />
-            <span className="text-xs text-slate-600">Deceased</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-sky-500" />
-            <span className="text-xs text-slate-600">Male</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-pink-500" />
-            <span className="text-xs text-slate-600">Female</span>
-          </div>
-        </div>
+      {/* Drag hint */}
+      <div className="absolute bottom-4 left-4 text-xs text-slate-400 bg-white/80 px-3 py-1.5 rounded-full shadow-sm pointer-events-none">
+        Drag to pan • Scroll to zoom • Click person for details
       </div>
     </div>
   );
 }
-

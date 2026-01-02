@@ -82,8 +82,8 @@ export function ApprovalCard({ change, onApprove, onReject, isProcessing }: Appr
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-            <Icon className="w-6 h-6 text-emerald-600" />
+          <div className="w-12 h-12 bg-maroon-100 rounded-xl flex items-center justify-center">
+            <Icon className="w-6 h-6 text-maroon-600" />
           </div>
           <div>
             <h3 className="font-semibold text-slate-900">
@@ -136,7 +136,7 @@ export function ApprovalCard({ change, onApprove, onReject, isProcessing }: Appr
       {/* Expand/collapse details */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 mt-4 text-sm text-emerald-600 hover:text-emerald-700"
+        className="flex items-center gap-2 mt-4 text-sm text-maroon-600 hover:text-maroon-700"
       >
         {isExpanded ? (
           <>

@@ -9,7 +9,12 @@ import {
   PersonImage,
   Approval,
   Activity,
-  Conversation
+  Conversation,
+  WikiArticle,
+  WikiComment,
+  WikiTag,
+  NotableNomination,
+  NotableImage
 } from '@prisma/client';
 
 // Re-export Prisma types
@@ -24,7 +29,12 @@ export type {
   PersonImage,
   Approval,
   Activity,
-  Conversation
+  Conversation,
+  WikiArticle,
+  WikiComment,
+  WikiTag,
+  NotableNomination,
+  NotableImage
 };
 
 // Extended types with relations
@@ -88,12 +98,23 @@ export interface TreeNode {
   profileImage?: string;
   isLiving: boolean;
   children?: TreeNode[];
-  spouse?: TreeNode;
+  spouse?: TreeNode;  // Legacy single spouse (for backward compatibility)
+  spouses?: SpouseNode[];  // Multiple spouses support
   attributes?: {
     birthYear?: string;
     deathYear?: string;
     occupation?: string;
+    maidenName?: string;
+    birthFamilyId?: string;
   };
+}
+
+// Spouse with marriage details
+export interface SpouseNode extends TreeNode {
+  marriageDate?: string;
+  divorceDate?: string;
+  marriageOrder?: number;  // 1 = first wife, 2 = second wife, etc.
+  marriageNotes?: string;
 }
 
 export interface FamilyTreeData {
@@ -210,5 +231,96 @@ export interface NotificationPreferences {
   pushApprovals: boolean;
   pushMessages: boolean;
   pushNewMembers: boolean;
+}
+
+// ============================================
+// WIKI TYPES
+// ============================================
+
+export type WikiArticleWithAuthor = WikiArticle & {
+  author: User;
+  aboutPerson?: PersonWithImage | null;
+  tags?: WikiTag[];
+  _count?: {
+    comments: number;
+  };
+};
+
+export type WikiCommentWithAuthor = WikiComment & {
+  author: User;
+  replies?: WikiCommentWithAuthor[];
+};
+
+export type WikiArticleWithDetails = WikiArticle & {
+  author: User;
+  aboutPerson?: PersonWithImage | null;
+  tags?: WikiTag[];
+  comments: WikiCommentWithAuthor[];
+};
+
+export interface WikiArticleFormData {
+  title: string;
+  content: string;
+  excerpt?: string;
+  coverImage?: string;
+  aboutPersonId?: string;
+  tags?: string[];
+  isPublished?: boolean;
+}
+
+// ============================================
+// NOTABLE PERSONS TYPES
+// ============================================
+
+export type NotableNominationWithDetails = NotableNomination & {
+  nominatedBy: User;
+  person: PersonWithImage;
+  images: NotableImage[];
+};
+
+export type NotablePersonWithDetails = Person & {
+  profileImage?: PersonImage | null;
+  images?: PersonImage[];
+  notableNominations?: NotableNominationWithDetails[];
+};
+
+export interface NotableNominationFormData {
+  personId: string;
+  title: string;
+  description: string;
+  achievements?: string[];
+  images?: File[];
+}
+
+// ============================================
+// RELATIVE DISCOVERY TYPES
+// ============================================
+
+export interface RelativeSuggestion {
+  person: PersonWithImage;
+  user?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+  relationshipPath: string; // e.g., "2nd Cousin", "Great Uncle"
+  distance: number; // relationship distance
+  commonAncestor?: PersonWithImage;
+  hasAccount: boolean;
+}
+
+// ============================================
+// EXPANDED TREE VIEW TYPES
+// ============================================
+
+export interface ExpandedTreeViewData {
+  notablePersons: NotablePersonWithDetails[];
+  recentArticles: WikiArticleWithAuthor[];
+  familyStats: {
+    totalMembers: number;
+    livingCount: number;
+    generations: number;
+    oldestRecord?: string;
+  };
 }
 

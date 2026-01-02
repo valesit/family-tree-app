@@ -122,7 +122,7 @@ export default function ProfilePage() {
                       onClick={() => setActiveSection(section.id)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                         activeSection === section.id
-                          ? 'bg-emerald-50 text-emerald-700'
+                          ? 'bg-maroon-50 text-maroon-700'
                           : 'text-slate-600 hover:bg-slate-50'
                       }`}
                     >
@@ -149,7 +149,7 @@ export default function ProfilePage() {
               <div
                 className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
                   message.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-700'
+                    ? 'bg-maroon-50 text-maroon-700'
                     : 'bg-rose-50 text-rose-700'
                 }`}
               >
@@ -174,14 +174,14 @@ export default function ProfilePage() {
                       name={user?.name || 'User'}
                       size="2xl"
                     />
-                    <button className="absolute bottom-0 right-0 p-2 bg-emerald-500 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-colors">
+                    <button className="absolute bottom-0 right-0 p-2 bg-maroon-500 text-white rounded-full shadow-lg hover:bg-maroon-600 transition-colors">
                       <Camera className="w-4 h-4" />
                     </button>
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-900">{user?.name}</h3>
                     <p className="text-sm text-slate-500">{user?.email || user?.phone}</p>
-                    <p className="text-xs text-emerald-600 mt-1 capitalize">{user?.role?.toLowerCase()} Account</p>
+                    <p className="text-xs text-maroon-600 mt-1 capitalize">{user?.role?.toLowerCase()} Account</p>
                   </div>
                 </div>
 
@@ -274,7 +274,7 @@ export default function ProfilePage() {
                           <input
                             type="checkbox"
                             defaultChecked
-                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 mt-0.5"
+                            className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500 mt-0.5"
                           />
                           <div>
                             <p className="text-sm font-medium text-slate-900">{item.label}</p>
@@ -296,7 +296,7 @@ export default function ProfilePage() {
                           <input
                             type="checkbox"
                             defaultChecked
-                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 mt-0.5"
+                            className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500 mt-0.5"
                           />
                           <div>
                             <p className="text-sm font-medium text-slate-900">{item.label}</p>

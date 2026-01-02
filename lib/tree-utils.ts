@@ -1,5 +1,5 @@
 import { Person, Relationship } from '@prisma/client';
-import { TreeNode, PersonWithRelations } from '@/types';
+import { TreeNode, SpouseNode, PersonWithRelations } from '@/types';
 
 /**
  * Build a tree structure from a list of persons and relationships
@@ -36,6 +36,8 @@ export function buildFamilyTree(
         birthYear: person.birthDate ? new Date(person.birthDate).getFullYear().toString() : undefined,
         deathYear: person.deathDate ? new Date(person.deathDate).getFullYear().toString() : undefined,
         occupation: person.occupation || undefined,
+        maidenName: person.maidenName || undefined,
+        birthFamilyId: (person as any).birthFamilyRootPersonId || undefined,
       },
     };
 
@@ -54,12 +56,21 @@ export function buildFamilyTree(
       }
     }
 
-    // Get spouse
-    const spouseRelation = relationships.find(
-      r => r.type === 'SPOUSE' && (r.spouse1Id === personId || r.spouse2Id === personId)
-    );
+    // Get ALL spouses (supports polygamy)
+    const spouseRelations = relationships
+      .filter(r => r.type === 'SPOUSE' && (r.spouse1Id === personId || r.spouse2Id === personId))
+      .sort((a, b) => {
+        // Sort by marriage date if available
+        if (a.startDate && b.startDate) {
+          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        }
+        return 0;
+      });
 
-    if (spouseRelation) {
+    const spouses: SpouseNode[] = [];
+    
+    for (let i = 0; i < spouseRelations.length; i++) {
+      const spouseRelation = spouseRelations[i];
       const spouseId = spouseRelation.spouse1Id === personId 
         ? spouseRelation.spouse2Id 
         : spouseRelation.spouse1Id;
@@ -67,7 +78,7 @@ export function buildFamilyTree(
       if (spouseId && !visited.has(spouseId)) {
         const spousePerson = personMap.get(spouseId);
         if (spousePerson) {
-          node.spouse = {
+          spouses.push({
             id: spousePerson.id,
             name: `${spousePerson.firstName} ${spousePerson.lastName}`,
             firstName: spousePerson.firstName,
@@ -77,9 +88,26 @@ export function buildFamilyTree(
             deathDate: spousePerson.deathDate?.toISOString(),
             profileImage: spousePerson.profileImage?.url,
             isLiving: spousePerson.isLiving,
-          };
+            marriageDate: spouseRelation.startDate?.toISOString(),
+            divorceDate: spouseRelation.endDate?.toISOString(),
+            marriageOrder: i + 1,
+            marriageNotes: spouseRelation.notes || undefined,
+            attributes: {
+              birthYear: spousePerson.birthDate ? new Date(spousePerson.birthDate).getFullYear().toString() : undefined,
+              deathYear: spousePerson.deathDate ? new Date(spousePerson.deathDate).getFullYear().toString() : undefined,
+              occupation: spousePerson.occupation || undefined,
+              maidenName: spousePerson.maidenName || undefined,
+              birthFamilyId: (spousePerson as any).birthFamilyRootPersonId || undefined,
+            },
+          });
         }
       }
+    }
+
+    // Set both for backward compatibility and new multiple spouse support
+    if (spouses.length > 0) {
+      node.spouse = spouses[0];  // First spouse for backward compatibility
+      node.spouses = spouses;     // All spouses
     }
 
     return node;

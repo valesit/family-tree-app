@@ -89,7 +89,7 @@ export default function CorrectionsPage() {
             onClick={() => setActiveTab('pending')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               activeTab === 'pending'
-                ? 'bg-emerald-100 text-emerald-700'
+                ? 'bg-maroon-100 text-maroon-700'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
@@ -100,7 +100,7 @@ export default function CorrectionsPage() {
             onClick={() => setActiveTab('mine')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               activeTab === 'mine'
-                ? 'bg-emerald-100 text-emerald-700'
+                ? 'bg-maroon-100 text-maroon-700'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
@@ -112,7 +112,7 @@ export default function CorrectionsPage() {
         {/* Content */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
           </div>
         ) : error ? (
           <Card className="text-center py-8">
@@ -176,7 +176,7 @@ export default function CorrectionsPage() {
                 {/* Expand/collapse */}
                 <button
                   onClick={() => setExpandedId(expandedId === correction.id ? null : correction.id)}
-                  className="flex items-center gap-2 mt-4 text-sm text-emerald-600 hover:text-emerald-700"
+                  className="flex items-center gap-2 mt-4 text-sm text-maroon-600 hover:text-maroon-700"
                 >
                   {expandedId === correction.id ? (
                     <>
@@ -202,7 +202,7 @@ export default function CorrectionsPage() {
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-slate-700 mb-2">Proposed Changes</h4>
-                        <pre className="text-xs bg-emerald-50 p-4 rounded-lg overflow-x-auto">
+                        <pre className="text-xs bg-maroon-50 p-4 rounded-lg overflow-x-auto">
                           {JSON.stringify(correction.proposedData, null, 2)}
                         </pre>
                       </div>

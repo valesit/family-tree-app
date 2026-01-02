@@ -184,36 +184,100 @@ async function applyPendingChange(pendingChange: {
 
     case 'UPDATE_PERSON':
       if (pendingChange.personId) {
-        await prisma.person.update({
-          where: { id: pendingChange.personId },
-          data: {
-            firstName: changeData.firstName as string,
-            lastName: changeData.lastName as string,
-            middleName: changeData.middleName as string || null,
-            maidenName: changeData.maidenName as string || null,
-            nickname: changeData.nickname as string || null,
-            gender: changeData.gender as 'MALE' | 'FEMALE' | 'OTHER' || null,
-            birthDate: changeData.birthDate ? new Date(changeData.birthDate as string) : null,
-            birthPlace: changeData.birthPlace as string || null,
-            deathDate: changeData.deathDate ? new Date(changeData.deathDate as string) : null,
-            deathPlace: changeData.deathPlace as string || null,
-            biography: changeData.biography as string || null,
-            facts: changeData.facts ? JSON.stringify(changeData.facts) : null,
-            email: changeData.email as string || null,
-            phone: changeData.phone as string || null,
-            address: changeData.address as string || null,
-            occupation: changeData.occupation as string || null,
-            isLiving: changeData.isLiving as boolean ?? true,
-            isPrivate: changeData.isPrivate as boolean ?? false,
+        // Check if this is a profile claim request
+        if (changeData.action === 'CLAIM_PROFILE') {
+          const claimUserId = changeData.userId as string;
+          
+          // Link the user to the person
+          await prisma.person.update({
+            where: { id: pendingChange.personId },
+            data: { userId: claimUserId },
+          });
+
+          // Get person name for notification
+          const claimedPerson = await prisma.person.findUnique({
+            where: { id: pendingChange.personId },
+            select: { firstName: true, lastName: true },
+          });
+
+          await prisma.activity.create({
+            data: {
+              type: 'PERSON_UPDATED',
+              description: `${changeData.userName} linked their account to ${claimedPerson?.firstName} ${claimedPerson?.lastName}`,
+              userId: claimUserId,
+              data: { personId: pendingChange.personId },
+            },
+          });
+
+          // Notify the user their claim was approved
+          await prisma.notification.create({
+            data: {
+              userId: claimUserId,
+              type: 'WELCOME',
+              title: 'Profile Linked!',
+              message: `Your account has been successfully linked to ${claimedPerson?.firstName} ${claimedPerson?.lastName} in the family tree.`,
+              data: { personId: pendingChange.personId },
+            },
+          });
+        } else {
+          // Regular person update
+          await prisma.person.update({
+            where: { id: pendingChange.personId },
+            data: {
+              firstName: changeData.firstName as string,
+              lastName: changeData.lastName as string,
+              middleName: changeData.middleName as string || null,
+              maidenName: changeData.maidenName as string || null,
+              nickname: changeData.nickname as string || null,
+              gender: changeData.gender as 'MALE' | 'FEMALE' | 'OTHER' || null,
+              birthDate: changeData.birthDate ? new Date(changeData.birthDate as string) : null,
+              birthPlace: changeData.birthPlace as string || null,
+              deathDate: changeData.deathDate ? new Date(changeData.deathDate as string) : null,
+              deathPlace: changeData.deathPlace as string || null,
+              biography: changeData.biography as string || null,
+              facts: changeData.facts ? JSON.stringify(changeData.facts) : null,
+              email: changeData.email as string || null,
+              phone: changeData.phone as string || null,
+              address: changeData.address as string || null,
+              occupation: changeData.occupation as string || null,
+              isLiving: changeData.isLiving as boolean ?? true,
+              isPrivate: changeData.isPrivate as boolean ?? false,
+            },
+          });
+
+          await prisma.activity.create({
+            data: {
+              type: 'PERSON_UPDATED',
+              description: `A family member's information was updated`,
+              userId: pendingChange.createdById,
+              data: { personId: pendingChange.personId },
+            },
+          });
+        }
+      }
+      break;
+
+    case 'UPDATE_FAMILY_NAME':
+      // Update family name
+      if (pendingChange.personId) {
+        const newFamilyName = (changeData as { familyName: string }).familyName;
+        
+        // Upsert family record
+        await prisma.family.upsert({
+          where: { rootPersonId: pendingChange.personId },
+          update: { name: newFamilyName },
+          create: {
+            rootPersonId: pendingChange.personId,
+            name: newFamilyName,
           },
         });
 
         await prisma.activity.create({
           data: {
             type: 'PERSON_UPDATED',
-            description: `A family member's information was updated`,
+            description: `Family name was changed to "${newFamilyName}"`,
             userId: pendingChange.createdById,
-            data: { personId: pendingChange.personId },
+            data: { rootPersonId: pendingChange.personId, newFamilyName },
           },
         });
       }

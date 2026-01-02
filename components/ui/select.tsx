@@ -41,7 +41,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               'focus:outline-none focus:ring-0',
               error
                 ? 'border-rose-300 focus:border-rose-500'
-                : 'border-slate-200 focus:border-emerald-500 hover:border-slate-300',
+                : 'border-slate-200 focus:border-maroon-500 hover:border-slate-300',
               className
             )}
             {...props}

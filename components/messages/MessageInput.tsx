@@ -60,7 +60,7 @@ export function MessageInput({ onSend, disabled, placeholder = 'Type a message..
             placeholder={placeholder}
             disabled={disabled || isSending}
             rows={1}
-            className="w-full resize-none rounded-xl border-2 border-slate-200 px-4 py-3 pr-12 text-sm focus:border-emerald-500 focus:outline-none disabled:bg-slate-50"
+            className="w-full resize-none rounded-xl border-2 border-slate-200 px-4 py-3 pr-12 text-sm focus:border-maroon-500 focus:outline-none disabled:bg-slate-50"
           />
           <button
             type="button"

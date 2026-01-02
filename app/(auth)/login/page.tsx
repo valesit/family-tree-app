@@ -60,7 +60,7 @@ function LoginForm() {
     <Card className="w-full max-w-md relative z-10 shadow-2xl border-0">
       {/* Logo */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl mb-4 shadow-lg shadow-emerald-500/30">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-2xl mb-4 shadow-lg shadow-maroon-500/30">
           <TreePine className="w-8 h-8 text-white" />
         </div>
         <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
@@ -135,11 +135,11 @@ function LoginForm() {
           <label className="flex items-center">
             <input
               type="checkbox"
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
             />
             <span className="ml-2 text-slate-600">Remember me</span>
           </label>
-          <Link href="/forgot-password" className="text-emerald-600 hover:text-emerald-700 font-medium">
+          <Link href="/forgot-password" className="text-maroon-600 hover:text-maroon-700 font-medium">
             Forgot password?
           </Link>
         </div>
@@ -151,7 +151,7 @@ function LoginForm() {
 
       <p className="mt-6 text-center text-sm text-slate-500">
         Don&apos;t have an account?{' '}
-        <Link href="/register" className="text-emerald-600 hover:text-emerald-700 font-medium">
+        <Link href="/register" className="text-maroon-600 hover:text-maroon-700 font-medium">
           Create one
         </Link>
       </p>
@@ -162,18 +162,18 @@ function LoginForm() {
 function LoginFallback() {
   return (
     <Card className="w-full max-w-md flex items-center justify-center py-20">
-      <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+      <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
     </Card>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-rose-50 to-amber-50 flex items-center justify-center p-4">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse animation-delay-2000" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-maroon-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-maroon-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse animation-delay-2000" />
       </div>
 
       <Suspense fallback={<LoginFallback />}>

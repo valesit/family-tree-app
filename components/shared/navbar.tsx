@@ -20,6 +20,7 @@ import {
   LogIn,
   UserPlus,
   Home,
+  BookOpen,
 } from 'lucide-react';
 import { Avatar, Button } from '@/components/ui';
 import { SessionUser } from '@/types';
@@ -37,6 +38,7 @@ export function Navbar() {
   // Navigation items for authenticated users
   const authNavItems = [
     { href: '/tree', label: 'Family Tree', icon: TreePine },
+    { href: '/wiki', label: 'Wiki', icon: BookOpen },
     { href: '/approvals', label: 'Approvals', icon: CheckCircle },
     { href: '/corrections', label: 'Corrections', icon: FileEdit },
     { href: '/messages', label: 'Messages', icon: MessageSquare },
@@ -45,6 +47,7 @@ export function Navbar() {
   // Navigation items for guests
   const guestNavItems = [
     { href: '/', label: 'View Tree', icon: Home },
+    { href: '/wiki', label: 'Wiki', icon: BookOpen },
   ];
 
   const navItems = isAuthenticated ? authNavItems : guestNavItems;
@@ -55,7 +58,7 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <div className="w-10 h-10 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-xl flex items-center justify-center shadow-lg shadow-maroon-500/20">
               <TreePine className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-xl text-slate-900 hidden sm:block">
@@ -75,7 +78,7 @@ export function Navbar() {
                   className={clsx(
                     'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-emerald-50 text-emerald-700'
+                      ? 'bg-maroon-50 text-maroon-700'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   )}
                 >
@@ -169,7 +172,7 @@ export function Navbar() {
                 </Link>
                 <Link
                   href="/register"
-                  className="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 rounded-xl font-medium hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg shadow-emerald-500/25"
+                  className="flex items-center space-x-2 bg-gradient-to-r from-maroon-500 to-maroon-700 text-white px-4 py-2 rounded-xl font-medium hover:from-maroon-600 hover:to-maroon-800 transition-all shadow-lg shadow-maroon-500/25"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span className="hidden sm:inline">Join</span>
@@ -207,7 +210,7 @@ export function Navbar() {
                   className={clsx(
                     'flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium',
                     isActive
-                      ? 'bg-emerald-50 text-emerald-700'
+                      ? 'bg-maroon-50 text-maroon-700'
                       : 'text-slate-600 hover:bg-slate-50'
                   )}
                 >
@@ -220,7 +223,7 @@ export function Navbar() {
               <Link
                 href="/add-person"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-emerald-600 hover:bg-emerald-50"
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-maroon-600 hover:bg-maroon-50"
               >
                 <Plus className="w-5 h-5" />
                 <span>Add Person</span>

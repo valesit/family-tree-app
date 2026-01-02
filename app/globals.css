@@ -10,6 +10,18 @@
   --color-foreground: #0f172a;
   --font-sans: var(--font-inter);
   --font-serif: var(--font-playfair);
+  
+  /* Custom maroon theme based on #651A1A */
+  --color-maroon-50: #fdf2f2;
+  --color-maroon-100: #fce4e4;
+  --color-maroon-200: #facaca;
+  --color-maroon-300: #f5a3a3;
+  --color-maroon-400: #eb6b6b;
+  --color-maroon-500: #651A1A;
+  --color-maroon-600: #5a1717;
+  --color-maroon-700: #4a1313;
+  --color-maroon-800: #3d1010;
+  --color-maroon-900: #330d0d;
 }
 
 /* Custom scrollbar */
@@ -84,7 +96,7 @@
 
 /* Focus ring utility */
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2;
+  @apply focus:outline-none focus:ring-2 focus:ring-maroon-500 focus:ring-offset-2;
 }
 
 /* Card hover effect */
@@ -106,7 +118,7 @@
 
 /* Gradient text utility */
 .gradient-text {
-  @apply bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent;
+  @apply bg-gradient-to-r from-maroon-500 to-maroon-700 bg-clip-text text-transparent;
 }
 
 /* Loading pulse animation */

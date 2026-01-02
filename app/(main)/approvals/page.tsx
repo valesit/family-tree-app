@@ -83,7 +83,7 @@ export default function ApprovalsPage() {
             onClick={() => setActiveTab('pending')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               activeTab === 'pending'
-                ? 'bg-emerald-100 text-emerald-700'
+                ? 'bg-maroon-100 text-maroon-700'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
@@ -99,7 +99,7 @@ export default function ApprovalsPage() {
             onClick={() => setActiveTab('mine')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               activeTab === 'mine'
-                ? 'bg-emerald-100 text-emerald-700'
+                ? 'bg-maroon-100 text-maroon-700'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
@@ -111,7 +111,7 @@ export default function ApprovalsPage() {
         {/* Content */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
           </div>
         ) : error ? (
           <Card className="text-center py-8">
@@ -125,7 +125,7 @@ export default function ApprovalsPage() {
           <Card className="text-center py-12">
             {activeTab === 'pending' ? (
               <>
-                <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
+                <CheckCircle className="w-16 h-16 text-maroon-500 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-slate-900 mb-2">
                   All Caught Up!
                 </h3>
@@ -171,8 +171,8 @@ export default function ApprovalsPage() {
                 </p>
                 <p className="text-sm text-slate-600">Pending</p>
               </div>
-              <div className="text-center p-4 bg-emerald-50 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
+              <div className="text-center p-4 bg-maroon-50 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-maroon-500 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-slate-900">
                   {data.data.filter(c => c.status === 'APPROVED').length}
                 </p>
