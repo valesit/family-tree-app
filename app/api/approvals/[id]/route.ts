@@ -51,7 +51,7 @@ export async function POST(
     }
 
     // Check if user is an approver or admin
-    const isApprover = pendingChange.approvals.some(a => a.approverId === user.id);
+    const isApprover = pendingChange.approvals.some((a: { approverId: string }) => a.approverId === user.id);
     const isAdmin = user.role === 'ADMIN';
 
     if (!isApprover && !isAdmin) {
