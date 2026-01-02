@@ -46,21 +46,21 @@ export default function WikiPage() {
     data: { items: WikiArticleWithAuthor[] };
   }>('/api/wiki?limit=50', fetcher);
 
-  const popularTags = tagsData?.data?.items
-    ?.flatMap(article => article.tags || [])
-    .reduce((acc: Record<string, number>, tag: { id: string; name: string } | null | undefined) => {
-      if (tag) {
-        acc[tag.name] = (acc[tag.name] || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<string, number>);
+  const popularTags: Record<string, number> = tagsData?.data?.items
+    ? tagsData.data.items
+        .flatMap(article => article.tags || [])
+        .reduce((acc: Record<string, number>, tag: { id: string; name: string } | null | undefined) => {
+          if (tag) {
+            acc[tag.name] = (acc[tag.name] || 0) + 1;
+          }
+          return acc;
+        }, {})
+    : {};
 
-  const sortedTags = popularTags 
-    ? Object.entries(popularTags)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([name]) => name)
-    : [];
+  const sortedTags = Object.entries(popularTags)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name]) => name);
 
   if (isLoading) {
     return (
