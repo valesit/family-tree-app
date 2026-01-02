@@ -31,10 +31,11 @@ export async function GET() {
     }
 
     // Build family previews
+    type FounderType = typeof rootPersons[number];
     const families = await Promise.all(
       Object.entries(familyGroups).map(async ([lastName, founders]) => {
         // Get the oldest founder as the main ancestor
-        const mainAncestor = founders.reduce((oldest, current) => {
+        const mainAncestor = founders.reduce((oldest: FounderType, current: FounderType) => {
           if (!oldest.birthDate) return current;
           if (!current.birthDate) return oldest;
           return current.birthDate < oldest.birthDate ? current : oldest;
