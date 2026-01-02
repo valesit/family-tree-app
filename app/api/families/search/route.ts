@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
 
     // Build family options
     type RootPersonType = typeof rootPersons[number];
+    type CustomFamilyType = typeof customFamilies[number];
     const families = rootPersons.map((person: RootPersonType) => {
       // Get spouse surname if available
       const spouseRelation = person.spouseRelations1[0] || person.spouseRelations2[0];
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
         : null;
 
       // Check if there's a custom family name
-      const customFamily = customFamilies.find(f => f.rootPersonId === person.id);
+      const customFamily = customFamilies.find((f: CustomFamilyType) => f.rootPersonId === person.id);
 
       // Build family name
       let familyName = customFamily?.name || person.lastName;
