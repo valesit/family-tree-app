@@ -222,7 +222,7 @@ export default function WikiArticlePage({ params }: PageProps) {
             {/* Tags */}
             {article.tags && article.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
-                {article.tags.map((tag) => (
+                {article.tags.map((tag: { id: string; name: string }) => (
                   <Link
                     key={tag.id}
                     href={`/wiki?tag=${tag.name}`}
