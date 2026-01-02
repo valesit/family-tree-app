@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
     });
 
     const contactedUserIds = new Set<string>();
-    existingConversations.forEach((msg) => {
+    existingConversations.forEach((msg: { senderId: string; receiverId: string | null }) => {
       if (msg.senderId !== user.id) contactedUserIds.add(msg.senderId);
       if (msg.receiverId && msg.receiverId !== user.id) contactedUserIds.add(msg.receiverId);
     });
@@ -206,13 +206,14 @@ export async function GET(request: NextRequest) {
     });
 
     // Filter and format suggestions
+    type PersonType = typeof persons[number];
     const suggestions: RelativeSuggestion[] = persons
-      .filter((person) => {
+      .filter((person: PersonType) => {
         // Exclude if user has already contacted this person
         if (person.user && contactedUserIds.has(person.user.id)) return false;
         return true;
       })
-      .map((person) => {
+      .map((person: PersonType) => {
         const relInfo = relativesMap.get(person.id)!;
         return {
           person: {

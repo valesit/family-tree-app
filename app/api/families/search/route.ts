@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
     });
 
     // Build family options
-    const families = rootPersons.map((person) => {
+    type RootPersonType = typeof rootPersons[number];
+    const families = rootPersons.map((person: RootPersonType) => {
       // Get spouse surname if available
       const spouseRelation = person.spouseRelations1[0] || person.spouseRelations2[0];
       const spouseSurname = spouseRelation
