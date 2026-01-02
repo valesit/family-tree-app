@@ -48,7 +48,7 @@ export default function WikiPage() {
 
   const popularTags = tagsData?.data?.items
     ?.flatMap(article => article.tags || [])
-    .reduce((acc, tag) => {
+    .reduce((acc: Record<string, number>, tag: { id: string; name: string } | null | undefined) => {
       if (tag) {
         acc[tag.name] = (acc[tag.name] || 0) + 1;
       }
