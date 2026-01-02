@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Determine root person
-    let rootId = rootPersonId;
+    let rootId: string | null = rootPersonId;
     if (!rootId) {
       // Find the oldest person with no parents as root
       const childIds = new Set(
@@ -59,6 +59,14 @@ export async function GET(request: NextRequest) {
         // Fall back to first person
         rootId = persons[0].id;
       }
+    }
+
+    // At this point we should always have a rootId, but guard to satisfy strict TS
+    if (!rootId) {
+      return NextResponse.json(
+        { success: false, error: 'Unable to determine root person' },
+        { status: 400 }
+      );
     }
 
     // Get the root person details
