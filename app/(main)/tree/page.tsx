@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
@@ -11,7 +11,7 @@ import { TreeNode, PersonWithRelations, SessionUser } from '@/types';
 import { 
   Loader2, AlertCircle, Users, TreePine, Calendar, Heart, Lock, 
   Maximize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
-  ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save
+  ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save, Cake
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,6 +36,53 @@ interface FoundingAncestor {
   birthYear: number | null;
   birthPlace: string | null;
   biography: string | null;
+}
+
+type BirthdayPerson = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  profileImage?: string;
+  isLiving: boolean;
+};
+
+function collectPeopleFromTree(tree: TreeNode | null): BirthdayPerson[] {
+  if (!tree) return [];
+  const byId = new Map<string, BirthdayPerson>();
+
+  const addNode = (n: TreeNode | null | undefined) => {
+    if (!n) return;
+    if (!n.birthDate) return;
+    byId.set(n.id, {
+      id: n.id,
+      firstName: n.firstName,
+      lastName: n.lastName,
+      birthDate: n.birthDate,
+      profileImage: n.profileImage,
+      isLiving: n.isLiving,
+    });
+  };
+
+  const walk = (n: TreeNode) => {
+    addNode(n);
+    addNode(n.spouse);
+    n.spouses?.forEach((s) => addNode(s));
+    n.children?.forEach((c) => walk(c));
+  };
+
+  walk(tree);
+  return Array.from(byId.values());
+}
+
+function getBirthdaysInMonth(tree: TreeNode | null, monthIndex: number): BirthdayPerson[] {
+  const people = collectPeopleFromTree(tree);
+  const birthdays = people.filter((p) => {
+    const d = new Date(p.birthDate);
+    return !Number.isNaN(d.getTime()) && d.getMonth() === monthIndex;
+  });
+  birthdays.sort((a, b) => new Date(a.birthDate).getDate() - new Date(b.birthDate).getDate());
+  return birthdays;
 }
 
 export default function TreePage() {
@@ -224,6 +271,10 @@ export default function TreePage() {
     foundingAncestor: null 
   };
 
+  const monthIndex = new Date().getMonth();
+  const monthName = new Date().toLocaleString(undefined, { month: 'long' });
+  const birthdaysThisMonth = useMemo(() => getBirthdaysInMonth(tree, monthIndex), [tree, monthIndex]);
+
   const notablePersons = notableData?.data || [];
 
   return (
@@ -390,6 +441,54 @@ export default function TreePage() {
                 <span className="font-medium text-slate-900">{stats.oldestMember.name} ({stats.oldestMember.birthYear})</span>
               </div>
             )}
+
+            {/* Birthdays this month */}
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-3">
+                <Cake className="w-5 h-5 text-pink-500" />
+                Birthdays in {monthName}
+                <span className="text-xs text-slate-400 font-normal">({birthdaysThisMonth.length})</span>
+              </h3>
+              {birthdaysThisMonth.length === 0 ? (
+                <p className="text-sm text-slate-500">No birthdays found for {monthName}.</p>
+              ) : (
+                <div className="space-y-2">
+                  {birthdaysThisMonth.slice(0, 8).map((p) => {
+                    const d = new Date(p.birthDate);
+                    const dayLabel = Number.isNaN(d.getTime())
+                      ? ''
+                      : d.toLocaleString(undefined, { month: 'short', day: 'numeric' });
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => router.push(`/person/${p.id}`)}
+                        className="w-full flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors text-left border border-slate-200"
+                      >
+                        <Avatar
+                          src={p.profileImage}
+                          name={`${p.firstName} ${p.lastName}`}
+                          size="sm"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-medium text-slate-900 text-sm truncate">
+                              {p.firstName} {p.lastName}
+                            </p>
+                            <span className="text-xs text-slate-500 flex-shrink-0">{dayLabel}</span>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {p.isLiving ? 'Living' : 'Deceased'}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {birthdaysThisMonth.length > 8 && (
+                    <p className="text-xs text-slate-500">Showing 8 of {birthdaysThisMonth.length} birthdays.</p>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Notable Members - Cards */}
             {notablePersons.length > 0 && (

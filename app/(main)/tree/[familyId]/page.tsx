@@ -23,6 +23,7 @@ import {
   Minimize2,
   BookOpen,
   Crown,
+  Cake,
   MapPin,
   ArrowLeft,
   PanelLeftClose,
@@ -58,6 +59,53 @@ interface FamilyData {
     birthPlace: string | null;
     biography: string | null;
   };
+}
+
+type BirthdayPerson = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  profileImage?: string;
+  isLiving: boolean;
+};
+
+function collectPeopleFromTree(tree: TreeNode | null): BirthdayPerson[] {
+  if (!tree) return [];
+  const byId = new Map<string, BirthdayPerson>();
+
+  const addNode = (n: TreeNode | null | undefined) => {
+    if (!n) return;
+    if (!n.birthDate) return;
+    byId.set(n.id, {
+      id: n.id,
+      firstName: n.firstName,
+      lastName: n.lastName,
+      birthDate: n.birthDate,
+      profileImage: n.profileImage,
+      isLiving: n.isLiving,
+    });
+  };
+
+  const walk = (n: TreeNode) => {
+    addNode(n);
+    addNode(n.spouse);
+    n.spouses?.forEach((s) => addNode(s));
+    n.children?.forEach((c) => walk(c));
+  };
+
+  walk(tree);
+  return Array.from(byId.values());
+}
+
+function getBirthdaysInMonth(tree: TreeNode | null, monthIndex: number): BirthdayPerson[] {
+  const people = collectPeopleFromTree(tree);
+  const birthdays = people.filter((p) => {
+    const d = new Date(p.birthDate);
+    return !Number.isNaN(d.getTime()) && d.getMonth() === monthIndex;
+  });
+  birthdays.sort((a, b) => new Date(a.birthDate).getDate() - new Date(b.birthDate).getDate());
+  return birthdays;
 }
 
 export default function FamilyViewPage() {
@@ -145,6 +193,9 @@ export default function FamilyViewPage() {
   }
 
   const { tree, stats, familyName, foundingAncestor } = data.data;
+  const monthIndex = new Date().getMonth();
+  const monthName = new Date().toLocaleString(undefined, { month: 'long' });
+  const birthdaysThisMonth = getBirthdaysInMonth(tree, monthIndex);
 
   // If left panel is expanded, show only left panel
   if (leftPanelExpanded) {
@@ -178,6 +229,8 @@ export default function FamilyViewPage() {
             stats={stats}
             isAuthenticated={isAuthenticated}
             familyId={familyId}
+            birthdaysThisMonth={birthdaysThisMonth}
+            birthdaysMonthName={monthName}
           />
         </div>
       </div>
@@ -293,6 +346,8 @@ export default function FamilyViewPage() {
               isAuthenticated={isAuthenticated}
               familyId={familyId}
               compact
+              birthdaysThisMonth={birthdaysThisMonth}
+              birthdaysMonthName={monthName}
             />
           </div>
         </div>
@@ -371,6 +426,8 @@ function FamilyOverviewContent({
   stats, 
   isAuthenticated,
   familyId,
+  birthdaysThisMonth,
+  birthdaysMonthName,
   compact = false 
 }: {
   familyName: string;
@@ -378,6 +435,8 @@ function FamilyOverviewContent({
   stats: TreeStats | null;
   isAuthenticated: boolean;
   familyId: string;
+  birthdaysThisMonth: BirthdayPerson[];
+  birthdaysMonthName: string;
   compact?: boolean;
 }) {
   return (
@@ -477,6 +536,50 @@ function FamilyOverviewContent({
           Notable Persons
         </h3>
         <NotablePersonsCarousel familyId={familyId} compact={compact} />
+      </Card>
+
+      {/* Birthdays this month */}
+      <Card>
+        <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+          <Cake className="w-4 h-4 text-pink-500" />
+          Birthdays in {birthdaysMonthName}
+          <span className="text-xs text-slate-400 font-normal">({birthdaysThisMonth.length})</span>
+        </h3>
+        {birthdaysThisMonth.length === 0 ? (
+          <p className="text-sm text-slate-500">No birthdays found for {birthdaysMonthName}.</p>
+        ) : (
+          <div className="space-y-2">
+            {birthdaysThisMonth.slice(0, 10).map((p) => {
+              const d = new Date(p.birthDate);
+              const dayLabel = Number.isNaN(d.getTime())
+                ? ''
+                : d.toLocaleString(undefined, { month: 'short', day: 'numeric' });
+              return (
+                <Link
+                  key={p.id}
+                  href={`/person/${p.id}`}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  <Avatar
+                    src={p.profileImage}
+                    name={`${p.firstName} ${p.lastName}`}
+                    size="sm"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-slate-900 truncate">{p.firstName} {p.lastName}</p>
+                      <span className="text-xs text-slate-500 flex-shrink-0">{dayLabel}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">{p.isLiving ? 'Living' : 'Deceased'}</p>
+                  </div>
+                </Link>
+              );
+            })}
+            {birthdaysThisMonth.length > 10 && (
+              <p className="text-xs text-slate-500">Showing 10 of {birthdaysThisMonth.length} birthdays.</p>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Family Wiki Link */}
