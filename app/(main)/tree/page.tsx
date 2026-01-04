@@ -236,6 +236,18 @@ export default function TreePage() {
     setIsEditingFamilyName(true);
   };
 
+  // IMPORTANT: Hooks must run unconditionally on every render (avoid calling hooks after early returns).
+  const { tree, stats, familyName, foundingAncestor } = data?.data || { 
+    tree: null, 
+    stats: null, 
+    familyName: null, 
+    foundingAncestor: null 
+  };
+
+  const monthIndex = new Date().getMonth();
+  const monthName = new Date().toLocaleString(undefined, { month: 'long' });
+  const birthdaysThisMonth = useMemo(() => getBirthdaysInMonth(tree, monthIndex), [tree, monthIndex]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
@@ -263,17 +275,6 @@ export default function TreePage() {
       </div>
     );
   }
-
-  const { tree, stats, familyName, foundingAncestor } = data?.data || { 
-    tree: null, 
-    stats: null, 
-    familyName: null, 
-    foundingAncestor: null 
-  };
-
-  const monthIndex = new Date().getMonth();
-  const monthName = new Date().toLocaleString(undefined, { month: 'long' });
-  const birthdaysThisMonth = useMemo(() => getBirthdaysInMonth(tree, monthIndex), [tree, monthIndex]);
 
   const notablePersons = notableData?.data || [];
 
