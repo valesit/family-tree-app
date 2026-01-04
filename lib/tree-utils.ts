@@ -2,6 +2,26 @@ import { Person, Relationship } from '@prisma/client';
 import { TreeNode, SpouseNode, PersonWithRelations } from '@/types';
 
 /**
+ * Collect all node IDs contained in a TreeNode (including spouses).
+ * Useful for scoping stats to a single family tree instead of the whole database.
+ */
+export function collectTreeNodeIds(tree: TreeNode | null): Set<string> {
+  const ids = new Set<string>();
+  if (!tree) return ids;
+
+  const addNode = (n: TreeNode | null | undefined) => {
+    if (!n) return;
+    ids.add(n.id);
+    n.spouses?.forEach((s) => addNode(s));
+    addNode(n.spouse);
+    n.children?.forEach((c) => addNode(c));
+  };
+
+  addNode(tree);
+  return ids;
+}
+
+/**
  * Build a tree structure from a list of persons and relationships
  */
 export function buildFamilyTree(

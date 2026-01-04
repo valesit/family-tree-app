@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { buildFamilyTree, calculateTreeStats } from '@/lib/tree-utils';
+import { buildFamilyTree, calculateTreeStats, collectTreeNodeIds } from '@/lib/tree-utils';
+import type { Relationship, Person } from '@prisma/client';
 
 // GET /api/tree - Get the family tree data (public - no auth required)
 export async function GET(request: NextRequest) {
@@ -103,7 +104,24 @@ export async function GET(request: NextRequest) {
 
     // Build the tree
     const tree = buildFamilyTree(rootId, persons, relationships, direction, maxDepth);
-    const stats = calculateTreeStats(persons, relationships);
+    // Scope stats to ONLY the people in this specific tree, not the entire database.
+    const treeIds = collectTreeNodeIds(tree);
+    const scopedPersons = persons.filter((p: Person) => treeIds.has(p.id));
+    const scopedRelationships = relationships.filter((r: Relationship) => {
+      if (r.type === 'PARENT_CHILD') {
+        return !!r.parentId && !!r.childId && treeIds.has(r.parentId) && treeIds.has(r.childId);
+      }
+      if (r.type === 'SPOUSE') {
+        return (
+          !!r.spouse1Id &&
+          !!r.spouse2Id &&
+          treeIds.has(r.spouse1Id) &&
+          treeIds.has(r.spouse2Id)
+        );
+      }
+      return false;
+    });
+    const stats = tree ? calculateTreeStats(scopedPersons, scopedRelationships) : null;
 
     return NextResponse.json({
       success: true,
