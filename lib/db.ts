@@ -15,7 +15,25 @@ function createPrismaClient() {
     throw new Error('DATABASE_URL environment variable is not set');
   }
   
-  const pool = new Pool({ connectionString });
+  // Many hosted Postgres providers (e.g. Supabase) require SSL in production.
+  // Local dev typically does not.
+  const isLocal =
+    connectionString.includes('localhost') ||
+    connectionString.includes('127.0.0.1') ||
+    connectionString.includes('host.docker.internal');
+
+  const pool = new Pool({
+    connectionString,
+    ...(isLocal
+      ? {}
+      : {
+          ssl: {
+            // Providers often use managed cert chains; in serverless environments this is the most compatible.
+            // If you have strict CA requirements, replace with proper CA bundle.
+            rejectUnauthorized: false,
+          },
+        }),
+  });
   const adapter = new PrismaPg(pool);
   
   return new PrismaClient({
