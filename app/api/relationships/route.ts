@@ -125,6 +125,45 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // For spouse relationships, add both spouses to each other's family trees
+    // This enables cross-family navigation (e.g., viewing spouse's birth family)
+    if (type === 'SPOUSE') {
+      const family1 = await findPersonFamilyRoot(person1Id);
+      const family2 = await findPersonFamilyRoot(person2Id);
+      
+      // Add person1 to person2's family (if they have different families)
+      if (family2 && family1 !== family2) {
+        const existingMembership1 = await prisma.familyMembership.findUnique({
+          where: { userId_familyId: { userId: person1.userId || '', familyId: family2 } },
+        });
+        if (person1.userId && !existingMembership1) {
+          await prisma.familyMembership.create({
+            data: {
+              userId: person1.userId,
+              familyId: family2,
+              role: 'MEMBER',
+            },
+          }).catch(() => {}); // Ignore if already exists
+        }
+      }
+      
+      // Add person2 to person1's family (if they have different families)
+      if (family1 && family1 !== family2) {
+        const existingMembership2 = await prisma.familyMembership.findUnique({
+          where: { userId_familyId: { userId: person2.userId || '', familyId: family1 } },
+        });
+        if (person2.userId && !existingMembership2) {
+          await prisma.familyMembership.create({
+            data: {
+              userId: person2.userId,
+              familyId: family1,
+              role: 'MEMBER',
+            },
+          }).catch(() => {}); // Ignore if already exists
+        }
+      }
+    }
+
     // Log activity
     await prisma.activity.create({
       data: {
