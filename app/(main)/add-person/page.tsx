@@ -26,7 +26,6 @@ function AddPersonContent() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedApprovers, setSelectedApprovers] = useState<string[]>([]);
   
   // Relationship selection state
   const [relationshipMode, setRelationshipMode] = useState<RelationshipMode>('none');
@@ -40,7 +39,6 @@ function AddPersonContent() {
   }>('/api/persons?limit=500', fetcher);
 
   const allPersons = personsData?.data?.items || [];
-  const availableApprovers = allPersons.filter(p => p.userId);
 
   // Initialize from URL params
   useEffect(() => {
@@ -68,10 +66,7 @@ function AddPersonContent() {
       const response = await fetch('/api/persons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          approverIds: selectedApprovers,
-        }),
+        body: JSON.stringify(data),
       });
 
       const result = await response.json();
@@ -92,7 +87,6 @@ function AddPersonContent() {
             type: relationshipSubtype,
             person1Id: selectedPersonId, // Parent
             person2Id: newPersonId,       // Child (new person)
-            approverIds: selectedApprovers,
           };
         } else if (relationshipMode === 'parent_of') {
           // New person is a parent of selected person
@@ -100,7 +94,6 @@ function AddPersonContent() {
             type: relationshipSubtype,
             person1Id: newPersonId,       // Parent (new person)
             person2Id: selectedPersonId,  // Child
-            approverIds: selectedApprovers,
           };
         } else if (relationshipMode === 'spouse_of') {
           // New person is spouse of selected person
@@ -108,7 +101,6 @@ function AddPersonContent() {
             type: 'SPOUSE',
             person1Id: selectedPersonId,
             person2Id: newPersonId,
-            approverIds: selectedApprovers,
           };
         }
 
@@ -146,18 +138,6 @@ function AddPersonContent() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const toggleApprover = (personId: string) => {
-    setSelectedApprovers(prev => {
-      if (prev.includes(personId)) {
-        return prev.filter(id => id !== personId);
-      }
-      if (prev.length >= 2) {
-        return prev;
-      }
-      return [...prev, personId];
-    });
   };
 
   // Get selected person details
@@ -423,56 +403,6 @@ function AddPersonContent() {
             )}
           </Card>
 
-          {/* Approvers selection */}
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-900">Select Approvers</h3>
-              <span className="text-sm text-slate-500">
-                {selectedApprovers.length}/2 selected
-              </span>
-            </div>
-            <p className="text-sm text-slate-600 mb-4">
-              Choose up to 2 family members to approve this addition. 
-              If none selected, an admin will review it.
-            </p>
-
-            {availableApprovers.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">
-                No family members with accounts available yet.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {availableApprovers.map((person) => (
-                  <button
-                    key={person.id}
-                    type="button"
-                    onClick={() => toggleApprover(person.userId!)}
-                    className={clsx(
-                      'w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-all',
-                      selectedApprovers.includes(person.userId!)
-                        ? 'border-maroon-500 bg-maroon-50'
-                        : 'border-slate-200 hover:border-slate-300'
-                    )}
-                  >
-                    <Avatar
-                      src={person.profileImage?.url}
-                      name={`${person.firstName} ${person.lastName}`}
-                      size="sm"
-                    />
-                    <div className="flex-1 text-left">
-                      <p className="text-sm font-medium text-slate-900">
-                        {person.firstName} {person.lastName}
-                      </p>
-                    </div>
-                    {selectedApprovers.includes(person.userId!) && (
-                      <Check className="w-5 h-5 text-maroon-500" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </Card>
-
           {/* Tips */}
           <Card className="bg-maroon-50 border-maroon-200">
             <h3 className="font-semibold text-maroon-900 mb-2">Tips</h3>
@@ -480,7 +410,8 @@ function AddPersonContent() {
               <li>• Fill in as much information as you know</li>
               <li>• Upload a photo to help family members recognize them</li>
               <li>• Select a relationship to connect them to the tree</li>
-              <li>• You can add relationships later from the tree view</li>
+              <li>• New additions show as &quot;Unverified&quot; until approved</li>
+              <li>• Any family member can verify new additions</li>
             </ul>
           </Card>
         </div>
