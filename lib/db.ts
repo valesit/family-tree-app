@@ -24,6 +24,10 @@ function createPrismaClient() {
 
   const pool = new Pool({
     connectionString,
+    // Limit connections to avoid exhausting Supabase pool
+    max: 3, // Maximum connections in the pool
+    idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
+    connectionTimeoutMillis: 10000, // Timeout for acquiring connection
     ...(isLocal
       ? {}
       : {
