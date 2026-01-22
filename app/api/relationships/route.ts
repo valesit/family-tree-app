@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { relationshipSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
+import { isSystemAdmin, isFamilyAdmin, findPersonFamilyRoot } from '@/lib/family-membership';
 
 // GET /api/relationships - Get all relationships (public - no auth required)
 export async function GET(request: NextRequest) {
@@ -105,65 +106,39 @@ export async function POST(request: NextRequest) {
       relationshipCreateData.spouse2Id = person2Id;
     }
 
-    // If admin, create directly
-    if (user.role === 'ADMIN') {
-      const relationship = await prisma.relationship.create({
-        data: relationshipCreateData,
-        include: {
-          parent: true,
-          child: true,
-          spouse1: true,
-          spouse2: true,
-        },
-      });
+    // Determine family for the relationship
+    const familyId = await findPersonFamilyRoot(person1Id) || await findPersonFamilyRoot(person2Id);
+    
+    // Check if user is System Admin or Family Admin - they can create directly
+    const isSysAdmin = await isSystemAdmin(user.id);
+    const isFamAdmin = familyId ? await isFamilyAdmin(user.id, familyId) : false;
 
-      // Log activity
-      await prisma.activity.create({
-        data: {
-          type: 'RELATIONSHIP_ADDED',
-          description: `A ${type.toLowerCase().replace('_', '-')} relationship was added between ${person1.firstName} and ${person2.firstName}`,
-          userId: user.id,
-          data: { relationshipId: relationship.id },
-        },
-      });
-
-      return NextResponse.json({ success: true, data: relationship });
-    }
-
-    // Create pending change for non-admins
-    const pendingChange = await prisma.pendingChange.create({
-      data: {
-        changeType: 'ADD_RELATIONSHIP',
-        changeData: validationResult.data,
-        createdById: user.id,
-        approvals: {
-          create: approverIds && approverIds.length > 0
-            ? approverIds.map((approverId: string) => ({
-                approverId,
-                status: 'PENDING',
-              }))
-            : [],
-        },
+    // Create relationship directly for everyone (like we do for persons)
+    // Relationships appear immediately - the linked persons may have isVerified=false
+    const relationship = await prisma.relationship.create({
+      data: relationshipCreateData,
+      include: {
+        parent: true,
+        child: true,
+        spouse1: true,
+        spouse2: true,
       },
     });
 
-    // Notify approvers
-    if (approverIds && approverIds.length > 0) {
-      await prisma.notification.createMany({
-        data: approverIds.map((approverId: string) => ({
-          userId: approverId,
-          type: 'APPROVAL_REQUEST',
-          title: 'Relationship Approval Request',
-          message: `${user.name} wants to add a relationship between ${person1.firstName} and ${person2.firstName}.`,
-          data: { changeId: pendingChange.id },
-        })),
-      });
-    }
+    // Log activity
+    await prisma.activity.create({
+      data: {
+        type: 'RELATIONSHIP_ADDED',
+        description: `A ${type.toLowerCase().replace('_', '-')} relationship was added between ${person1.firstName} and ${person2.firstName}${!isSysAdmin && !isFamAdmin ? ' (persons may need verification)' : ''}`,
+        userId: user.id,
+        data: { relationshipId: relationship.id, familyId },
+      },
+    });
 
-    return NextResponse.json({
-      success: true,
-      data: pendingChange,
-      message: 'Your relationship request has been submitted for approval.',
+    return NextResponse.json({ 
+      success: true, 
+      data: relationship,
+      message: 'Relationship added successfully.',
     });
   } catch (error) {
     console.error('Error creating relationship:', error);

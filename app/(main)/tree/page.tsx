@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree, ExpandedTreeView } from '@/components/tree';
@@ -87,10 +87,12 @@ function getBirthdaysInMonth(tree: TreeNode | null, monthIndex: number): Birthda
 
 export default function TreePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [selectedPerson, setSelectedPerson] = useState<PersonWithRelations | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExpandedViewOpen, setIsExpandedViewOpen] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
   
   // Family name edit state
   const [isEditingFamilyName, setIsEditingFamilyName] = useState(false);
@@ -100,6 +102,41 @@ export default function TreePage() {
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
   const isAdmin = user?.role === 'ADMIN';
+  
+  // Get rootId from URL params if specified
+  const rootIdParam = searchParams.get('rootId');
+
+  // Fetch user's families to determine their default tree
+  const { data: userFamiliesData } = useSWR<{
+    success: boolean;
+    data: {
+      families: Array<{
+        id: string;
+        name: string;
+        role: string;
+        rootPerson: { id: string; firstName: string; lastName: string } | null;
+      }>;
+      defaultFamilyId: string | null;
+      linkedPersonFamily: string | null;
+    };
+  }>(isAuthenticated && !rootIdParam ? '/api/user/families' : null, fetcher);
+
+  // Redirect logged-in users to their family tree if they haven't specified one
+  useEffect(() => {
+    if (
+      isAuthenticated && 
+      !rootIdParam && 
+      !hasRedirected && 
+      userFamiliesData?.success && 
+      userFamiliesData.data.defaultFamilyId
+    ) {
+      setHasRedirected(true);
+      router.replace(`/tree?rootId=${userFamiliesData.data.defaultFamilyId}`);
+    }
+  }, [isAuthenticated, rootIdParam, hasRedirected, userFamiliesData, router]);
+
+  // Build the API URL - use rootId if specified, otherwise default
+  const treeApiUrl = rootIdParam ? `/api/tree?rootId=${rootIdParam}` : '/api/tree';
 
   const { data, error, isLoading, mutate } = useSWR<{
     success: boolean;
@@ -110,7 +147,7 @@ export default function TreePage() {
       familyName: string;
       foundingAncestor: FoundingAncestor | null;
     };
-  }>('/api/tree', fetcher, {
+  }>(treeApiUrl, fetcher, {
     revalidateOnFocus: false,
   });
 
@@ -248,12 +285,49 @@ export default function TreePage() {
   const monthName = new Date().toLocaleString(undefined, { month: 'long' });
   const birthdaysThisMonth = useMemo(() => getBirthdaysInMonth(tree, monthIndex), [tree, monthIndex]);
 
-  if (isLoading) {
+  // Show loading while checking for redirect or loading tree
+  const isCheckingRedirect = isAuthenticated && !rootIdParam && !hasRedirected && !userFamiliesData;
+  
+  if (isLoading || isCheckingRedirect) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="text-center">
           <Loader2 className="w-10 h-10 text-maroon-500 animate-spin mx-auto mb-4" />
           <p className="text-slate-600">Loading your family tree...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show onboarding if user is logged in but has no family
+  const userHasNoFamily = isAuthenticated && userFamiliesData?.success && 
+    !userFamiliesData.data.defaultFamilyId && 
+    userFamiliesData.data.families.length === 0;
+
+  if (userHasNoFamily && !rootIdParam) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <div className="text-center max-w-md mx-auto px-6">
+          <TreePine className="w-16 h-16 text-maroon-500 mx-auto mb-6" />
+          <h2 className="text-2xl font-bold text-slate-900 mb-3">Welcome to Family Tree!</h2>
+          <p className="text-slate-600 mb-6">
+            You&apos;re not part of any family tree yet. You can create a new family tree or browse existing ones to find your family.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button
+              onClick={() => router.push('/add-person')}
+              className="bg-maroon-600 hover:bg-maroon-700 text-white"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Create New Tree
+            </Button>
+            <Button
+              onClick={() => router.push('/')}
+              variant="outline"
+            >
+              Browse Families
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -277,6 +351,10 @@ export default function TreePage() {
   }
 
   const notablePersons = notableData?.data || [];
+  
+  // Get user's families for switcher
+  const userFamilies = userFamiliesData?.data?.families || [];
+  const hasMultipleFamilies = userFamilies.length > 1;
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-slate-50">
@@ -289,6 +367,29 @@ export default function TreePage() {
           >
             <ChevronLeft className="w-5 h-5 text-slate-600" />
           </button>
+          
+          {/* Family Switcher for users with multiple families */}
+          {hasMultipleFamilies && (
+            <div className="relative group">
+              <select
+                value={data?.data?.rootPersonId || ''}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    router.push(`/tree?rootId=${e.target.value}`);
+                  }
+                }}
+                className="appearance-none bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-maroon-500 cursor-pointer"
+              >
+                {userFamilies.map((family) => (
+                  <option key={family.id} value={family.id}>
+                    {family.name} {family.role === 'ADMIN' ? '(Admin)' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+            </div>
+          )}
+          
           <div>
             {isEditingFamilyName ? (
               <div className="flex items-center gap-3">

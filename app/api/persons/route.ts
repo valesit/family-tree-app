@@ -4,6 +4,13 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
+import { 
+  isSystemAdmin, 
+  isFamilyAdmin, 
+  findPersonFamilyRoot,
+  notifyVerifiedMembers,
+  addUserToFamily
+} from '@/lib/family-membership';
 
 // GET /api/persons - Get all persons or search (public - no auth required)
 export async function GET(request: NextRequest) {
@@ -61,7 +68,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/persons - Create a new person (direct or pending)
+// POST /api/persons - Create a new person (direct creation with verification status)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -71,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     const user = session.user as SessionUser;
     const body = await request.json();
-    const { approverIds, ...personData } = body;
+    const { approverIds, familyId, relatedPersonId, ...personData } = body;
 
     // Validate person data
     const validationResult = personSchema.safeParse(personData);
@@ -82,73 +89,80 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If admin, create directly without approval
-    if (user.role === 'ADMIN') {
-      const person = await prisma.person.create({
-        data: {
-          ...validationResult.data,
-          birthDate: validationResult.data.birthDate ? new Date(validationResult.data.birthDate) : null,
-          deathDate: validationResult.data.deathDate ? new Date(validationResult.data.deathDate) : null,
-          facts: validationResult.data.facts ? JSON.stringify(validationResult.data.facts) : null,
-          createdById: user.id,
-        },
-        include: {
-          profileImage: true,
-        },
-      });
-
-      // Log activity
-      await prisma.activity.create({
-        data: {
-          type: 'PERSON_ADDED',
-          description: `${person.firstName} ${person.lastName} was added to the family tree`,
-          userId: user.id,
-          data: { personId: person.id },
-        },
-      });
-
-      return NextResponse.json({ success: true, data: person });
+    // Determine which family tree this person belongs to
+    let targetFamilyId = familyId;
+    if (!targetFamilyId && relatedPersonId) {
+      // Find the family root from the related person
+      targetFamilyId = await findPersonFamilyRoot(relatedPersonId);
     }
 
-    // Create pending change for non-admins
-    const pendingChange = await prisma.pendingChange.create({
+    // Check if user is System Admin or Family Admin
+    const isSysAdmin = await isSystemAdmin(user.id);
+    const isFamAdmin = targetFamilyId ? await isFamilyAdmin(user.id, targetFamilyId) : false;
+    
+    // Person is auto-verified if added by System Admin or Family Admin
+    const shouldAutoVerify = isSysAdmin || isFamAdmin;
+
+    // Create the person directly (no more pending approval for new persons)
+    // New persons appear immediately with "Unverified" badge unless added by admin
+    const person = await prisma.person.create({
       data: {
-        changeType: 'CREATE_PERSON',
-        changeData: validationResult.data,
+        ...validationResult.data,
+        birthDate: validationResult.data.birthDate ? new Date(validationResult.data.birthDate) : null,
+        deathDate: validationResult.data.deathDate ? new Date(validationResult.data.deathDate) : null,
+        facts: validationResult.data.facts ? JSON.stringify(validationResult.data.facts) : null,
         createdById: user.id,
-        approvals: {
-          create: approverIds && approverIds.length > 0
-            ? approverIds.map((approverId: string) => ({
-                approverId,
-                status: 'PENDING',
-              }))
-            : [], // Admin will need to approve
-        },
+        addedById: user.id,
+        isVerified: shouldAutoVerify,
+        verifiedAt: shouldAutoVerify ? new Date() : null,
+        verifiedById: shouldAutoVerify ? user.id : null,
       },
       include: {
-        approvals: {
-          include: { approver: true },
-        },
+        profileImage: true,
       },
     });
 
-    // Notify approvers
-    if (approverIds && approverIds.length > 0) {
-      await prisma.notification.createMany({
-        data: approverIds.map((approverId: string) => ({
-          userId: approverId,
-          type: 'APPROVAL_REQUEST',
-          title: 'Approval Request',
-          message: `${user.name} wants to add a new family member and needs your approval.`,
-          data: { changeId: pendingChange.id },
-        })),
-      });
+    // Log activity
+    await prisma.activity.create({
+      data: {
+        type: 'PERSON_ADDED',
+        description: `${person.firstName} ${person.lastName} was added to the family tree${!shouldAutoVerify ? ' (pending verification)' : ''}`,
+        userId: user.id,
+        data: { personId: person.id, familyId: targetFamilyId },
+      },
+    });
+
+    // If not auto-verified and we have a family ID, notify verified members for approval
+    if (!shouldAutoVerify && targetFamilyId) {
+      await notifyVerifiedMembers(
+        targetFamilyId,
+        {
+          type: 'NEW_PERSON_PENDING',
+          title: 'New family member needs verification',
+          message: `${person.firstName} ${person.lastName} was added to the family tree and needs verification.`,
+          data: { personId: person.id, familyId: targetFamilyId },
+        },
+        user.id // Exclude the person who added them
+      );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: pendingChange,
-      message: 'Your request has been submitted for approval.',
+    // If the user adding the person is not yet a member of this family, add them
+    if (targetFamilyId) {
+      const existingMembership = await prisma.familyMembership.findUnique({
+        where: { userId_familyId: { userId: user.id, familyId: targetFamilyId } },
+      });
+      
+      if (!existingMembership) {
+        await addUserToFamily(user.id, targetFamilyId, 'MEMBER');
+      }
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      data: person,
+      message: shouldAutoVerify 
+        ? 'Person added successfully.' 
+        : 'Person added with unverified status. Family members can verify this addition.',
     });
   } catch (error) {
     console.error('Error creating person:', error);

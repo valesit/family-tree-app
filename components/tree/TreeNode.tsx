@@ -3,7 +3,7 @@
 import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
-import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink, Link2, AlertCircle } from 'lucide-react';
 
 interface TreeNodeProps {
   node: TreeNodeType;
@@ -101,6 +101,14 @@ export function TreeNode({
       {isRoot && !isSpouse && (
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-maroon-500 text-white text-[9px] font-semibold rounded-full">
           Root
+        </div>
+      )}
+
+      {/* Unverified badge */}
+      {person.isVerified === false && (
+        <div className="absolute -top-2 right-1/2 translate-x-1/2 px-2 py-0.5 bg-amber-500 text-white text-[8px] font-semibold rounded-full flex items-center gap-0.5 z-20">
+          <AlertCircle className="w-2.5 h-2.5" />
+          Unverified
         </div>
       )}
 

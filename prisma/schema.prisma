@@ -42,6 +42,27 @@ model User {
   // Notable nominations
   notableNominations NotableNomination[] @relation("NominationCreator")
 
+  // Family memberships (which trees this user belongs to)
+  familyMemberships FamilyMembership[]
+  
+  // Families created by this user
+  familiesCreated   Family[]            @relation("FamilyCreator")
+  
+  // Persons added by this user
+  personsAdded      Person[]            @relation("PersonAddedBy")
+  
+  // Persons verified by this user
+  personsVerified   Person[]            @relation("PersonVerifiedBy")
+  
+  // Admin removal requests created by this user
+  adminRemovalRequests AdminRemovalRequest[] @relation("RemovalRequester")
+  
+  // Admin removal requests targeting this user
+  adminRemovalTargets  AdminRemovalRequest[] @relation("RemovalTarget")
+  
+  // Admin removal requests resolved by this user (System Admin)
+  adminRemovalsResolved AdminRemovalRequest[] @relation("RemovalResolver")
+
   @@index([email])
   @@index([phone])
 }
@@ -83,9 +104,16 @@ model VerificationToken {
 }
 
 enum UserRole {
-  ADMIN
-  MEMBER
-  VIEWER
+  ADMIN    // System/Platform Admin - global access
+  MEMBER   // Regular user
+  VIEWER   // Read-only access
+}
+
+// Role within a specific family tree
+enum FamilyRole {
+  ADMIN    // Family Admin - can approve edits, manage tree admins
+  MEMBER   // Verified member - can approve new persons
+  PENDING  // Unverified - awaiting approval
 }
 
 // Family member in the tree (can be linked to a user account or not)
@@ -123,6 +151,18 @@ model Person {
   // Links to the root person of their birth family tree
   birthFamilyRootPersonId String?
 
+  // Verification status for new family members
+  isVerified    Boolean   @default(false)  // Shows "Unverified" badge if false
+  verifiedAt    DateTime?                   // When the person was verified
+  
+  // Who added this person
+  addedById     String?
+  addedBy       User?     @relation("PersonAddedBy", fields: [addedById], references: [id])
+  
+  // Who verified this person
+  verifiedById  String?
+  verifiedBy    User?     @relation("PersonVerifiedBy", fields: [verifiedById], references: [id])
+
   // Link to user account (optional)
   userId String? @unique
   user   User?   @relation("UserPerson", fields: [userId], references: [id])
@@ -145,6 +185,9 @@ model Person {
   @@index([firstName, lastName])
   @@index([userId])
   @@index([isNotable])
+  @@index([isVerified])
+  @@index([addedById])
+  @@index([verifiedById])
 }
 
 enum Gender {
@@ -225,11 +268,15 @@ model PendingChange {
   personId String?
   person   Person? @relation(fields: [personId], references: [id], onDelete: Cascade)
 
+  // Which family tree this change belongs to (for scoping approvers)
+  familyId String?
+
   // Approvals required
   approvals Approval[]
 
   @@index([createdById])
   @@index([personId])
+  @@index([familyId])
   @@index([status])
 }
 
@@ -380,6 +427,14 @@ enum NotificationType {
   NOTABLE_NOMINATION_APPROVED
   NOTABLE_NOMINATION_REJECTED
   RELATIVE_SUGGESTION
+  // New notification types for family management
+  NEW_PERSON_PENDING       // New unverified person added to family
+  PERSON_VERIFIED          // Person was verified
+  PROFILE_CLAIMED          // Someone claimed "This is me"
+  FAMILY_ADMIN_ADDED       // User promoted to Family Admin
+  FAMILY_ADMIN_REMOVAL_REQUEST  // Request to remove Family Admin
+  FAMILY_ADMIN_REMOVED     // Family Admin was removed
+  EDIT_APPROVAL_REQUEST    // Request to approve an edit (Family Admin only)
 }
 
 // Activity log for the family tree
@@ -426,7 +481,77 @@ model Family {
   // Link to the root/founding person of this family tree
   rootPersonId String  @unique
   
+  // Who created this family tree (auto becomes Family Admin)
+  createdById  String?
+  createdBy    User?   @relation("FamilyCreator", fields: [createdById], references: [id])
+  
+  // Family memberships
+  memberships  FamilyMembership[]
+  
+  // Admin removal requests for this family
+  adminRemovalRequests AdminRemovalRequest[]
+  
   @@index([rootPersonId])
+  @@index([createdById])
+}
+
+// ============================================
+// FAMILY MEMBERSHIP
+// ============================================
+
+// Tracks which users belong to which family trees and their role
+model FamilyMembership {
+  id        String     @id @default(cuid())
+  role      FamilyRole @default(MEMBER)
+  joinedAt  DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  // The user
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // The family tree (linked by rootPersonId)
+  familyId  String
+  family    Family     @relation(fields: [familyId], references: [rootPersonId], onDelete: Cascade)
+  
+  @@unique([userId, familyId])
+  @@index([userId])
+  @@index([familyId])
+  @@index([role])
+}
+
+// ============================================
+// ADMIN REMOVAL REQUESTS
+// ============================================
+
+// Requests to remove a Family Admin (requires System Admin approval)
+model AdminRemovalRequest {
+  id            String   @id @default(cuid())
+  reason        String?  @db.Text
+  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt     DateTime @default(now())
+  resolvedAt    DateTime?
+  
+  // Which family tree
+  familyId      String
+  family        Family   @relation(fields: [familyId], references: [rootPersonId], onDelete: Cascade)
+  
+  // The Family Admin to be removed
+  targetUserId  String
+  targetUser    User     @relation("RemovalTarget", fields: [targetUserId], references: [id])
+  
+  // Who requested the removal (another Family Admin)
+  requestedById String
+  requestedBy   User     @relation("RemovalRequester", fields: [requestedById], references: [id])
+  
+  // System Admin who resolved this request
+  resolvedById  String?
+  resolvedBy    User?    @relation("RemovalResolver", fields: [resolvedById], references: [id])
+  
+  @@index([familyId])
+  @@index([targetUserId])
+  @@index([requestedById])
+  @@index([status])
 }
 
 // ============================================

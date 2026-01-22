@@ -3,8 +3,13 @@ import { getServerSession } from 'next-auth';
 import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { SessionUser } from '@/types';
+import { 
+  findPersonFamilyRoot, 
+  addUserToFamily,
+  notifyFamilyAdmins 
+} from '@/lib/family-membership';
 
-// POST /api/persons/[id]/claim - Link user account to a person (auto-approved)
+// POST /api/persons/[id]/claim - Link user account to a person ("This is me" - auto-verified)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -48,36 +53,60 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Auto-approve: Link directly for all users (seamless & scalable)
+    // Find which family tree this person belongs to
+    const familyId = await findPersonFamilyRoot(personId);
+
+    // Auto-approve: Link directly and verify (self-attestation)
     const updatedPerson = await prisma.person.update({
       where: { id: personId },
-      data: { userId: user.id },
+      data: { 
+        userId: user.id,
+        // Self-claiming auto-verifies the person
+        isVerified: true,
+        verifiedAt: new Date(),
+        verifiedById: user.id,
+      },
     });
+
+    // Add user to family membership as a verified member
+    if (familyId) {
+      await addUserToFamily(user.id, familyId, 'MEMBER');
+    }
 
     // Create activity log
     await prisma.activity.create({
       data: {
         type: 'PERSON_UPDATED',
-        description: `${user.name} linked their account to ${person.firstName} ${person.lastName}`,
+        description: `${user.name} claimed the profile of ${person.firstName} ${person.lastName} ("This is me")`,
         userId: user.id,
-        data: { personId },
+        data: { personId, familyId },
       },
     });
 
-    // Notify admins (for awareness, not approval)
-    const admins = await prisma.user.findMany({
+    // Notify Family Admins of this tree (not all admins)
+    if (familyId) {
+      await notifyFamilyAdmins(familyId, {
+        type: 'PROFILE_CLAIMED',
+        title: 'Profile Claimed',
+        message: `${user.name || user.email} has claimed the profile of ${person.firstName} ${person.lastName}`,
+        data: { personId, userId: user.id, familyId },
+      });
+    }
+
+    // Also notify System Admins
+    const systemAdmins = await prisma.user.findMany({
       where: { role: 'ADMIN' },
       select: { id: true },
     });
 
-    if (admins.length > 0) {
+    if (systemAdmins.length > 0) {
       await prisma.notification.createMany({
-        data: admins.map((admin: { id: string }) => ({
+        data: systemAdmins.map((admin: { id: string }) => ({
           userId: admin.id,
-          type: 'NEW_FAMILY_MEMBER',
+          type: 'PROFILE_CLAIMED' as any,
           title: 'Profile Claimed',
-          message: `${user.name} (${user.email}) has linked their account to ${person.firstName} ${person.lastName}`,
-          data: { personId, userId: user.id },
+          message: `${user.name} (${user.email}) has claimed the profile of ${person.firstName} ${person.lastName}`,
+          data: { personId, userId: user.id, familyId },
         })),
       });
     }

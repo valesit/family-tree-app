@@ -52,6 +52,7 @@ export function buildFamilyTree(
       deathDate: person.deathDate?.toISOString(),
       profileImage: person.profileImage?.url,
       isLiving: person.isLiving,
+      isVerified: (person as any).isVerified ?? true, // Default to true for backward compatibility
       attributes: {
         birthYear: person.birthDate ? new Date(person.birthDate).getFullYear().toString() : undefined,
         deathYear: person.deathDate ? new Date(person.deathDate).getFullYear().toString() : undefined,
@@ -108,6 +109,7 @@ export function buildFamilyTree(
             deathDate: spousePerson.deathDate?.toISOString(),
             profileImage: spousePerson.profileImage?.url,
             isLiving: spousePerson.isLiving,
+            isVerified: (spousePerson as any).isVerified ?? true,
             marriageDate: spouseRelation.startDate?.toISOString(),
             divorceDate: spouseRelation.endDate?.toISOString(),
             marriageOrder: i + 1,

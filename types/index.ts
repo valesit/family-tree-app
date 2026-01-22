@@ -14,7 +14,11 @@ import {
   WikiComment,
   WikiTag,
   NotableNomination,
-  NotableImage
+  NotableImage,
+  Family,
+  FamilyMembership,
+  AdminRemovalRequest,
+  FamilyRole
 } from '@prisma/client';
 
 // Re-export Prisma types
@@ -34,7 +38,11 @@ export type {
   WikiComment,
   WikiTag,
   NotableNomination,
-  NotableImage
+  NotableImage,
+  Family,
+  FamilyMembership,
+  AdminRemovalRequest,
+  FamilyRole
 };
 
 // Extended types with relations
@@ -99,6 +107,7 @@ export interface TreeNode {
   deathDate?: string;
   profileImage?: string;
   isLiving: boolean;
+  isVerified?: boolean;  // Shows "Unverified" badge if false
   children?: TreeNode[];
   spouse?: TreeNode;  // Legacy single spouse (for backward compatibility)
   spouses?: SpouseNode[];  // Multiple spouses support
@@ -194,6 +203,38 @@ export interface SessionUser {
   image?: string | null;
   role: 'ADMIN' | 'MEMBER' | 'VIEWER';
   linkedPersonId?: string | null;
+}
+
+// ============================================
+// FAMILY MEMBERSHIP TYPES
+// ============================================
+
+export type FamilyMembershipWithUser = FamilyMembership & {
+  user: User;
+};
+
+export type FamilyMembershipWithFamily = FamilyMembership & {
+  family: Family;
+};
+
+export type FamilyWithMemberships = Family & {
+  memberships: FamilyMembershipWithUser[];
+  createdBy?: User | null;
+};
+
+export type AdminRemovalRequestWithDetails = AdminRemovalRequest & {
+  family: Family;
+  targetUser: User;
+  requestedBy: User;
+  resolvedBy?: User | null;
+};
+
+// Check if user is Family Admin for a specific tree
+export interface FamilyAdminCheck {
+  isFamilyAdmin: boolean;
+  isSystemAdmin: boolean;
+  canManageTree: boolean;
+  membership?: FamilyMembership | null;
 }
 
 // Search types
