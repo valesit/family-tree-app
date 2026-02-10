@@ -62,11 +62,14 @@ function AddPersonContent() {
     setError(null);
 
     try {
-      // First create the person
+      // First create the person (link to family via related person when adding with a relationship)
       const response = await fetch('/api/persons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          ...(relationshipMode !== 'none' && selectedPersonId ? { relatedPersonId: selectedPersonId } : {}),
+        }),
       });
 
       const result = await response.json();
@@ -113,7 +116,7 @@ function AddPersonContent() {
 
           const relationshipResult = await relationshipResponse.json();
           if (!relationshipResult.success) {
-            console.error('Failed to create relationship:', relationshipResult.error);
+            throw new Error(relationshipResult.error || 'Person created but linking to family member failed. You can add the relationship from the tree.');
           }
         }
       }

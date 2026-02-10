@@ -12,6 +12,7 @@ export function collectTreeNodeIds(tree: TreeNode | null): Set<string> {
   const addNode = (n: TreeNode | null | undefined) => {
     if (!n) return;
     ids.add(n.id);
+    n.parents?.forEach((p) => addNode(p));
     n.spouses?.forEach((s) => addNode(s));
     addNode(n.spouse);
     n.children?.forEach((c) => addNode(c));
@@ -61,6 +62,23 @@ export function buildFamilyTree(
         birthFamilyId: (person as any).birthFamilyRootPersonId || undefined,
       },
     };
+
+    // Get parents if showing ancestors (so new parent/ancestor shows on tree)
+    if (direction === 'ancestors' || direction === 'both') {
+      const parentRelations = relationships.filter(
+        (r: Relationship) =>
+          (r.type === 'PARENT_CHILD' || r.type === 'ADOPTED' || r.type === 'STEP_PARENT' || r.type === 'STEP_CHILD' || r.type === 'FOSTER') &&
+          r.childId === personId &&
+          r.parentId
+      );
+      const parentIds = [...new Set(parentRelations.map((r: Relationship) => r.parentId!))];
+      const parents = parentIds
+        .map((pid) => buildNode(pid, depth + 1))
+        .filter((p): p is TreeNode => p !== null);
+      if (parents.length > 0) {
+        node.parents = parents;
+      }
+    }
 
     // Get children if showing descendants
     if (direction === 'descendants' || direction === 'both') {
