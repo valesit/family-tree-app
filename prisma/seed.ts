@@ -410,8 +410,20 @@ Today, our family spans multiple countries and continents, but we remain connect
     },
   });
 
+  // Create Family record so home page shows the tree
+  await prisma.family.upsert({
+    where: { rootPersonId: greatGrandfather.id },
+    update: { name: 'Sithole/Moyo Family' },
+    create: {
+      rootPersonId: greatGrandfather.id,
+      name: 'Sithole/Moyo Family',
+      createdById: admin.id,
+    },
+  });
+
   console.log('✅ Sample family tree created with 12 members across 4 generations');
   console.log('✅ Sample wiki article created');
+  console.log('✅ Family record created for home page');
   console.log('');
   console.log('═══════════════════════════════════════════════════');
   console.log('  ADMIN CREDENTIALS');

@@ -108,7 +108,6 @@ export interface TreeNode {
   profileImage?: string;
   isLiving: boolean;
   isVerified?: boolean;  // Shows "Unverified" badge if false
-  parents?: TreeNode[];   // Ancestors (so adding a parent shows on tree)
   children?: TreeNode[];
   spouse?: TreeNode;  // Legacy single spouse (for backward compatibility)
   spouses?: SpouseNode[];  // Multiple spouses support

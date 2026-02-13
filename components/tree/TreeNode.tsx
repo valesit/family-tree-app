@@ -180,38 +180,9 @@ export function TreeNode({
   );
   };
 
-  const hasParents = node.parents && node.parents.length > 0;
-
   return (
     <div className="flex flex-col items-center">
-      {/* Parents row - ancestors show here so new parent appears on tree */}
-      {hasParents && (
-        <div className="flex flex-col items-center mb-3">
-          <div className="flex items-end justify-center gap-8">
-            {node.parents!.map((parent) => (
-              <div key={parent.id} className="flex flex-col items-center">
-                <TreeNode
-                  node={parent}
-                  onNodeClick={onNodeClick}
-                  onAddChild={onAddChild}
-                  onAddSpouse={onAddSpouse}
-                  onAddParent={onAddParent}
-                  onViewBirthFamily={onViewBirthFamily}
-                  expandedNodes={expandedNodes}
-                  toggleExpanded={toggleExpanded}
-                  level={level + 1}
-                />
-              </div>
-            ))}
-          </div>
-          {/* Vertical connector from parents down to this person */}
-          <svg width="2" height="20" className="mt-2">
-            <line x1="1" y1="0" x2="1" y2="20" stroke="#9f1239" strokeWidth="2" />
-          </svg>
-        </div>
-      )}
-
-      {/* Add Parent button - only shown at root level when no parents, or when we have parents (add another) */}
+      {/* Add Parent button - only shown at root level */}
       {isRoot && onAddParent && (
         <div className="flex flex-col items-center mb-3">
           <button
@@ -220,7 +191,7 @@ export function TreeNode({
           >
             <ChevronUp className="w-3 h-3" />
             <Users className="w-3 h-3" />
-            {hasParents ? 'Add Another Parent' : 'Add Parent'}
+            Add Parent
           </button>
           {/* SVG connector down */}
           <svg width="2" height="16" className="mt-1">

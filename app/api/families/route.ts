@@ -1,23 +1,120 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
+const PARENT_CHILD_TYPES = ['PARENT_CHILD', 'ADOPTED', 'STEP_PARENT', 'STEP_CHILD', 'FOSTER'] as const;
+
+async function getStats() {
+  const [totalMembers, livingCount, deceasedCount, maleCount, femaleCount, marriageCount, oldestMember, youngestLiving] =
+    await Promise.all([
+      prisma.person.count(),
+      prisma.person.count({ where: { isLiving: true } }),
+      prisma.person.count({ where: { isLiving: false } }),
+      prisma.person.count({ where: { gender: 'MALE' } }),
+      prisma.person.count({ where: { gender: 'FEMALE' } }),
+      prisma.relationship.count({ where: { type: 'SPOUSE' } }),
+      prisma.person.findFirst({
+        where: { birthDate: { not: null } },
+        orderBy: { birthDate: 'asc' },
+        select: { firstName: true, lastName: true, birthDate: true },
+      }),
+      prisma.person.findFirst({
+        where: { birthDate: { not: null }, isLiving: true },
+        orderBy: { birthDate: 'desc' },
+        select: { firstName: true, lastName: true, birthDate: true },
+      }),
+    ]);
+  return {
+    totalMembers,
+    livingCount,
+    deceasedCount,
+    maleCount,
+    femaleCount,
+    marriageCount,
+    oldestMember: oldestMember
+      ? { name: `${oldestMember.firstName} ${oldestMember.lastName}`, birthYear: new Date(oldestMember.birthDate!).getFullYear() }
+      : null,
+    youngestLiving: youngestLiving
+      ? { name: `${youngestLiving.firstName} ${youngestLiving.lastName}`, birthYear: new Date(youngestLiving.birthDate!).getFullYear() }
+      : null,
+  };
+}
+
 export async function GET() {
   try {
-    // Use same logic as tree API: find roots = persons who are never the child in PARENT_CHILD
+    // 1. Try Family table first (explicit family trees)
+    const familyRecords = await prisma.family.findMany({
+      include: { createdBy: true },
+    });
+
+    if (familyRecords.length > 0) {
+      const families = await Promise.all(
+        familyRecords.map(async (f) => {
+          const person = await prisma.person.findUnique({
+            where: { id: f.rootPersonId },
+            include: { profileImage: true },
+          });
+          if (!person) return null;
+          const memberCount = await countFamilyMembers(person.id);
+          const generationCount = await countGenerations(person.id);
+          const notableCount = await prisma.person.count({
+            where: { lastName: person.lastName, isNotable: true },
+          });
+          return {
+            id: person.id,
+            familyName: f.name,
+            foundingAncestor: {
+              id: person.id,
+              firstName: person.firstName,
+              lastName: person.lastName,
+              profileImage: person.profileImage?.url || null,
+              birthYear: person.birthDate ? new Date(person.birthDate).getFullYear() : null,
+              birthPlace: person.birthPlace,
+            },
+            memberCount,
+            generationCount,
+            notableCount,
+            lastUpdated: f.updatedAt?.toISOString() || new Date().toISOString(),
+          };
+        })
+      );
+      const validFamilies = families.filter((f): f is NonNullable<typeof f> => f !== null);
+      return NextResponse.json({
+        success: true,
+        data: {
+          families: validFamilies.sort((a, b) => b.memberCount - a.memberCount),
+          stats: await getStats(),
+        },
+      });
+    }
+
+    // 2. Fallback: infer from Person/Relationship (roots = never the child in parent-child relations)
     const [persons, relationships] = await Promise.all([
       prisma.person.findMany({ include: { profileImage: true } }),
-      prisma.relationship.findMany({ where: { type: 'PARENT_CHILD' }, select: { childId: true } }),
+      prisma.relationship.findMany({
+        where: { type: { in: [...PARENT_CHILD_TYPES] } },
+        select: { childId: true },
+      }),
     ]);
     const childIds = new Set(
       relationships.map((r) => r.childId).filter((id): id is string => !!id)
     );
-    const rootPersons = persons
+    let rootPersons = persons
       .filter((p) => !childIds.has(p.id))
       .sort((a, b) => {
         if (!a.birthDate) return 1;
         if (!b.birthDate) return -1;
         return a.birthDate.getTime() - b.birthDate.getTime();
       });
+
+    // 3. Fallback: if we have persons but no roots (bad data), use oldest person as single family
+    if (rootPersons.length === 0 && persons.length > 0) {
+      const sorted = [...persons].sort((a, b) => {
+        if (!a.birthDate) return 1;
+        if (!b.birthDate) return -1;
+        return a.birthDate.getTime() - b.birthDate.getTime();
+      });
+      rootPersons = [sorted[0]];
+    }
 
     // Group root persons by last name to form family units
     const familyGroups: { [key: string]: typeof rootPersons } = {};
@@ -82,43 +179,7 @@ export async function GET() {
       })
     );
 
-    // Get overall stats
-    const totalMembers = await prisma.person.count();
-    const livingCount = await prisma.person.count({ where: { isLiving: true } });
-    const deceasedCount = await prisma.person.count({ where: { isLiving: false } });
-    const maleCount = await prisma.person.count({ where: { gender: 'MALE' } });
-    const femaleCount = await prisma.person.count({ where: { gender: 'FEMALE' } });
-    const marriageCount = await prisma.relationship.count({ where: { type: 'SPOUSE' } });
-
-    // Get oldest and youngest
-    const oldestMember = await prisma.person.findFirst({
-      where: { birthDate: { not: null } },
-      orderBy: { birthDate: 'asc' },
-      select: { firstName: true, lastName: true, birthDate: true }
-    });
-
-    const youngestLiving = await prisma.person.findFirst({
-      where: { birthDate: { not: null }, isLiving: true },
-      orderBy: { birthDate: 'desc' },
-      select: { firstName: true, lastName: true, birthDate: true }
-    });
-
-    const stats = {
-      totalMembers,
-      livingCount,
-      deceasedCount,
-      maleCount,
-      femaleCount,
-      marriageCount,
-      oldestMember: oldestMember ? {
-        name: `${oldestMember.firstName} ${oldestMember.lastName}`,
-        birthYear: new Date(oldestMember.birthDate!).getFullYear()
-      } : null,
-      youngestLiving: youngestLiving ? {
-        name: `${youngestLiving.firstName} ${youngestLiving.lastName}`,
-        birthYear: new Date(youngestLiving.birthDate!).getFullYear()
-      } : null,
-    };
+    const stats = await getStats();
 
     return NextResponse.json({
       success: true,

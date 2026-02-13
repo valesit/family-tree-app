@@ -68,7 +68,6 @@ function collectPeopleFromTree(tree: TreeNode | null): BirthdayPerson[] {
     addNode(n);
     addNode(n.spouse);
     n.spouses?.forEach((s) => addNode(s));
-    n.parents?.forEach((p) => walk(p));
     n.children?.forEach((c) => walk(c));
   };
 

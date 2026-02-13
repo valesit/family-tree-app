@@ -34,9 +34,39 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Build a quick parentId→childId lookup for walking up the tree
+    const childToParents = new Map<string, string[]>();
+    for (const r of relationships) {
+      if (r.type === 'PARENT_CHILD' && r.childId && r.parentId) {
+        const list = childToParents.get(r.childId) || [];
+        list.push(r.parentId);
+        childToParents.set(r.childId, list);
+      }
+    }
+
+    // Walk up from a given person to find the topmost ancestor in this tree
+    function findTopmostAncestor(startId: string): string {
+      const visited = new Set<string>();
+      let current = startId;
+      while (true) {
+        visited.add(current);
+        const parents = childToParents.get(current);
+        if (!parents || parents.length === 0) break;
+        // Pick the first parent that hasn't been visited (avoid cycles)
+        const next = parents.find((p) => !visited.has(p));
+        if (!next) break;
+        current = next;
+      }
+      return current;
+    }
+
     // Determine root person
     let rootId: string | null = rootPersonId;
-    if (!rootId) {
+    if (rootId) {
+      // Even if a rootId was given, walk up to the topmost ancestor so the tree
+      // always renders from the very top (e.g. after adding a parent above current root)
+      rootId = findTopmostAncestor(rootId);
+    } else {
       // Find the oldest person with no parents as root
       const childIds = new Set(
         relationships
