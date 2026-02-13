@@ -5,41 +5,44 @@ import { Pool } from 'pg';
 declare global {
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
+  // eslint-disable-next-line no-var
+  var pgPool: Pool | undefined;
 }
 
 function createPrismaClient() {
-  // For Prisma 7+, we need to use an adapter
   const connectionString = process.env.DATABASE_URL;
-  
+
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
-  
-  // Many hosted Postgres providers (e.g. Supabase) require SSL in production.
-  // Local dev typically does not.
+
   const isLocal =
     connectionString.includes('localhost') ||
     connectionString.includes('127.0.0.1') ||
     connectionString.includes('host.docker.internal');
 
-  const pool = new Pool({
-    connectionString,
-    // Limit connections to avoid exhausting Supabase pool
-    max: 3, // Maximum connections in the pool
-    idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 10000, // Timeout for acquiring connection
-    ...(isLocal
-      ? {}
-      : {
-          ssl: {
-            // Providers often use managed cert chains; in serverless environments this is the most compatible.
-            // If you have strict CA requirements, replace with proper CA bundle.
-            rejectUnauthorized: false,
-          },
-        }),
-  });
-  const adapter = new PrismaPg(pool);
-  
+  const isVercel = !!process.env.VERCEL;
+
+  // Reuse pool across hot invocations in serverless (globalThis persists in warm lambdas)
+  if (!globalThis.pgPool) {
+    globalThis.pgPool = new Pool({
+      connectionString,
+      // Serverless: keep pool tiny; local dev can be slightly larger
+      max: isVercel ? 1 : 3,
+      idleTimeoutMillis: isVercel ? 10000 : 30000,
+      connectionTimeoutMillis: 15000,
+      // Serverless environments should NOT keep connections alive between invocations
+      allowExitOnIdle: true,
+      ...(isLocal
+        ? {}
+        : {
+            ssl: { rejectUnauthorized: false },
+          }),
+    });
+  }
+
+  const adapter = new PrismaPg(globalThis.pgPool);
+
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
@@ -48,10 +51,8 @@ function createPrismaClient() {
 
 function createLazyPrismaClient(): PrismaClient {
   /**
-   * IMPORTANT:
    * Next.js / Vercel may import server modules during build-time evaluation.
-   * If DATABASE_URL is not set at build time, we don't want to crash the build immediately.
-   * Instead, we lazily throw only when Prisma is actually used.
+   * If DATABASE_URL is not set at build time we lazily throw only when Prisma is actually used.
    */
   return new Proxy({} as PrismaClient, {
     get(_target, prop) {
