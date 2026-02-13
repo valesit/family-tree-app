@@ -63,7 +63,77 @@ export function buildFamilyTree(
       },
     };
 
-    // Get parents if showing ancestors (so new parent/ancestor shows on tree)
+    // 1) Build spouses FIRST so they're attached before we recurse into children (which would
+    //    add the spouse to visited as a parent of a child and then we'd skip them as spouse).
+    const spouseRelations = relationships
+      .filter((r: Relationship) => r.type === 'SPOUSE' && (r.spouse1Id === personId || r.spouse2Id === personId))
+      .sort((a: Relationship, b: Relationship) => {
+        if (a.startDate && b.startDate) {
+          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        }
+        return 0;
+      });
+
+    const spouses: SpouseNode[] = [];
+    const spouseIds = new Set<string>();
+
+    for (let i = 0; i < spouseRelations.length; i++) {
+      const spouseRelation = spouseRelations[i];
+      const spouseId = spouseRelation.spouse1Id === personId
+        ? spouseRelation.spouse2Id
+        : spouseRelation.spouse1Id;
+      if (!spouseId) continue;
+      spouseIds.add(spouseId);
+      const spousePerson = personMap.get(spouseId);
+      if (spousePerson) {
+        spouses.push({
+          id: spousePerson.id,
+          name: `${spousePerson.firstName} ${spousePerson.lastName}`,
+          firstName: spousePerson.firstName,
+          lastName: spousePerson.lastName,
+          gender: spousePerson.gender || undefined,
+          birthDate: spousePerson.birthDate?.toISOString(),
+          deathDate: spousePerson.deathDate?.toISOString(),
+          profileImage: spousePerson.profileImage?.url,
+          isLiving: spousePerson.isLiving,
+          isVerified: (spousePerson as any).isVerified ?? true,
+          marriageDate: spouseRelation.startDate?.toISOString(),
+          divorceDate: spouseRelation.endDate?.toISOString(),
+          marriageOrder: i + 1,
+          marriageNotes: spouseRelation.notes || undefined,
+          attributes: {
+            birthYear: spousePerson.birthDate ? new Date(spousePerson.birthDate).getFullYear().toString() : undefined,
+            deathYear: spousePerson.deathDate ? new Date(spousePerson.deathDate).getFullYear().toString() : undefined,
+            occupation: spousePerson.occupation || undefined,
+            maidenName: spousePerson.maidenName || undefined,
+            birthFamilyId: (spousePerson as any).birthFamilyRootPersonId || undefined,
+          },
+        });
+      }
+    }
+    if (spouses.length > 0) {
+      node.spouse = spouses[0];
+      node.spouses = spouses;
+    }
+
+    // 2) Build children, excluding anyone who is already a spouse (show as couple, not parent–child).
+    if (direction === 'descendants' || direction === 'both') {
+      const childRelations = relationships.filter(
+        (r: Relationship) =>
+          r.type === 'PARENT_CHILD' &&
+          r.parentId === personId &&
+          r.childId &&
+          !spouseIds.has(r.childId)
+      );
+      const children = childRelations
+        .map((r: Relationship) => buildNode(r.childId!, depth + 1))
+        .filter((c): c is TreeNode => c !== null);
+      if (children.length > 0) {
+        node.children = children;
+      }
+    }
+
+    // 3) Build parents last so descendant traversal doesn't mark people visited and hide them.
     if (direction === 'ancestors' || direction === 'both') {
       const parentRelations = relationships.filter(
         (r: Relationship) =>
@@ -78,76 +148,6 @@ export function buildFamilyTree(
       if (parents.length > 0) {
         node.parents = parents;
       }
-    }
-
-    // Get children if showing descendants
-    if (direction === 'descendants' || direction === 'both') {
-      const childRelations = relationships.filter(
-        (r: Relationship) => r.type === 'PARENT_CHILD' && r.parentId === personId
-      );
-      
-      const children = childRelations
-        .map((r: Relationship) => buildNode(r.childId!, depth + 1))
-        .filter((c): c is TreeNode => c !== null);
-
-      if (children.length > 0) {
-        node.children = children;
-      }
-    }
-
-    // Get ALL spouses (supports polygamy)
-    const spouseRelations = relationships
-      .filter((r: Relationship) => r.type === 'SPOUSE' && (r.spouse1Id === personId || r.spouse2Id === personId))
-      .sort((a: Relationship, b: Relationship) => {
-        // Sort by marriage date if available
-        if (a.startDate && b.startDate) {
-          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-        }
-        return 0;
-      });
-
-    const spouses: SpouseNode[] = [];
-    
-    for (let i = 0; i < spouseRelations.length; i++) {
-      const spouseRelation = spouseRelations[i];
-      const spouseId = spouseRelation.spouse1Id === personId 
-        ? spouseRelation.spouse2Id 
-        : spouseRelation.spouse1Id;
-      
-      if (spouseId && !visited.has(spouseId)) {
-        const spousePerson = personMap.get(spouseId);
-        if (spousePerson) {
-          spouses.push({
-            id: spousePerson.id,
-            name: `${spousePerson.firstName} ${spousePerson.lastName}`,
-            firstName: spousePerson.firstName,
-            lastName: spousePerson.lastName,
-            gender: spousePerson.gender || undefined,
-            birthDate: spousePerson.birthDate?.toISOString(),
-            deathDate: spousePerson.deathDate?.toISOString(),
-            profileImage: spousePerson.profileImage?.url,
-            isLiving: spousePerson.isLiving,
-            isVerified: (spousePerson as any).isVerified ?? true,
-            marriageDate: spouseRelation.startDate?.toISOString(),
-            divorceDate: spouseRelation.endDate?.toISOString(),
-            marriageOrder: i + 1,
-            marriageNotes: spouseRelation.notes || undefined,
-            attributes: {
-              birthYear: spousePerson.birthDate ? new Date(spousePerson.birthDate).getFullYear().toString() : undefined,
-              deathYear: spousePerson.deathDate ? new Date(spousePerson.deathDate).getFullYear().toString() : undefined,
-              occupation: spousePerson.occupation || undefined,
-              maidenName: spousePerson.maidenName || undefined,
-              birthFamilyId: (spousePerson as any).birthFamilyRootPersonId || undefined,
-            },
-          });
-        }
-      }
-    }
-
-    // Set both for backward compatibility and new multiple spouse support
-    if (spouses.length > 0) {
-      node.spouse = spouses[0];  // First spouse for backward compatibility
-      node.spouses = spouses;     // All spouses
     }
 
     return node;
