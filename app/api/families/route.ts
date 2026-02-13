@@ -3,21 +3,21 @@ import prisma from '@/lib/db';
 
 export async function GET() {
   try {
-    // Get all persons who are potential family tree roots (no parents)
-    const rootPersons = await prisma.person.findMany({
-      where: {
-        // Find people with no parent relationships (where they are the child)
-        parentRelations: {
-          none: {}
-        }
-      },
-      include: {
-        profileImage: true,
-      },
-      orderBy: {
-        birthDate: 'asc'
-      }
-    });
+    // Use same logic as tree API: find roots = persons who are never the child in PARENT_CHILD
+    const [persons, relationships] = await Promise.all([
+      prisma.person.findMany({ include: { profileImage: true } }),
+      prisma.relationship.findMany({ where: { type: 'PARENT_CHILD' }, select: { childId: true } }),
+    ]);
+    const childIds = new Set(
+      relationships.map((r) => r.childId).filter((id): id is string => !!id)
+    );
+    const rootPersons = persons
+      .filter((p) => !childIds.has(p.id))
+      .sort((a, b) => {
+        if (!a.birthDate) return 1;
+        if (!b.birthDate) return -1;
+        return a.birthDate.getTime() - b.birthDate.getTime();
+      });
 
     // Group root persons by last name to form family units
     const familyGroups: { [key: string]: typeof rootPersons } = {};
