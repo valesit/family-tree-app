@@ -66,10 +66,11 @@ export const personSchema = z.object({
 });
 
 // Relationship schema
+// Use .min(1) instead of .cuid() because Prisma 7 generates CUIDv2 and seed data uses custom IDs
 export const relationshipSchema = z.object({
   type: z.enum(['PARENT_CHILD', 'SPOUSE', 'SIBLING', 'ADOPTED', 'STEP_PARENT', 'STEP_CHILD', 'FOSTER']),
-  person1Id: z.string().cuid('Invalid person ID'),
-  person2Id: z.string().cuid('Invalid person ID'),
+  person1Id: z.string().min(1, 'Person ID is required'),
+  person2Id: z.string().min(1, 'Person ID is required'),
   startDate: z.string().regex(dateRegex, 'Invalid date format').optional().or(z.literal('')),
   endDate: z.string().regex(dateRegex, 'Invalid date format').optional().or(z.literal('')),
   notes: z.string().max(1000).optional().or(z.literal('')),
@@ -80,7 +81,7 @@ export const relationshipSchema = z.object({
 
 // Correction request schema
 export const correctionSchema = z.object({
-  personId: z.string().cuid('Invalid person ID'),
+  personId: z.string().min(1, 'Person ID is required'),
   proposedChanges: z.object({
     firstName: z.string().optional(),
     lastName: z.string().optional(),
@@ -95,8 +96,8 @@ export const correctionSchema = z.object({
 // Message schema
 export const messageSchema = z.object({
   content: z.string().min(1, 'Message cannot be empty').max(5000),
-  receiverId: z.string().cuid('Invalid receiver ID').optional(),
-  conversationId: z.string().cuid('Invalid conversation ID').optional(),
+  receiverId: z.string().min(1).optional(),
+  conversationId: z.string().min(1).optional(),
 }).refine(data => data.receiverId || data.conversationId, {
   message: 'Either receiverId or conversationId is required',
   path: ['receiverId'],
@@ -104,7 +105,7 @@ export const messageSchema = z.object({
 
 // Approval schema
 export const approvalSchema = z.object({
-  pendingChangeId: z.string().cuid('Invalid change ID'),
+  pendingChangeId: z.string().min(1, 'Change ID is required'),
   status: z.enum(['APPROVED', 'REJECTED']),
   comment: z.string().max(1000).optional().or(z.literal('')),
 });
@@ -132,8 +133,8 @@ export const changeRequestSchema = z.object({
     'DELETE_IMAGE',
   ]),
   changeData: z.record(z.string(), z.unknown()),
-  personId: z.string().cuid().optional(),
-  approverIds: z.array(z.string().cuid()).min(0).max(2),
+  personId: z.string().min(1).optional(),
+  approverIds: z.array(z.string().min(1)).min(0).max(2),
   comment: z.string().max(1000).optional(),
 });
 
