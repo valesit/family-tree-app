@@ -47,10 +47,33 @@ export async function GET() {
     });
 
     if (familyRecords.length > 0) {
+      // Load all parent-child relationships once for walking up to topmost ancestor
+      const allParentChild = await prisma.relationship.findMany({
+        where: { type: 'PARENT_CHILD' },
+        select: { parentId: true, childId: true },
+      });
+      const childToParent = new Map<string, string>();
+      for (const r of allParentChild) {
+        if (r.childId && r.parentId) childToParent.set(r.childId, r.parentId);
+      }
+      function findTopmostAncestor(startId: string): string {
+        const visited = new Set<string>();
+        let current = startId;
+        while (true) {
+          visited.add(current);
+          const parent = childToParent.get(current);
+          if (!parent || visited.has(parent)) break;
+          current = parent;
+        }
+        return current;
+      }
+
       const families = await Promise.all(
         familyRecords.map(async (f) => {
+          // Walk up from the stored root to the actual topmost ancestor
+          const topmostId = findTopmostAncestor(f.rootPersonId);
           const person = await prisma.person.findUnique({
-            where: { id: f.rootPersonId },
+            where: { id: topmostId },
             include: { profileImage: true },
           });
           if (!person) return null;

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Common validators
 const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const dateRegex = /^\d{4}-\d{2}-\d{2}(T.*)?$/;
 
 // User registration schema
 export const registerSchema = z.object({

@@ -96,6 +96,9 @@ export function PersonForm({
       isLiving: true,
       isPrivate: false,
       ...initialData,
+      // Normalize ISO datetime strings to YYYY-MM-DD for <input type="date">
+      birthDate: initialData?.birthDate ? initialData.birthDate.slice(0, 10) : '',
+      deathDate: initialData?.deathDate ? initialData.deathDate.slice(0, 10) : '',
     },
   });
 
