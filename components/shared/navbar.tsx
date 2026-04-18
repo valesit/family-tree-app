@@ -53,15 +53,15 @@ export function Navbar() {
   const navItems = isAuthenticated ? authNavItems : guestNavItems;
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_1px_0_0_rgba(15,23,42,0.04)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-xl flex items-center justify-center shadow-lg shadow-maroon-500/20">
+            <div className="w-10 h-10 bg-maroon-500 rounded-lg flex items-center justify-center shadow-sm">
               <TreePine className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-xl text-slate-900 hidden sm:block">
+            <span className="font-semibold text-lg tracking-tight text-slate-900 hidden sm:block">
               FamilyTree
             </span>
           </Link>
@@ -78,7 +78,7 @@ export function Navbar() {
                   className={clsx(
                     'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-maroon-50 text-maroon-700'
+                      ? 'bg-slate-100 text-maroon-700'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   )}
                 >
@@ -111,7 +111,7 @@ export function Navbar() {
                 {/* Notifications */}
                 <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
                   <Bell className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-maroon-500 rounded-full" />
                 </button>
 
                 {/* Profile dropdown */}
@@ -150,7 +150,7 @@ export function Navbar() {
                         </Link>
                         <button
                           onClick={() => signOut({ callbackUrl: '/' })}
-                          className="flex items-center space-x-2 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 w-full text-left"
+                          className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 w-full text-left"
                         >
                           <LogOut className="w-4 h-4" />
                           <span>Sign Out</span>
@@ -172,7 +172,7 @@ export function Navbar() {
                 </Link>
                 <Link
                   href="/register"
-                  className="flex items-center space-x-2 bg-gradient-to-r from-maroon-500 to-maroon-700 text-white px-4 py-2 rounded-xl font-medium hover:from-maroon-600 hover:to-maroon-800 transition-all shadow-lg shadow-maroon-500/25"
+                  className="flex items-center space-x-2 bg-maroon-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span className="hidden sm:inline">Join</span>
@@ -210,7 +210,7 @@ export function Navbar() {
                   className={clsx(
                     'flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium',
                     isActive
-                      ? 'bg-maroon-50 text-maroon-700'
+                      ? 'bg-slate-100 text-maroon-700'
                       : 'text-slate-600 hover:bg-slate-50'
                   )}
                 >
@@ -223,7 +223,7 @@ export function Navbar() {
               <Link
                 href="/add-person"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-maroon-600 hover:bg-maroon-50"
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-maroon-600 hover:bg-slate-100"
               >
                 <Plus className="w-5 h-5" />
                 <span>Add Person</span>

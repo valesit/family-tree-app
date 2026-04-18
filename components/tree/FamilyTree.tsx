@@ -9,13 +9,14 @@ import { Move } from 'lucide-react';
 interface FamilyTreeProps {
   data: TreeNodeType | null;
   onNodeClick: (node: TreeNodeType) => void;
-  onAddChild: (parentId: string) => void;
-  onAddSpouse: (personId: string) => void;
+  onAddChild?: (parentId: string) => void;
+  onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
   onViewBirthFamily?: (personId: string, maidenName?: string) => void;
+  readOnly?: boolean;
 }
 
-export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddParent, onViewBirthFamily }: FamilyTreeProps) {
+export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddParent, onViewBirthFamily, readOnly = false }: FamilyTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.85 });
   const [isDragging, setIsDragging] = useState(false);
@@ -145,7 +146,7 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
   }
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="relative w-full h-full overflow-hidden bg-white">
       {/* Subtle grid pattern */}
       <div 
         className="absolute inset-0 opacity-[0.03] pointer-events-none"
@@ -179,14 +180,15 @@ export function FamilyTree({ data, onNodeClick, onAddChild, onAddSpouse, onAddPa
           <TreeNode
             node={data}
             onNodeClick={onNodeClick}
-            onAddChild={onAddChild}
-            onAddSpouse={onAddSpouse}
-            onAddParent={onAddParent}
+            onAddChild={readOnly ? undefined : onAddChild}
+            onAddSpouse={readOnly ? undefined : onAddSpouse}
+            onAddParent={readOnly ? undefined : onAddParent}
             onViewBirthFamily={onViewBirthFamily}
             expandedNodes={expandedNodes}
             toggleExpanded={toggleExpanded}
             level={0}
             isRoot={true}
+            readOnly={readOnly}
           />
         </div>
       </div>

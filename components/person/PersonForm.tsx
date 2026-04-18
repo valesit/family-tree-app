@@ -76,30 +76,30 @@ export function PersonForm({
     formState: { errors },
   } = useForm<PersonInput>({
     resolver: zodResolver(personSchema),
-    defaultValues: {
-      firstName: '',
-      lastName: '',
-      middleName: '',
-      maidenName: '',
-      nickname: '',
-      gender: undefined,
-      birthDate: '',
-      birthPlace: '',
-      deathDate: '',
-      deathPlace: '',
-      biography: '',
-      facts: [],
-      email: '',
-      phone: '',
-      address: '',
-      occupation: '',
-      isLiving: true,
-      isPrivate: false,
-      ...initialData,
-      // Normalize ISO datetime strings to YYYY-MM-DD for <input type="date">
-      birthDate: initialData?.birthDate ? initialData.birthDate.slice(0, 10) : '',
-      deathDate: initialData?.deathDate ? initialData.deathDate.slice(0, 10) : '',
-    },
+    defaultValues: (() => {
+      const { birthDate: rawBirth, deathDate: rawDeath, ...rest } = initialData || {};
+      return {
+        firstName: '',
+        lastName: '',
+        middleName: '',
+        maidenName: '',
+        nickname: '',
+        gender: undefined,
+        birthPlace: '',
+        deathPlace: '',
+        biography: '',
+        facts: [],
+        email: '',
+        phone: '',
+        address: '',
+        occupation: '',
+        isLiving: true,
+        isPrivate: false,
+        ...rest,
+        birthDate: rawBirth ? String(rawBirth).slice(0, 10) : '',
+        deathDate: rawDeath ? String(rawDeath).slice(0, 10) : '',
+      };
+    })(),
   });
 
   const { fields, append, remove } = useFieldArray({

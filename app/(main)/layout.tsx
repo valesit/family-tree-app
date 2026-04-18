@@ -31,7 +31,7 @@ export default async function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-white">
       <Navbar />
       <main className="pt-16">{children}</main>
     </div>

@@ -12,10 +12,10 @@
   --font-sans: var(--font-inter);
   --font-serif: var(--font-playfair);
   
-  /* Custom maroon theme based on #651A1A */
-  --color-maroon-50: #fdf2f2;
-  --color-maroon-100: #fce4e4;
-  --color-maroon-200: #facaca;
+  /* Custom maroon theme based on #651A1A — neutrals lean warm gray, not pink */
+  --color-maroon-50: #f8f6f6;
+  --color-maroon-100: #efe8e8;
+  --color-maroon-200: #e0d4d4;
   --color-maroon-300: #f5a3a3;
   --color-maroon-400: #eb6b6b;
   --color-maroon-500: #651A1A;

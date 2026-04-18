@@ -57,10 +57,10 @@ function LoginForm() {
   };
 
   return (
-    <Card className="w-full max-w-md relative z-10 shadow-2xl border-0">
+    <Card className="w-full max-w-md relative z-10 shadow-xl border border-slate-100">
       {/* Logo */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-maroon-500 to-maroon-700 rounded-2xl mb-4 shadow-lg shadow-maroon-500/30">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-maroon-500 rounded-xl mb-4 shadow-sm">
           <TreePine className="w-8 h-8 text-white" />
         </div>
         <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
@@ -96,7 +96,7 @@ function LoginForm() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-sm">
+        <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-red-700 text-sm">
           {error}
         </div>
       )}
@@ -161,7 +161,7 @@ function LoginForm() {
 
 function LoginFallback() {
   return (
-    <Card className="w-full max-w-md flex items-center justify-center py-20">
+    <Card className="w-full max-w-md flex items-center justify-center py-20 border border-slate-100 shadow-xl">
       <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
     </Card>
   );
@@ -169,13 +169,7 @@ function LoginFallback() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-rose-50 to-amber-50 flex items-center justify-center p-4">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-maroon-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-maroon-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse animation-delay-2000" />
-      </div>
-
+    <div className="min-h-screen bg-white flex items-center justify-center p-4">
       <Suspense fallback={<LoginFallback />}>
         <LoginForm />
       </Suspense>

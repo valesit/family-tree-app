@@ -101,10 +101,13 @@ export async function GET() {
         })
       );
       const validFamilies = families.filter((f): f is NonNullable<typeof f> => f !== null);
+      const sorted = validFamilies.sort((a, b) => b.memberCount - a.memberCount);
+      const primary = sorted.find((f) => f.familyName.toLowerCase().includes('sithole')) || sorted[0] || null;
       return NextResponse.json({
         success: true,
         data: {
-          families: validFamilies.sort((a, b) => b.memberCount - a.memberCount),
+          families: sorted,
+          primaryFamilyId: primary?.id || null,
           stats: await getStats(),
         },
       });
@@ -203,11 +206,14 @@ export async function GET() {
     );
 
     const stats = await getStats();
+    const sortedFallback = families.sort((a: (typeof families)[number], b: (typeof families)[number]) => b.memberCount - a.memberCount);
+    const primaryFallback = sortedFallback.find((f) => f.familyName.toLowerCase().includes('sithole')) || sortedFallback[0] || null;
 
     return NextResponse.json({
       success: true,
       data: {
-        families: families.sort((a: (typeof families)[number], b: (typeof families)[number]) => b.memberCount - a.memberCount),
+        families: sortedFallback,
+        primaryFamilyId: primaryFallback?.id || null,
         stats,
       }
     });

@@ -25,11 +25,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+      'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
     const variants = {
       primary:
-        'bg-gradient-to-r from-maroon-500 to-maroon-700 text-white hover:from-maroon-600 hover:to-maroon-800 focus:ring-maroon-500 shadow-lg shadow-maroon-500/25',
+        'bg-maroon-500 text-white hover:bg-maroon-600 focus:ring-maroon-500 shadow-sm',
       secondary:
         'bg-slate-800 text-white hover:bg-slate-700 focus:ring-slate-500',
       outline:

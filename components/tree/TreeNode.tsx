@@ -8,14 +8,15 @@ import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, Ext
 interface TreeNodeProps {
   node: TreeNodeType;
   onNodeClick: (node: TreeNodeType) => void;
-  onAddChild: (parentId: string) => void;
-  onAddSpouse: (personId: string) => void;
+  onAddChild?: (parentId: string) => void;
+  onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
   onViewBirthFamily?: (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => void;
   expandedNodes: Set<string>;
   toggleExpanded: (nodeId: string) => void;
   level: number;
   isRoot?: boolean;
+  readOnly?: boolean;
 }
 
 export function TreeNode({
@@ -29,6 +30,7 @@ export function TreeNode({
   toggleExpanded,
   level,
   isRoot = false,
+  readOnly = false,
 }: TreeNodeProps) {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id) || level < 2;
@@ -36,11 +38,11 @@ export function TreeNode({
   const getGenderColor = (gender?: string) => {
     switch (gender) {
       case 'MALE':
-        return 'border-sky-400 bg-gradient-to-br from-sky-50 to-white';
+        return 'border-slate-200 bg-white ring-1 ring-inset ring-sky-200/70';
       case 'FEMALE':
-        return 'border-pink-400 bg-gradient-to-br from-pink-50 to-white';
+        return 'border-slate-200 bg-white ring-1 ring-inset ring-maroon-200/60';
       default:
-        return 'border-slate-300 bg-white';
+        return 'border-slate-200 bg-white';
     }
   };
 
@@ -171,7 +173,7 @@ export function TreeNode({
         )}
         {/* Marriage date for spouses */}
         {isSpouse && 'marriageDate' in person && person.marriageDate && (
-          <p className="text-rose-400 text-[9px] mt-0.5">
+          <p className="text-slate-400 text-[9px] mt-0.5">
             m. {new Date(person.marriageDate).getFullYear()}
           </p>
         )}
@@ -182,8 +184,8 @@ export function TreeNode({
 
   return (
     <div className="flex flex-col items-center">
-      {/* Add Parent button - only shown at root level */}
-      {isRoot && onAddParent && (
+      {/* Add Parent button - only shown at root level in edit mode */}
+      {isRoot && onAddParent && !readOnly && (
         <div className="flex flex-col items-center mb-3">
           <button
             onClick={() => onAddParent(node.id)}
@@ -205,17 +207,19 @@ export function TreeNode({
         {/* Main person */}
         <div className="relative">
           <PersonCard person={node} />
-          {/* Add child button on hover */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddChild(node.id);
-            }}
-            className="absolute -right-1 top-1/2 -translate-y-1/2 p-1 bg-maroon-500 text-white rounded-full shadow opacity-0 hover:opacity-100 transition-opacity group-hover:opacity-100"
-            title="Add child"
-          >
-            <UserPlus className="w-3 h-3" />
-          </button>
+          {/* Add child button on hover - hidden in read-only mode */}
+          {!readOnly && onAddChild && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddChild(node.id);
+              }}
+              className="absolute -right-1 top-1/2 -translate-y-1/2 p-1 bg-maroon-500 text-white rounded-full shadow opacity-0 hover:opacity-100 transition-opacity group-hover:opacity-100"
+              title="Add child"
+            >
+              <UserPlus className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
         {/* Render all spouses with marriage connectors */}
@@ -224,19 +228,19 @@ export function TreeNode({
             {/* Marriage connector */}
             <div className="flex items-center">
               <svg width="20" height="2">
-                <line x1="0" y1="1" x2="20" y2="1" stroke="#f43f5e" strokeWidth="2" />
+                <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
               </svg>
               <div className="relative">
-                <Heart className="w-5 h-5 text-rose-500 mx-0.5" fill="currentColor" />
+                <Heart className="w-5 h-5 text-maroon-500 mx-0.5" fill="currentColor" />
                 {/* Show marriage number if multiple spouses */}
                 {hasMultipleSpouses && (
-                  <span className="absolute -top-1 -right-1 text-[8px] font-bold text-rose-600">
+                  <span className="absolute -top-1 -right-1 text-[8px] font-bold text-maroon-700">
                     {index + 1}
                   </span>
                 )}
               </div>
               <svg width="20" height="2">
-                <line x1="0" y1="1" x2="20" y2="1" stroke="#f43f5e" strokeWidth="2" />
+                <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
               </svg>
             </div>
             <PersonCard 
@@ -248,26 +252,28 @@ export function TreeNode({
           </div>
         ))}
 
-        {/* Add spouse button - always visible to allow adding more spouses */}
-        <div className="flex items-center">
-          <svg width="16" height="2">
-            <line x1="0" y1="1" x2="16" y2="1" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
-          </svg>
-          <button
-            onClick={() => onAddSpouse(node.id)}
-            className={clsx(
-              'flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-colors bg-slate-50/50',
-              'hover:border-maroon-400 hover:text-maroon-500',
-              allSpouses.length === 0 
-                ? 'w-[100px] h-[100px] border-slate-300 text-slate-400'
-                : 'w-14 h-14 border-slate-200 text-slate-300'
-            )}
-            title={allSpouses.length > 0 ? "Add another spouse" : "Add spouse"}
-          >
-            <Plus className={allSpouses.length === 0 ? "w-4 h-4" : "w-3 h-3"} />
-            {allSpouses.length === 0 && <span className="text-[10px] mt-1">Spouse</span>}
-          </button>
-        </div>
+        {/* Add spouse button - hidden in read-only mode */}
+        {!readOnly && onAddSpouse && (
+          <div className="flex items-center">
+            <svg width="16" height="2">
+              <line x1="0" y1="1" x2="16" y2="1" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
+            </svg>
+            <button
+              onClick={() => onAddSpouse(node.id)}
+              className={clsx(
+                'flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-colors bg-slate-50/50',
+                'hover:border-maroon-400 hover:text-maroon-500',
+                allSpouses.length === 0 
+                  ? 'w-[100px] h-[100px] border-slate-300 text-slate-400'
+                  : 'w-14 h-14 border-slate-200 text-slate-300'
+              )}
+              title={allSpouses.length > 0 ? "Add another spouse" : "Add spouse"}
+            >
+              <Plus className={allSpouses.length === 0 ? "w-4 h-4" : "w-3 h-3"} />
+              {allSpouses.length === 0 && <span className="text-[10px] mt-1">Spouse</span>}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Children section */}
@@ -328,6 +334,7 @@ export function TreeNode({
                         expandedNodes={expandedNodes}
                         toggleExpanded={toggleExpanded}
                         level={level + 1}
+                        readOnly={readOnly}
                       />
                     </div>
                   ))}
@@ -338,8 +345,8 @@ export function TreeNode({
         </div>
       )}
 
-      {/* Add child button when no children */}
-      {!hasChildren && level < 4 && (
+      {/* Add child button when no children - hidden in read-only mode */}
+      {!hasChildren && level < 4 && !readOnly && onAddChild && (
         <div className="flex flex-col items-center mt-2">
           <svg width="2" height="12">
             <line x1="1" y1="0" x2="1" y2="12" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
