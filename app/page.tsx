@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree } from '@/components/tree';
+import { FamilyGallerySection } from '@/components/gallery';
 import { TreeNode, PersonWithRelations } from '@/types';
 import {
   TreePine,
@@ -227,11 +228,11 @@ export default function HomePage() {
             aria-hidden
           />
           <div
-            className="absolute -right-24 -top-32 h-[22rem] w-[22rem] rounded-full bg-maroon-500/[0.09] blur-3xl"
+            className="absolute -right-20 -top-24 h-[14rem] w-[14rem] sm:h-[18rem] sm:w-[18rem] rounded-full bg-maroon-500/[0.08] blur-3xl"
             aria-hidden
           />
           <div
-            className="absolute -left-16 top-1/2 h-48 w-48 -translate-y-1/2 rounded-full bg-amber-200/[0.12] blur-2xl"
+            className="absolute -left-12 top-1/2 h-32 w-32 -translate-y-1/2 rounded-full bg-amber-200/[0.1] blur-2xl"
             aria-hidden
           />
           <div
@@ -239,15 +240,15 @@ export default function HomePage() {
             aria-hidden
           />
 
-          <div className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 lg:gap-8">
+          <div className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
               <div className="min-w-0 max-w-3xl">
-                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-maroon-700/80 mb-3 flex items-center gap-2">
-                  <span className="inline-block h-px w-6 bg-gradient-to-r from-maroon-400/60 to-transparent" aria-hidden />
-                  <Heart className="w-3.5 h-3.5 text-maroon-500" strokeWidth={2} />
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-maroon-700/80 mb-2 flex items-center gap-2">
+                  <span className="inline-block h-px w-5 bg-gradient-to-r from-maroon-400/60 to-transparent" aria-hidden />
+                  <Heart className="w-3 h-3 text-maroon-500" strokeWidth={2} />
                   Family Heritage
                 </p>
-                <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-semibold text-slate-900 tracking-tight leading-[1.15]">
+                <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-semibold text-slate-900 tracking-tight leading-tight">
                   The{' '}
                   <span className="bg-gradient-to-br from-maroon-600 to-maroon-900 bg-clip-text text-transparent">
                     {familyName}
@@ -255,7 +256,7 @@ export default function HomePage() {
                   <span className="text-slate-800">Family Tree</span>
                 </h1>
                 {ancestor && (
-                  <p className="text-sm sm:text-base text-slate-600 mt-3 font-medium">
+                  <p className="text-xs sm:text-sm text-slate-600 mt-2 font-medium">
                     Est. {ancestor.firstName} {ancestor.lastName}
                     {(ancestor as FamilyTreePreview['foundingAncestor']).birthYear &&
                       ` (${(ancestor as FamilyTreePreview['foundingAncestor']).birthYear})`}
@@ -264,16 +265,16 @@ export default function HomePage() {
                   </p>
                 )}
                 {treeData?.data?.foundingAncestor?.biography && (
-                  <p className="text-slate-500 text-sm max-w-2xl line-clamp-2 mt-3 leading-relaxed">
+                  <p className="text-slate-500 text-xs sm:text-sm max-w-2xl line-clamp-2 mt-2 leading-relaxed">
                     {treeData.data.foundingAncestor.biography}
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 {primaryId && (
                   <Link
                     href={`/tree?rootId=${primaryId}`}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-maroon-500 to-maroon-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-maroon-900/25 ring-1 ring-white/10 transition hover:brightness-105 hover:shadow-maroon-900/30"
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-maroon-500 to-maroon-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-maroon-900/20 ring-1 ring-white/10 transition hover:brightness-105"
                   >
                     <Maximize2 className="w-4 h-4 opacity-90" />
                     View Full Tree
@@ -282,7 +283,7 @@ export default function HomePage() {
                 {!isAuthenticated && (
                   <Link
                     href="/register"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300/90 bg-white/90 px-5 py-2.5 text-sm font-medium text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:border-maroon-200"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300/90 bg-white/90 px-4 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:border-maroon-200"
                   >
                     <UserPlus className="w-4 h-4" />
                     Sign Up to Edit
@@ -290,7 +291,7 @@ export default function HomePage() {
                 )}
                 <Link
                   href="/wiki"
-                  className="inline-flex items-center gap-2 rounded-xl border border-maroon-200/80 bg-maroon-50/50 px-4 py-2.5 text-sm font-medium text-maroon-900 hover:bg-maroon-50 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-xl border border-maroon-200/80 bg-maroon-50/50 px-4 py-2 text-sm font-medium text-maroon-900 hover:bg-maroon-50 transition-colors"
                 >
                   <BookOpen className="w-4 h-4" />
                   Read stories
@@ -298,6 +299,11 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+        </section>
+
+        {/* Family gallery — stock + uploads */}
+        <section className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+          <FamilyGallerySection rootPersonId={primaryId ?? null} compact />
         </section>
 
         {/* Tree + sidebar stats — tree is primary, stats alongside */}
