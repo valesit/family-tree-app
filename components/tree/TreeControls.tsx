@@ -14,7 +14,7 @@ export function TreeControls({ onZoomIn, onZoomOut, onReset, scale }: TreeContro
   const zoomPercentage = Math.round(scale * 100);
 
   return (
-    <div className="absolute top-4 right-4 flex flex-col items-center space-y-2">
+    <div className="absolute top-4 right-4 flex flex-col items-center space-y-2 z-10" data-tree-controls>
       <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200 p-1 flex flex-col">
         <button
           onClick={onZoomIn}

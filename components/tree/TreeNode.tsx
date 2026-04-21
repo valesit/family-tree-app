@@ -3,6 +3,7 @@
 import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
+import { useTreeViewOptional } from './TreeViewContext';
 import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink, Link2, AlertCircle } from 'lucide-react';
 
 interface TreeNodeProps {
@@ -74,6 +75,8 @@ export function TreeNode({
     return ordinalSuffixes[order] || `${order}th`;
   };
 
+  const treeView = useTreeViewOptional();
+
   // Person Card Component
   const PersonCard = ({ person, isSpouse = false, marriageOrder, totalSpouses }: { 
     person: TreeNodeType | SpouseNode; 
@@ -90,6 +93,7 @@ export function TreeNode({
       data-clickable="true"
       onClick={(e) => {
         e.stopPropagation();
+        if (treeView?.consumeIfSuppressClick()) return;
         onNodeClick(person);
       }}
       className={clsx(
@@ -131,6 +135,7 @@ export function TreeNode({
           }`}
           onClick={(e) => {
             e.stopPropagation();
+            if (treeView?.consumeIfSuppressClick()) return;
             if (person.attributes?.birthFamilyId) {
               // Direct link to birth family tree
               onViewBirthFamily?.(person.id, person.attributes.maidenName, person.attributes.birthFamilyId);

@@ -168,65 +168,94 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main className="pt-20">
-        {/* Hero + Key Facts */}
-        <section className="relative py-10 px-4 border-b border-slate-100">
-          <div className="max-w-7xl mx-auto relative">
-            <div className="flex flex-col lg:flex-row items-start gap-8">
-              {/* Family Header */}
-              <div className="flex-1 min-w-0">
-                <div className="inline-flex items-center px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-600 text-xs font-medium tracking-wide uppercase mb-4">
-                  <Heart className="w-3.5 h-3.5 mr-2 text-slate-400" strokeWidth={2} />
+        {/* Compact intro — keeps the tree high on the page */}
+        <section className="border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-2">
+                  <Heart className="w-3.5 h-3.5 text-maroon-500" strokeWidth={2} />
                   Family Heritage
-                </div>
-                <h1 className="text-4xl md:text-5xl font-semibold text-slate-900 mb-3 leading-tight tracking-tight">
-                  The{' '}
-                  <span className="text-maroon-500">
-                    {familyName}
-                  </span>
+                </p>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-slate-900 tracking-tight">
+                  The <span className="text-maroon-500">{familyName}</span>
                 </h1>
                 {ancestor && (
-                  <p className="text-lg text-slate-600 mb-2">
+                  <p className="text-sm sm:text-base text-slate-600 mt-2">
                     Est. {ancestor.firstName} {ancestor.lastName}
-                    {(ancestor as FamilyTreePreview['foundingAncestor']).birthYear && ` (${(ancestor as FamilyTreePreview['foundingAncestor']).birthYear})`}
-                    {(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace && ` - ${(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace}`}
+                    {(ancestor as FamilyTreePreview['foundingAncestor']).birthYear &&
+                      ` (${(ancestor as FamilyTreePreview['foundingAncestor']).birthYear})`}
+                    {(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace &&
+                      ` · ${(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace}`}
                   </p>
                 )}
                 {treeData?.data?.foundingAncestor?.biography && (
-                  <p className="text-slate-500 text-sm max-w-xl line-clamp-3">
+                  <p className="text-slate-500 text-sm max-w-2xl line-clamp-2 mt-2">
                     {treeData.data.foundingAncestor.biography}
                   </p>
                 )}
-
-                {/* CTAs */}
-                <div className="flex flex-wrap gap-3 mt-6">
-                  {primaryId && (
-                    <Link
-                      href={`/tree?rootId=${primaryId}`}
-                      className="inline-flex items-center gap-2 bg-maroon-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
-                    >
-                      <Maximize2 className="w-4 h-4" />
-                      View Full Tree
-                    </Link>
-                  )}
-                  {!isAuthenticated && (
-                    <Link
-                      href="/register"
-                      className="inline-flex items-center gap-2 bg-white text-slate-800 border border-slate-300 px-5 py-2.5 rounded-lg font-medium hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      Sign Up to Edit
-                    </Link>
-                  )}
-                </div>
               </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {primaryId && (
+                  <Link
+                    href={`/tree?rootId=${primaryId}`}
+                    className="inline-flex items-center gap-2 bg-maroon-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-maroon-600 transition-colors shadow-sm"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                    View Full Tree
+                  </Link>
+                )}
+                {!isAuthenticated && (
+                  <Link
+                    href="/register"
+                    className="inline-flex items-center gap-2 bg-white text-slate-800 border border-slate-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Sign Up to Edit
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
 
-              {/* Key Facts Panel */}
-              {stats && primaryFamily && (
-                <div className="w-full lg:w-80 bg-slate-50/80 rounded-xl border border-slate-100 p-6 space-y-4">
+        {/* Tree + sidebar stats — tree is primary, stats alongside */}
+        <section className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-stretch min-h-0">
+            {/* Tree canvas — maximum vertical space */}
+            <div className="flex-1 min-w-0 flex flex-col order-1 min-h-[min(78vh,920px)] lg:min-h-[min(82vh,960px)]">
+              <div className="flex items-center justify-between gap-3 mb-3 px-0.5">
+                <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <TreePine className="w-4 h-4 text-maroon-600" />
+                  Family tree
+                </h2>
+                <span className="text-xs text-slate-500 hidden sm:inline">Drag to move · Scroll to zoom</span>
+              </div>
+              <div className="flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-[min(72vh,880px)] ring-1 ring-slate-900/[0.04]">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-full min-h-[inherit]">
+                    <div className="text-center">
+                      <Loader2 className="w-10 h-10 text-slate-400 animate-spin mx-auto mb-4" />
+                      <p className="text-slate-600">Loading family tree...</p>
+                    </div>
+                  </div>
+                ) : hasNoData ? (
+                  <EmptyState isAuthenticated={isAuthenticated} />
+                ) : (
+                  <FamilyTree data={tree} onNodeClick={handleNodeClick} readOnly />
+                )}
+              </div>
+            </div>
+
+            {/* Stats — beside tree on lg+, below on small screens */}
+            <aside className="w-full lg:w-[min(100%,20rem)] xl:w-80 shrink-0 order-2 lg:pt-9">
+              {stats && primaryFamily ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-24 space-y-4 ring-1 ring-slate-900/[0.04]">
                   <h3 className="font-semibold text-slate-900 text-base flex items-center gap-2">
-                    <TreePine className="w-5 h-5 text-slate-600" />
-                    Family at a Glance
+                    <TreePine className="w-5 h-5 text-maroon-600" />
+                    Family at a glance
                   </h3>
+                  <p className="text-xs text-slate-500 -mt-2">Key numbers for this family</p>
                   <div className="grid grid-cols-2 gap-3">
                     <FactCard icon={Users} label="Members" value={String(primaryFamily.memberCount)} />
                     <FactCard icon={TreePine} label="Generations" value={String(primaryFamily.generationCount)} />
@@ -237,7 +266,7 @@ export default function HomePage() {
                   </div>
                   {stats.oldestMember && (
                     <div className="pt-3 border-t border-slate-100">
-                      <p className="text-xs text-slate-400 mb-1">Oldest Ancestor</p>
+                      <p className="text-xs text-slate-400 mb-1">Oldest ancestor</p>
                       <p className="text-sm font-medium text-slate-700">
                         {stats.oldestMember.name}{' '}
                         <span className="text-slate-400">({stats.oldestMember.birthYear})</span>
@@ -245,38 +274,21 @@ export default function HomePage() {
                     </div>
                   )}
                   {ancestor && (ancestor as FamilyTreePreview['foundingAncestor']).birthPlace && (
-                    <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                      <MapPin className="w-3.5 h-3.5" />
+                    <div className="flex items-start gap-2 text-sm text-slate-600">
+                      <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-slate-400" />
                       {(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Embedded Family Tree */}
-        <section className="px-4 pb-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" style={{ height: '65vh', minHeight: '500px' }}>
-              {isLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <Loader2 className="w-10 h-10 text-slate-400 animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600">Loading family tree...</p>
-                  </div>
-                </div>
-              ) : hasNoData ? (
-                <EmptyState isAuthenticated={isAuthenticated} />
               ) : (
-                <FamilyTree
-                  data={tree}
-                  onNodeClick={handleNodeClick}
-                  readOnly
-                />
+                !isLoading &&
+                !hasNoData && (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-6 text-sm text-slate-500">
+                    Statistics will appear when family data is loaded.
+                  </div>
+                )
               )}
-            </div>
+            </aside>
           </div>
         </section>
 
