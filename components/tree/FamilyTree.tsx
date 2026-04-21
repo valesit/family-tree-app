@@ -17,6 +17,23 @@ interface FamilyTreeProps {
   readOnly?: boolean;
 }
 
+/** Open first two generations by default (depth 0–1 nodes with children). */
+function collectDefaultExpandedIds(node: TreeNodeType | null): Set<string> {
+  const ids = new Set<string>();
+  if (!node) return ids;
+
+  function walk(n: TreeNodeType, depth: number) {
+    if (n.children && n.children.length > 0 && depth < 2) {
+      ids.add(n.id);
+      for (const c of n.children) {
+        walk(c, depth + 1);
+      }
+    }
+  }
+  walk(node, 0);
+  return ids;
+}
+
 type PanSession = {
   pointerId: number;
   startX: number;
@@ -24,6 +41,9 @@ type PanSession = {
   origX: number;
   origY: number;
   moved: boolean;
+  captureActive: boolean;
+  /** Pointer started on a button/link — suppress click after pan */
+  startOnInteractive: boolean;
 };
 
 function FamilyTreeInner({
@@ -46,6 +66,12 @@ function FamilyTreeInner({
   useEffect(() => {
     transformRef.current = transform;
   }, [transform]);
+
+  useEffect(() => {
+    if (data) {
+      setExpandedNodes(collectDefaultExpandedIds(data));
+    }
+  }, [data]);
 
   // Center the tree on mount / data change
   useEffect(() => {
@@ -70,7 +96,6 @@ function FamilyTreeInner({
     }
   }, []);
 
-  // Wheel zoom — needs non-passive listener so preventDefault works
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -90,6 +115,10 @@ function FamilyTreeInner({
     if ((e.target as HTMLElement).closest('[data-tree-controls]')) return;
     if (e.button !== 0) return;
 
+    const startOnInteractive = !!(e.target as HTMLElement).closest(
+      'button, a[href], [role="button"]'
+    );
+
     const t = transformRef.current;
     panSessionRef.current = {
       pointerId: e.pointerId,
@@ -98,12 +127,10 @@ function FamilyTreeInner({
       origX: t.x,
       origY: t.y,
       moved: false,
+      captureActive: false,
+      startOnInteractive,
     };
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
+    /* Deliberately no setPointerCapture here — immediate capture steals clicks from buttons */
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -114,9 +141,18 @@ function FamilyTreeInner({
     const dy = e.clientY - s.startY;
 
     if (Math.hypot(dx, dy) > 6) {
-      if (!s.moved) {
-        s.moved = true;
+      s.moved = true;
+      if (!s.captureActive) {
+        s.captureActive = true;
         setIsDragging(true);
+        if (s.startOnInteractive && treeView) {
+          treeView.markPanEnded();
+        }
+        try {
+          containerRef.current?.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
       }
       setTransform({
         scale: transformRef.current.scale,
@@ -130,18 +166,17 @@ function FamilyTreeInner({
     const s = panSessionRef.current;
     if (!s || e.pointerId !== s.pointerId) return;
 
-    if (s.moved && treeView) {
-      treeView.markPanEnded();
-    }
     panSessionRef.current = null;
     setIsDragging(false);
 
-    try {
-      if ((e.currentTarget as HTMLElement).hasPointerCapture?.(e.pointerId)) {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    if (s.captureActive) {
+      try {
+        if (containerRef.current?.hasPointerCapture?.(e.pointerId)) {
+          containerRef.current.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
     }
   };
 
@@ -226,7 +261,7 @@ function FamilyTreeInner({
       />
 
       <div className="absolute bottom-4 left-4 text-xs text-slate-500 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200/80 shadow-sm pointer-events-none max-w-[min(100%,20rem)]">
-        Drag anywhere to pan · Scroll to zoom · Click a person for details
+        Drag to pan · Scroll to zoom · Click a person for details
       </div>
     </div>
   );

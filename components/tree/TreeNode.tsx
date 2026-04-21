@@ -34,7 +34,7 @@ export function TreeNode({
   readOnly = false,
 }: TreeNodeProps) {
   const hasChildren = node.children && node.children.length > 0;
-  const isExpanded = expandedNodes.has(node.id) || level < 2;
+  const isExpanded = expandedNodes.has(node.id);
 
   const getGenderColor = (gender?: string) => {
     switch (gender) {
@@ -291,8 +291,14 @@ export function TreeNode({
 
           {/* Expand/collapse button */}
           <button
-            onClick={() => toggleExpanded(node.id)}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleExpanded(node.id);
+            }}
             className="p-1 bg-white rounded-full shadow border-2 border-maroon-300 hover:bg-maroon-50 transition-colors z-10"
+            aria-expanded={isExpanded}
+            aria-label={isExpanded ? 'Collapse branch' : 'Expand branch'}
           >
             {isExpanded ? (
               <ChevronDown className="w-3 h-3 text-maroon-600" />

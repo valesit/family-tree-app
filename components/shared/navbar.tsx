@@ -21,6 +21,7 @@ import {
   UserPlus,
   Home,
   BookOpen,
+  Images,
 } from 'lucide-react';
 import { Avatar, Button } from '@/components/ui';
 import { SessionUser } from '@/types';
@@ -39,6 +40,7 @@ export function Navbar() {
   const authNavItems = [
     { href: '/tree', label: 'Family Tree', icon: TreePine },
     { href: '/wiki', label: 'Wiki', icon: BookOpen },
+    { href: '/gallery', label: 'Gallery', icon: Images },
     { href: '/approvals', label: 'Approvals', icon: CheckCircle },
     { href: '/corrections', label: 'Corrections', icon: FileEdit },
     { href: '/messages', label: 'Messages', icon: MessageSquare },
@@ -46,8 +48,9 @@ export function Navbar() {
 
   // Navigation items for guests
   const guestNavItems = [
-    { href: '/', label: 'View Tree', icon: Home },
+    { href: '/', label: 'Home', icon: Home },
     { href: '/wiki', label: 'Wiki', icon: BookOpen },
+    { href: '/gallery', label: 'Gallery', icon: Images },
   ];
 
   const navItems = isAuthenticated ? authNavItems : guestNavItems;

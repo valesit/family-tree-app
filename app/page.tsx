@@ -24,6 +24,8 @@ import {
   User,
   Briefcase,
   BookOpen,
+  BookMarked,
+  Images,
 } from 'lucide-react';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -118,70 +120,142 @@ export default function HomePage() {
   const isLoading = familiesLoading || (primaryId && treeLoading);
   const hasNoData = !familiesLoading && (!familiesData?.data?.families?.length);
 
+  const treeExploreHref = primaryId ? `/tree?rootId=${primaryId}` : '/tree';
+
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-[#faf9f7] text-slate-900">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_1px_0_0_rgba(15,23,42,0.04)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-maroon-500 rounded-lg flex items-center justify-center shadow-sm">
-                <TreePine className="w-5 h-5 text-white" />
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-maroon-900/10 bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_-12px_rgba(101,26,26,0.12)]">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between gap-3 h-14 sm:h-16">
+            <Link href="/" className="flex items-center gap-2 min-w-0 shrink">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-maroon-600 to-maroon-800 rounded-lg flex items-center justify-center shadow-md shadow-maroon-900/20 ring-1 ring-white/20">
+                <TreePine className="w-[18px] h-[18px] sm:w-5 sm:h-5 text-white" />
               </div>
-              <span className="font-semibold text-lg tracking-tight text-slate-900">{familyName}</span>
+              <span className="font-semibold text-sm sm:text-base tracking-tight text-slate-900 truncate max-w-[10rem] sm:max-w-[14rem]">
+                {familyName}
+              </span>
+            </Link>
+
+            {/* Center — discover links */}
+            <div className="hidden md:flex items-center justify-center flex-1 gap-0.5 lg:gap-1 px-2 min-w-0">
+              <Link
+                href="/wiki"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
+              >
+                <BookOpen className="w-3.5 h-3.5 opacity-70" />
+                Wiki
+              </Link>
+              <Link
+                href="/wiki"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
+              >
+                <BookMarked className="w-3.5 h-3.5 opacity-70" />
+                Stories
+              </Link>
+              <Link
+                href="/gallery"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
+              >
+                <Images className="w-3.5 h-3.5 opacity-70" />
+                Gallery
+              </Link>
+              <Link
+                href={treeExploreHref}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
+              >
+                <TreePine className="w-3.5 h-3.5 opacity-70" />
+                Full tree
+              </Link>
             </div>
-            <div className="flex items-center space-x-4">
+
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {isAuthenticated ? (
                 <>
-                  <Link href="/tree" className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
-                    Full Tree
-                  </Link>
-                  <Link href="/wiki" className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
-                    Wiki
-                  </Link>
                   <Link
                     href="/add-person"
-                    className="text-sm bg-maroon-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
+                    className="text-xs sm:text-sm bg-maroon-500 text-white px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
                   >
                     Add Person
                   </Link>
                 </>
               ) : (
                 <>
-                  <Link href="/login" className="text-sm text-slate-600 hover:text-slate-900 font-medium flex items-center gap-2 transition-colors">
-                    <LogIn className="w-4 h-4" />
-                    Sign In
+                  <Link
+                    href="/login"
+                    className="text-xs sm:text-sm text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1.5 transition-colors"
+                  >
+                    <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Sign In</span>
                   </Link>
                   <Link
                     href="/register"
-                    className="text-sm bg-maroon-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm flex items-center gap-2"
+                    className="text-xs sm:text-sm bg-maroon-500 text-white px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm flex items-center gap-1.5"
                   >
-                    <UserPlus className="w-4 h-4" />
-                    Join Family
+                    <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    Join
                   </Link>
                 </>
               )}
             </div>
           </div>
+
+          {/* Mobile discover row */}
+          <div className="md:hidden flex items-center justify-center gap-1 pb-2 -mt-0.5 overflow-x-auto">
+            <Link href="/wiki" className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              Wiki
+            </Link>
+            <Link href="/wiki" className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              Stories
+            </Link>
+            <Link href="/gallery" className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              Gallery
+            </Link>
+            <Link href={treeExploreHref} className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              Full tree
+            </Link>
+          </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <main className="pt-20">
-        {/* Compact intro — keeps the tree high on the page */}
-        <section className="border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white">
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-2">
+      <main className="pt-28 md:pt-20">
+        {/* Hero — elegant title + subtle warmth */}
+        <section className="relative overflow-hidden border-b border-maroon-900/[0.07]">
+          <div
+            className="absolute inset-0 bg-gradient-to-br from-[#faf7f4] via-white to-[#f3ebe6]/90"
+            aria-hidden
+          />
+          <div
+            className="absolute -right-24 -top-32 h-[22rem] w-[22rem] rounded-full bg-maroon-500/[0.09] blur-3xl"
+            aria-hidden
+          />
+          <div
+            className="absolute -left-16 top-1/2 h-48 w-48 -translate-y-1/2 rounded-full bg-amber-200/[0.12] blur-2xl"
+            aria-hidden
+          />
+          <div
+            className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-maroon-800/15 to-transparent"
+            aria-hidden
+          />
+
+          <div className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 lg:gap-8">
+              <div className="min-w-0 max-w-3xl">
+                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-maroon-700/80 mb-3 flex items-center gap-2">
+                  <span className="inline-block h-px w-6 bg-gradient-to-r from-maroon-400/60 to-transparent" aria-hidden />
                   <Heart className="w-3.5 h-3.5 text-maroon-500" strokeWidth={2} />
                   Family Heritage
                 </p>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-slate-900 tracking-tight">
-                  The <span className="text-maroon-500">{familyName}</span>
+                <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-semibold text-slate-900 tracking-tight leading-[1.15]">
+                  The{' '}
+                  <span className="bg-gradient-to-br from-maroon-600 to-maroon-900 bg-clip-text text-transparent">
+                    {familyName}
+                  </span>{' '}
+                  <span className="text-slate-800">Family Tree</span>
                 </h1>
                 {ancestor && (
-                  <p className="text-sm sm:text-base text-slate-600 mt-2">
+                  <p className="text-sm sm:text-base text-slate-600 mt-3 font-medium">
                     Est. {ancestor.firstName} {ancestor.lastName}
                     {(ancestor as FamilyTreePreview['foundingAncestor']).birthYear &&
                       ` (${(ancestor as FamilyTreePreview['foundingAncestor']).birthYear})`}
@@ -190,30 +264,37 @@ export default function HomePage() {
                   </p>
                 )}
                 {treeData?.data?.foundingAncestor?.biography && (
-                  <p className="text-slate-500 text-sm max-w-2xl line-clamp-2 mt-2">
+                  <p className="text-slate-500 text-sm max-w-2xl line-clamp-2 mt-3 leading-relaxed">
                     {treeData.data.foundingAncestor.biography}
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                 {primaryId && (
                   <Link
                     href={`/tree?rootId=${primaryId}`}
-                    className="inline-flex items-center gap-2 bg-maroon-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-maroon-600 transition-colors shadow-sm"
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-maroon-500 to-maroon-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-maroon-900/25 ring-1 ring-white/10 transition hover:brightness-105 hover:shadow-maroon-900/30"
                   >
-                    <Maximize2 className="w-4 h-4" />
+                    <Maximize2 className="w-4 h-4 opacity-90" />
                     View Full Tree
                   </Link>
                 )}
                 {!isAuthenticated && (
                   <Link
                     href="/register"
-                    className="inline-flex items-center gap-2 bg-white text-slate-800 border border-slate-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300/90 bg-white/90 px-5 py-2.5 text-sm font-medium text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:border-maroon-200"
                   >
                     <UserPlus className="w-4 h-4" />
                     Sign Up to Edit
                   </Link>
                 )}
+                <Link
+                  href="/wiki"
+                  className="inline-flex items-center gap-2 rounded-xl border border-maroon-200/80 bg-maroon-50/50 px-4 py-2.5 text-sm font-medium text-maroon-900 hover:bg-maroon-50 transition-colors"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Read stories
+                </Link>
               </div>
             </div>
           </div>
@@ -231,7 +312,7 @@ export default function HomePage() {
                 </h2>
                 <span className="text-xs text-slate-500 hidden sm:inline">Drag to move · Scroll to zoom</span>
               </div>
-              <div className="flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-[min(72vh,880px)] ring-1 ring-slate-900/[0.04]">
+              <div className="flex-1 rounded-2xl border border-maroon-900/10 bg-white shadow-[0_20px_50px_-24px_rgba(101,26,26,0.15)] overflow-hidden min-h-[min(72vh,880px)] ring-1 ring-maroon-900/[0.04]">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full min-h-[inherit]">
                     <div className="text-center">
@@ -250,12 +331,12 @@ export default function HomePage() {
             {/* Stats — beside tree on lg+, below on small screens */}
             <aside className="w-full lg:w-[min(100%,20rem)] xl:w-80 shrink-0 order-2 lg:pt-9">
               {stats && primaryFamily ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-24 space-y-4 ring-1 ring-slate-900/[0.04]">
-                  <h3 className="font-semibold text-slate-900 text-base flex items-center gap-2">
+                <div className="rounded-2xl border border-maroon-900/10 bg-gradient-to-b from-white to-maroon-50/30 p-5 shadow-md lg:sticky lg:top-28 space-y-4 ring-1 ring-maroon-900/[0.05]">
+                  <h3 className="font-serif font-semibold text-slate-900 text-lg flex items-center gap-2">
                     <TreePine className="w-5 h-5 text-maroon-600" />
                     Family at a glance
                   </h3>
-                  <p className="text-xs text-slate-500 -mt-2">Key numbers for this family</p>
+                  <p className="text-xs text-slate-500 -mt-1">Key numbers for this family</p>
                   <div className="grid grid-cols-2 gap-3">
                     <FactCard icon={Users} label="Members" value={String(primaryFamily.memberCount)} />
                     <FactCard icon={TreePine} label="Generations" value={String(primaryFamily.generationCount)} />
@@ -265,7 +346,7 @@ export default function HomePage() {
                     )}
                   </div>
                   {stats.oldestMember && (
-                    <div className="pt-3 border-t border-slate-100">
+                    <div className="pt-3 border-t border-maroon-900/10">
                       <p className="text-xs text-slate-400 mb-1">Oldest ancestor</p>
                       <p className="text-sm font-medium text-slate-700">
                         {stats.oldestMember.name}{' '}
@@ -275,10 +356,17 @@ export default function HomePage() {
                   )}
                   {ancestor && (ancestor as FamilyTreePreview['foundingAncestor']).birthPlace && (
                     <div className="flex items-start gap-2 text-sm text-slate-600">
-                      <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-slate-400" />
+                      <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-maroon-400/80" />
                       {(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace}
                     </div>
                   )}
+                  <Link
+                    href="/wiki"
+                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl border border-maroon-200/90 bg-gradient-to-b from-white to-maroon-50/60 px-4 py-3 text-sm font-semibold text-maroon-900 shadow-sm transition hover:border-maroon-300 hover:shadow-md"
+                  >
+                    Learn more about this family
+                    <ArrowRight className="w-4 h-4 shrink-0 opacity-80" />
+                  </Link>
                 </div>
               ) : (
                 !isLoading &&
@@ -515,10 +603,10 @@ export default function HomePage() {
 
 function FactCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
   return (
-    <div className="bg-white rounded-lg border border-slate-100 p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <Icon className="w-5 h-5 text-slate-500 mx-auto mb-1" />
-      <p className="text-xl font-bold text-slate-900">{value}</p>
-      <p className="text-[11px] text-slate-500">{label}</p>
+    <div className="rounded-xl border border-maroon-900/[0.06] bg-white/90 p-3 text-center shadow-[0_2px_12px_-4px_rgba(101,26,26,0.12)] backdrop-blur-[2px]">
+      <Icon className="w-5 h-5 text-maroon-600/70 mx-auto mb-1" />
+      <p className="text-xl font-bold tabular-nums text-slate-900">{value}</p>
+      <p className="text-[11px] text-slate-500 font-medium">{label}</p>
     </div>
   );
 }
