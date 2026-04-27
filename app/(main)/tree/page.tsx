@@ -14,6 +14,7 @@ import {
   ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save, Cake
 } from 'lucide-react';
 import Link from 'next/link';
+import { clsx } from 'clsx';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -98,6 +99,8 @@ export default function TreePage() {
   const [isEditingFamilyName, setIsEditingFamilyName] = useState(false);
   const [editedFamilyName, setEditedFamilyName] = useState('');
   const [isSavingFamilyName, setIsSavingFamilyName] = useState(false);
+  /** On small screens, overview is secondary — collapsed by default so the tree is primary. */
+  const [mobileOverviewOpen, setMobileOverviewOpen] = useState(false);
 
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
@@ -447,27 +450,90 @@ export default function TreePage() {
         )}
       </div>
 
-      {/* Main Content — stack on small screens; side-by-side on lg+ (wide min on left + min-w:auto tree was clipping the tree off-screen on mobile) */}
-      <div className="flex-1 flex min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        {/* Left Panel - Family Overview (20% on large screens) */}
-        <div className="w-full max-h-[min(50vh,22rem)] shrink-0 border-b border-slate-200 lg:max-h-none lg:w-1/5 lg:min-w-[220px] lg:border-b-0 lg:border-r flex flex-col bg-white min-w-0">
+      {/* Main content: tree is primary (left on lg+, first on mobile); overview is collapsible on small screens. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
+        {/* Family tree — first in DOM: left on desktop, full-width focus on mobile */}
+        <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
           {/* Panel Header */}
-          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-2.5 sm:px-6 sm:py-3">
             <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-slate-600" />
+              <TreePine className="h-5 w-5 text-slate-600" />
+              <span className="font-semibold text-slate-900">Family Tree</span>
+            </div>
+            <button
+              onClick={() => setIsExpandedViewOpen(true)}
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+              title="Expand view"
+              type="button"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="relative min-h-0 min-h-[min(58dvh,520px)] flex-1 lg:min-h-0">
+            <FamilyTree
+              data={tree}
+              onNodeClick={handleNodeClick}
+              onAddChild={handleAddChild}
+              onAddSpouse={handleAddSpouse}
+              onAddParent={handleAddParent}
+              onViewBirthFamily={handleViewBirthFamily}
+            />
+          </div>
+        </div>
+
+        {/* Family overview — right on desktop, below on mobile, collapsible on &lt;lg via mobileOverviewOpen */}
+        <div className="order-2 flex min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-slate-200 bg-white lg:order-2 lg:h-full lg:max-h-none lg:w-1/5 lg:shrink-0 lg:min-h-0 lg:min-w-[220px] lg:flex-col lg:border-t-0 lg:border-l lg:border-slate-200">
+          <button
+            type="button"
+            onClick={() => setMobileOverviewOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left text-slate-800 transition-colors hover:bg-slate-50 lg:hidden"
+            aria-expanded={mobileOverviewOpen}
+            aria-controls="tree-page-family-overview"
+          >
+            <span className="flex items-center gap-2 font-semibold">
+              <BookOpen className="h-5 w-5 text-slate-600" />
+              Family overview
+              {stats && (
+                <span className="text-xs font-normal text-slate-500">
+                  · {stats.totalMembers} members
+                </span>
+              )}
+            </span>
+            {mobileOverviewOpen ? (
+              <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" />
+            ) : (
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" />
+            )}
+          </button>
+
+          <div className="hidden items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-slate-600" />
               <span className="font-semibold text-slate-900">Family Overview</span>
             </div>
             <button
               onClick={() => setIsExpandedViewOpen(true)}
-              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
               title="Expand view"
+              type="button"
             >
-              <Maximize2 className="w-4 h-4 text-slate-500" />
+              <Maximize2 className="h-4 w-4 text-slate-500" />
             </button>
           </div>
-          
-          {/* Panel Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          <div
+            id="tree-page-family-overview"
+            className={clsx(
+              'min-h-0 w-full',
+              'overflow-y-auto',
+              mobileOverviewOpen
+                ? 'max-h-[min(52vh,28rem)] sm:max-h-[min(50vh,32rem)]'
+                : 'max-h-0 overflow-y-hidden',
+              'lg:max-h-none lg:flex-1 lg:overflow-y-auto'
+            )}
+          >
+          <div className="space-y-6 p-4 sm:p-6">
             {/* Founding Ancestor Card */}
             {foundingAncestor && (
               <div className="bg-gradient-to-br from-maroon-600 to-maroon-800 rounded-xl p-4 text-white">
@@ -645,35 +711,6 @@ export default function TreePage() {
             </div>
           </div>
         </div>
-
-        {/* Right Panel - Family Tree (remaining width on large screens) */}
-        <div className="flex w-full min-h-[min(58dvh,520px)] min-w-0 flex-1 flex-col bg-white lg:min-h-0">
-          {/* Panel Header */}
-          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <TreePine className="w-5 h-5 text-slate-600" />
-              <span className="font-semibold text-slate-900">Family Tree</span>
-            </div>
-            <button
-              onClick={() => setIsExpandedViewOpen(true)}
-              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Expand view"
-            >
-              <Maximize2 className="w-4 h-4 text-slate-500" />
-            </button>
-          </div>
-          
-          {/* Tree Content */}
-          <div className="min-h-0 flex-1 relative">
-      <FamilyTree
-        data={tree}
-        onNodeClick={handleNodeClick}
-        onAddChild={handleAddChild}
-        onAddSpouse={handleAddSpouse}
-          onAddParent={handleAddParent}
-              onViewBirthFamily={handleViewBirthFamily}
-      />
-          </div>
         </div>
       </div>
 

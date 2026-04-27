@@ -28,6 +28,8 @@ import {
   ArrowLeft,
   PanelLeftClose,
   PanelRightClose,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import { clsx } from 'clsx';
@@ -118,6 +120,7 @@ export default function FamilyViewPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [leftPanelExpanded, setLeftPanelExpanded] = useState(false);
   const [rightPanelExpanded, setRightPanelExpanded] = useState(false);
+  const [mobileOverviewOpen, setMobileOverviewOpen] = useState(false);
 
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
@@ -318,59 +321,24 @@ export default function FamilyViewPage() {
         </div>
       </div>
 
-      {/* Split view — min-w on narrow screens + wide tree content forced the tree off-screen; stack on small viewports */}
-      <div className="flex-1 flex min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        {/* Left Panel - Family Overview */}
-        <div className="w-full max-h-[min(50vh,24rem)] shrink-0 border-b border-slate-200 bg-slate-50 flex flex-col min-w-0 lg:max-h-none lg:w-1/3 lg:min-w-0 lg:max-w-[500px] lg:border-b-0 lg:border-r">
-          {/* Panel Header */}
-          <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
-            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-maroon-500" />
-              Family Overview
-            </h2>
-            <button
-              onClick={() => setLeftPanelExpanded(true)}
-              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Expand Overview"
-            >
-              <Maximize2 className="w-4 h-4 text-slate-500" />
-            </button>
-          </div>
-          
-          {/* Panel Content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <FamilyOverviewContent 
-              familyName={familyName}
-              foundingAncestor={foundingAncestor}
-              stats={stats}
-              isAuthenticated={isAuthenticated}
-              familyId={familyId}
-              compact
-              birthdaysThisMonth={birthdaysThisMonth}
-              birthdaysMonthName={monthName}
-            />
-          </div>
-        </div>
-
-        {/* Right Panel - Family Tree */}
-        <div className="flex min-h-[min(58dvh,520px)] min-w-0 flex-1 flex-col lg:min-h-0">
-          {/* Panel Header */}
-          <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
-            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-              <TreePine className="w-4 h-4 text-maroon-500" />
+      {/* Tree is primary (left on lg+); overview on the right, collapsible on mobile */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
+        <div className="order-1 flex min-h-0 w-full min-w-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+            <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+              <TreePine className="h-4 w-4 text-maroon-500" />
               Family Tree
             </h2>
             <button
               onClick={() => setRightPanelExpanded(true)}
-              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
               title="Expand Tree"
+              type="button"
             >
-              <Maximize2 className="w-4 h-4 text-slate-500" />
+              <Maximize2 className="h-4 w-4 text-slate-500" />
             </button>
           </div>
-          
-          {/* Tree Content */}
-          <div className="min-h-0 flex-1 relative">
+          <div className="relative min-h-0 min-h-[min(58dvh,520px)] flex-1 lg:min-h-0">
             <FamilyTree
               data={tree}
               onNodeClick={handleNodeClick}
@@ -378,6 +346,69 @@ export default function FamilyViewPage() {
               onAddSpouse={handleAddSpouse}
               onAddParent={handleAddParent}
             />
+          </div>
+        </div>
+
+        <div className="order-2 flex min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-slate-200 bg-slate-50 lg:order-2 lg:h-full lg:min-h-0 lg:min-w-0 lg:w-1/3 lg:max-w-[min(100%,32rem)] lg:shrink-0 lg:border-t-0 lg:border-l lg:border-slate-200">
+          <button
+            type="button"
+            onClick={() => setMobileOverviewOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 text-left text-slate-800 transition-colors hover:bg-slate-50 lg:hidden"
+            aria-expanded={mobileOverviewOpen}
+            aria-controls="family-id-overview-panel"
+          >
+            <span className="flex items-center gap-2 font-semibold">
+              <BookOpen className="h-5 w-5 text-maroon-500" />
+              Family overview
+              {stats && (
+                <span className="text-xs font-normal text-slate-500">· {stats.totalMembers} members</span>
+              )}
+            </span>
+            {mobileOverviewOpen ? (
+              <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" />
+            ) : (
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" />
+            )}
+          </button>
+
+          <div className="hidden shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:flex">
+            <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+              <BookOpen className="h-4 w-4 text-maroon-500" />
+              Family Overview
+            </h2>
+            <button
+              onClick={() => setLeftPanelExpanded(true)}
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+              title="Expand Overview"
+              type="button"
+            >
+              <Maximize2 className="h-4 w-4 text-slate-500" />
+            </button>
+          </div>
+
+          <div
+            id="family-id-overview-panel"
+            className={clsx(
+              'min-h-0 w-full',
+              'overflow-y-auto',
+              mobileOverviewOpen
+                ? 'max-h-[min(52vh,28rem)] sm:max-h-[min(50vh,32rem)]'
+                : 'max-h-0 overflow-y-hidden',
+              'lg:max-h-none lg:flex-1 lg:overflow-y-auto'
+            )}
+          >
+            <div className="p-4">
+              <FamilyOverviewContent
+                familyName={familyName}
+                foundingAncestor={foundingAncestor}
+                stats={stats}
+                isAuthenticated={isAuthenticated}
+                familyId={familyId}
+                compact
+                birthdaysThisMonth={birthdaysThisMonth}
+                birthdaysMonthName={monthName}
+              />
+            </div>
           </div>
         </div>
       </div>
