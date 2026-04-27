@@ -447,10 +447,10 @@ export default function TreePage() {
         )}
       </div>
 
-      {/* Main Content - Two Panels */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Family Overview (20%) */}
-        <div className="w-1/5 min-w-[280px] border-r border-slate-200 flex flex-col bg-white">
+      {/* Main Content — stack on small screens; side-by-side on lg+ (wide min on left + min-w:auto tree was clipping the tree off-screen on mobile) */}
+      <div className="flex-1 flex min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        {/* Left Panel - Family Overview (20% on large screens) */}
+        <div className="w-full max-h-[min(50vh,22rem)] shrink-0 border-b border-slate-200 lg:max-h-none lg:w-1/5 lg:min-w-[220px] lg:border-b-0 lg:border-r flex flex-col bg-white min-w-0">
           {/* Panel Header */}
           <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -646,10 +646,10 @@ export default function TreePage() {
           </div>
         </div>
 
-        {/* Right Panel - Family Tree (80%) */}
-        <div className="w-4/5 flex flex-col bg-white">
+        {/* Right Panel - Family Tree (remaining width on large screens) */}
+        <div className="flex w-full min-h-[min(58dvh,520px)] min-w-0 flex-1 flex-col bg-white lg:min-h-0">
           {/* Panel Header */}
-          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <TreePine className="w-5 h-5 text-slate-600" />
               <span className="font-semibold text-slate-900">Family Tree</span>
@@ -664,7 +664,7 @@ export default function TreePage() {
           </div>
           
           {/* Tree Content */}
-          <div className="flex-1 relative">
+          <div className="min-h-0 flex-1 relative">
       <FamilyTree
         data={tree}
         onNodeClick={handleNodeClick}

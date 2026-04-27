@@ -318,10 +318,10 @@ export default function FamilyViewPage() {
         </div>
       </div>
 
-      {/* Split View Container */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Split view — min-w on narrow screens + wide tree content forced the tree off-screen; stack on small viewports */}
+      <div className="flex-1 flex min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* Left Panel - Family Overview */}
-        <div className="w-1/3 min-w-[350px] max-w-[500px] bg-slate-50 border-r border-slate-200 flex flex-col">
+        <div className="w-full max-h-[min(50vh,24rem)] shrink-0 border-b border-slate-200 bg-slate-50 flex flex-col min-w-0 lg:max-h-none lg:w-1/3 lg:min-w-0 lg:max-w-[500px] lg:border-b-0 lg:border-r">
           {/* Panel Header */}
           <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
@@ -353,7 +353,7 @@ export default function FamilyViewPage() {
         </div>
 
         {/* Right Panel - Family Tree */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex min-h-[min(58dvh,520px)] min-w-0 flex-1 flex-col lg:min-h-0">
           {/* Panel Header */}
           <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
@@ -370,7 +370,7 @@ export default function FamilyViewPage() {
           </div>
           
           {/* Tree Content */}
-          <div className="flex-1 relative">
+          <div className="min-h-0 flex-1 relative">
             <FamilyTree
               data={tree}
               onNodeClick={handleNodeClick}
