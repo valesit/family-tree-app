@@ -360,20 +360,21 @@ export default function TreePage() {
   const hasMultipleFamilies = userFamilies.length > 1;
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-slate-50">
-      {/* Top Header Bar */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <button 
+    <div className="h-[calc(100dvh-4rem)] flex flex-col bg-slate-50">
+      {/* Top Header Bar — compact on mobile to give the tree more room */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+          <button
             onClick={() => router.push('/')}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            className="rounded-lg p-1.5 transition-colors hover:bg-slate-100 sm:p-2"
+            type="button"
+            aria-label="Back to home"
           >
-            <ChevronLeft className="w-5 h-5 text-slate-600" />
+            <ChevronLeft className="h-5 w-5 text-slate-600" />
           </button>
-          
-          {/* Family Switcher for users with multiple families */}
+
           {hasMultipleFamilies && (
-            <div className="relative group">
+            <div className="relative hidden sm:block">
               <select
                 value={data?.data?.rootPersonId || ''}
                 onChange={(e) => {
@@ -381,7 +382,7 @@ export default function TreePage() {
                     router.push(`/tree?rootId=${e.target.value}`);
                   }
                 }}
-                className="appearance-none bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-maroon-500 cursor-pointer"
+                className="cursor-pointer appearance-none rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 pr-8 text-sm font-medium text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-maroon-500"
               >
                 {userFamilies.map((family) => (
                   <option key={family.id} value={family.id}>
@@ -389,63 +390,68 @@ export default function TreePage() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             </div>
           )}
-          
-          <div>
+
+          <div className="min-w-0">
             {isEditingFamilyName ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={editedFamilyName}
                   onChange={(e) => setEditedFamilyName(e.target.value)}
-                  className="text-xl font-bold text-slate-900 px-3 py-1 border-2 border-maroon-300 rounded-lg focus:border-maroon-500 focus:outline-none"
+                  className="min-w-0 rounded-lg border-2 border-maroon-300 px-2 py-1 text-base font-bold text-slate-900 focus:border-maroon-500 focus:outline-none sm:text-xl"
                   placeholder="e.g., Sithole Family"
                   autoFocus
                 />
                 <button
                   onClick={handleSaveFamilyName}
                   disabled={isSavingFamilyName || !editedFamilyName.trim()}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-maroon-600 text-white text-sm rounded-lg hover:bg-maroon-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1 rounded-lg bg-maroon-600 px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-maroon-700 disabled:opacity-50 sm:px-3 sm:text-sm"
+                  type="button"
                 >
-                  {isSavingFamilyName ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {isAdmin ? 'Save' : 'Submit'}
+                  {isSavingFamilyName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  <span className="hidden sm:inline">{isAdmin ? 'Save' : 'Submit'}</span>
                 </button>
                 <button
                   onClick={() => setIsEditingFamilyName(false)}
-                  className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition-colors hover:bg-slate-100 sm:px-3 sm:text-sm"
+                  type="button"
                 >
                   Cancel
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-slate-900">{familyName || 'Family'}</h1>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <h1 className="truncate text-base font-bold text-slate-900 sm:text-2xl">
+                  {familyName || 'Family'}
+                </h1>
                 {isAuthenticated && (
                   <button
                     onClick={handleStartEditFamilyName}
-                    className="p-1.5 text-slate-400 hover:text-maroon-600 hover:bg-maroon-50 rounded-lg transition-colors"
-                    title={isAdmin ? "Edit family name" : "Propose family name change"}
+                    className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-maroon-50 hover:text-maroon-600 sm:p-1.5"
+                    title={isAdmin ? 'Edit family name' : 'Propose family name change'}
+                    type="button"
                   >
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </button>
                 )}
               </div>
             )}
-            <p className="text-sm text-slate-500">
-              {stats ? `${stats.totalMembers} members • ${stats.marriageCount} marriages` : 'Loading...'}
+            <p className="truncate text-[11px] text-slate-500 sm:text-sm">
+              {stats ? `${stats.totalMembers} members · ${stats.marriageCount} marriages` : 'Loading...'}
             </p>
           </div>
         </div>
-        
+
         {!isAuthenticated && (
           <Link
             href="/login"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 transition-colors hover:bg-slate-50 sm:gap-2 sm:px-4 sm:py-2"
           >
-            <Lock className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">Sign in to contribute</span>
+            <Lock className="h-4 w-4 text-slate-500" />
+            <span className="hidden text-sm font-medium text-slate-700 sm:inline">Sign in</span>
           </Link>
         )}
       </div>
@@ -454,8 +460,8 @@ export default function TreePage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
         {/* Family tree — first in DOM: left on desktop, full-width focus on mobile */}
         <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
-          {/* Panel Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-2.5 sm:px-6 sm:py-3">
+          {/* Panel Header — hidden on mobile (top header already names the family) */}
+          <div className="hidden shrink-0 items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
             <div className="flex items-center gap-2">
               <TreePine className="h-5 w-5 text-slate-600" />
               <span className="font-semibold text-slate-900">Family Tree</span>
@@ -470,7 +476,7 @@ export default function TreePage() {
             </button>
           </div>
 
-          <div className="relative min-h-0 min-h-[min(58dvh,520px)] flex-1 lg:min-h-0">
+          <div className="relative min-h-[min(70dvh,640px)] flex-1 lg:min-h-0">
             <FamilyTree
               data={tree}
               onNodeClick={handleNodeClick}

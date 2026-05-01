@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
@@ -13,9 +13,15 @@ import {
   X,
   Trash2,
   LogIn,
+  ImageOff,
 } from 'lucide-react';
-import type { StockGalleryItem } from '@/lib/gallery-stock';
+import {
+  GALLERY_CATEGORIES,
+  type GalleryCategoryId,
+  type StockGalleryItem,
+} from '@/lib/gallery-stock';
 import { SessionUser } from '@/types';
+import { clsx } from 'clsx';
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -33,6 +39,8 @@ interface FamilyGallerySectionProps {
   compact?: boolean;
 }
 
+type FilterId = 'all' | GalleryCategoryId | 'uploads';
+
 export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySectionProps) {
   const { data: session, status } = useSession();
   const user = session?.user as SessionUser | undefined;
@@ -42,6 +50,7 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [activeFilter, setActiveFilter] = useState<FilterId>('all');
 
   const galleryUrl = rootPersonId ? `/api/gallery?rootPersonId=${encodeURIComponent(rootPersonId)}` : '/api/gallery';
   const { data, isLoading, mutate } = useSWR(galleryUrl, fetcher, { revalidateOnFocus: false });
@@ -49,6 +58,21 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
   const stock: StockGalleryItem[] = data?.data?.stock ?? [];
   const uploads: UploadRow[] = data?.data?.uploads ?? [];
   const isAuthenticated = status === 'authenticated';
+
+  /** Counts per filter so users see what's there at a glance. */
+  const counts = useMemo(() => {
+    const c: Record<FilterId, number> = {
+      all: stock.length + uploads.length,
+      generations: 0,
+      celebrations: 0,
+      heritage: 0,
+      moments: 0,
+      milestones: 0,
+      uploads: uploads.length,
+    };
+    for (const s of stock) c[s.category]++;
+    return c;
+  }, [stock, uploads]);
 
   const handleUpload = async () => {
     const input = fileRef.current;
@@ -70,6 +94,7 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
       setHasFile(false);
       if (input) input.value = '';
       await mutate();
+      setActiveFilter('uploads');
     } catch {
       alert('Upload failed');
     } finally {
@@ -122,25 +147,41 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
   const canEdit = (row: UploadRow) =>
     isAuthenticated && user && (user.role === 'ADMIN' || row.uploadedById === user.id);
 
+  /** Matches the active filter pill. */
+  const filteredStock =
+    activeFilter === 'all'
+      ? stock
+      : activeFilter === 'uploads'
+      ? []
+      : stock.filter((s) => s.category === activeFilter);
+
+  const filteredUploads =
+    activeFilter === 'all' || activeFilter === 'uploads' ? uploads : [];
+
+  const isEmpty =
+    !isLoading && filteredStock.length === 0 && filteredUploads.length === 0;
+
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border border-maroon-900/10 bg-gradient-to-b from-white to-maroon-50/20 shadow-sm ring-1 ring-maroon-900/[0.04] ${
-        compact ? 'py-5 px-4 sm:px-6' : 'py-8 px-4 sm:px-8'
-      }`}
+      className={clsx(
+        'relative overflow-hidden rounded-2xl border border-maroon-900/10 bg-gradient-to-b from-white to-maroon-50/20 shadow-sm ring-1 ring-maroon-900/[0.04]',
+        compact ? 'py-4 px-3 sm:py-5 sm:px-6' : 'py-6 px-4 sm:py-8 sm:px-8'
+      )}
     >
       <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-maroon-400/[0.06] blur-3xl pointer-events-none" aria-hidden />
 
-      <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h2 className="font-serif text-xl sm:text-2xl font-semibold text-slate-900 flex items-center gap-2">
-            <Images className="w-6 h-6 text-maroon-600 shrink-0" />
+      {/* Header */}
+      <div className="relative mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 font-serif text-lg font-semibold text-slate-900 sm:text-2xl">
+            <Images className="h-5 w-5 shrink-0 text-maroon-600 sm:h-6 sm:w-6" />
             Family gallery
           </h2>
-          <p className="text-sm text-slate-600 mt-1">
-            Moments from reunions, milestones, and everyday life — stock highlights plus your uploads.
+          <p className="mt-0.5 text-xs text-slate-600 sm:mt-1 sm:text-sm">
+            Tap a category to filter photos. Sign in to add your own.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           {isAuthenticated ? (
             <>
               <input
@@ -154,63 +195,112 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
                 type="button"
                 disabled={!rootPersonId || uploading}
                 onClick={() => fileRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-xl bg-maroon-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-maroon-600 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-xl bg-maroon-500 px-3 py-2 text-xs font-semibold text-white shadow-md transition-colors hover:bg-maroon-600 disabled:opacity-50 sm:px-4 sm:py-2.5 sm:text-sm"
               >
-                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Choose photo
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Add photo
               </button>
               <Link
                 href="/gallery"
-                className="text-sm font-medium text-maroon-800 hover:underline"
+                className="text-xs font-medium text-maroon-800 hover:underline sm:text-sm"
               >
-                Open full gallery
+                See all
               </Link>
             </>
           ) : (
             <Link
               href={`/login?callbackUrl=${encodeURIComponent('/gallery')}`}
-              className="inline-flex items-center gap-2 rounded-xl border border-maroon-300 bg-white px-4 py-2.5 text-sm font-semibold text-maroon-900 shadow-sm hover:bg-maroon-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl border border-maroon-300 bg-white px-3 py-2 text-xs font-semibold text-maroon-900 shadow-sm transition-colors hover:bg-maroon-50 sm:px-4 sm:py-2.5 sm:text-sm"
             >
-              <LogIn className="w-4 h-4" />
-              Sign in to upload photos
+              <LogIn className="h-4 w-4" />
+              Sign in to upload
             </Link>
           )}
         </div>
       </div>
 
-      {isAuthenticated && rootPersonId && (
-        <div className="flex flex-col gap-3 mb-6 p-4 rounded-xl bg-white/80 border border-slate-200/80">
-          <p className="text-xs text-slate-500">
-            Choose a photo, add an optional caption, then submit. JPEG, PNG, GIF or WebP — max 4MB.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3">
+      {/* Category pills */}
+      <div className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:mb-5 sm:gap-2 [scrollbar-width:thin]">
+        <CategoryPill
+          label="All"
+          count={counts.all}
+          active={activeFilter === 'all'}
+          onClick={() => setActiveFilter('all')}
+        />
+        {GALLERY_CATEGORIES.map((cat) => (
+          <CategoryPill
+            key={cat.id}
+            label={cat.label}
+            count={counts[cat.id]}
+            active={activeFilter === cat.id}
+            onClick={() => setActiveFilter(cat.id)}
+            title={cat.blurb}
+          />
+        ))}
+        {uploads.length > 0 && (
+          <CategoryPill
+            label="Your family's"
+            count={counts.uploads}
+            active={activeFilter === 'uploads'}
+            onClick={() => setActiveFilter('uploads')}
+            highlight
+          />
+        )}
+      </div>
+
+      {/* Authenticated upload form (only when adding) */}
+      {isAuthenticated && rootPersonId && hasFile && (
+        <div className="mb-4 flex flex-col gap-2 rounded-xl border border-slate-200/80 bg-white/80 p-3 sm:mb-5 sm:p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
             <input
               type="text"
               value={uploadLabel}
               onChange={(e) => setUploadLabel(e.target.value)}
-              placeholder="Caption or label for this photo (optional)"
-              className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-maroon-400 focus:ring-1 focus:ring-maroon-400 outline-none"
+              placeholder="Caption (optional)"
+              className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-maroon-400 focus:ring-1 focus:ring-maroon-400"
               maxLength={500}
             />
             <button
               type="button"
-              disabled={uploading || !hasFile}
+              disabled={uploading}
               onClick={handleUpload}
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors whitespace-nowrap"
+              className="whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-40"
             >
-              {uploading ? 'Uploading…' : 'Upload photo'}
+              {uploading ? 'Uploading…' : 'Upload'}
+            </button>
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => {
+                if (fileRef.current) fileRef.current.value = '';
+                setHasFile(false);
+                setUploadLabel('');
+              }}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              Cancel
             </button>
           </div>
+          <p className="text-[11px] text-slate-500">JPEG, PNG, GIF or WebP — max 4&nbsp;MB.</p>
         </div>
       )}
 
+      {/* Grid */}
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
+        <div className="flex justify-center py-10">
+          <Loader2 className="h-7 w-7 animate-spin text-maroon-500" />
+        </div>
+      ) : isEmpty ? (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white/60 py-10 text-center">
+          <ImageOff className="h-7 w-7 text-slate-400" aria-hidden />
+          <p className="text-sm text-slate-600">No photos in this category yet.</p>
+          {activeFilter === 'uploads' && isAuthenticated && (
+            <p className="text-xs text-slate-500">Tap “Add photo” to be the first.</p>
+          )}
         </div>
       ) : (
-        <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 list-none p-0 m-0">
-          {stock.map((item) => (
+        <ul className="m-0 grid list-none grid-cols-2 gap-2.5 p-0 sm:gap-3 md:grid-cols-3 lg:grid-cols-4">
+          {filteredStock.map((item) => (
             <li key={item.id} className="group">
               <div className="aspect-[4/3] overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100 shadow-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -221,23 +311,25 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
                   loading="lazy"
                 />
               </div>
-              <p className="mt-2 text-xs sm:text-sm text-slate-600 font-medium line-clamp-2">{item.label}</p>
+              <p className="mt-1.5 line-clamp-2 text-[11px] font-medium text-slate-600 sm:mt-2 sm:text-xs md:text-sm">
+                {item.label}
+              </p>
             </li>
           ))}
-          {uploads.map((row) => (
+          {filteredUploads.map((row) => (
             <li key={row.id} className="group">
               <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100 shadow-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={row.url} alt="" className="h-full w-full object-cover" />
                 {canEdit(row) && (
-                  <div className="absolute top-2 right-2 flex gap-1">
+                  <div className="absolute right-1.5 top-1.5 flex gap-1">
                     <button
                       type="button"
                       onClick={() => startEdit(row)}
                       className="rounded-lg bg-white/95 p-1.5 text-slate-700 shadow hover:bg-white"
-                      title="Edit label"
+                      title="Edit caption"
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
@@ -245,17 +337,17 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
                       className="rounded-lg bg-white/95 p-1.5 text-red-600 shadow hover:bg-white"
                       title="Remove"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 )}
               </div>
               {editingId === row.id ? (
-                <div className="mt-2 flex gap-1">
+                <div className="mt-1.5 flex gap-1">
                   <input
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
-                    className="flex-1 min-w-0 rounded border border-maroon-200 px-2 py-1 text-xs"
+                    className="min-w-0 flex-1 rounded border border-maroon-200 px-2 py-1 text-xs"
                     maxLength={500}
                   />
                   <button
@@ -263,19 +355,19 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
                     onClick={() => saveLabel(row.id)}
                     className="rounded bg-maroon-500 p-1.5 text-white"
                   >
-                    <Check className="w-4 h-4" />
+                    <Check className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditingId(null)}
                     className="rounded border border-slate-200 p-1.5"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
               ) : (
-                <p className="mt-2 text-xs sm:text-sm text-slate-600 font-medium line-clamp-2">
-                  {row.label || <span className="text-slate-400 italic">No label</span>}
+                <p className="mt-1.5 line-clamp-2 text-[11px] font-medium text-slate-600 sm:mt-2 sm:text-xs md:text-sm">
+                  {row.label || <span className="italic text-slate-400">No caption</span>}
                 </p>
               )}
             </li>
@@ -283,5 +375,43 @@ export function FamilyGallerySection({ rootPersonId, compact }: FamilyGallerySec
         </ul>
       )}
     </section>
+  );
+}
+
+interface CategoryPillProps {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  title?: string;
+  highlight?: boolean;
+}
+
+function CategoryPill({ label, count, active, onClick, title, highlight }: CategoryPillProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={clsx(
+        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm',
+        active
+          ? 'border-maroon-700 bg-maroon-700 text-white shadow-sm'
+          : highlight
+          ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+          : 'border-slate-200 bg-white text-slate-700 hover:border-maroon-200 hover:text-maroon-800'
+      )}
+      aria-pressed={active}
+    >
+      <span>{label}</span>
+      <span
+        className={clsx(
+          'rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+          active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }

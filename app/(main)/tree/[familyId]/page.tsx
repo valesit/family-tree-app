@@ -294,28 +294,29 @@ export default function FamilyViewPage() {
 
   // Default: Split view
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="text-slate-500 hover:text-slate-700">
-              <ArrowLeft className="w-5 h-5" />
+    <div className="h-[calc(100dvh-4rem)] flex flex-col">
+      {/* Compact header on mobile to give the tree more room */}
+      <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+            <Link href="/" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 sm:p-2" aria-label="Home">
+              <ArrowLeft className="h-5 w-5" />
             </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">{familyName} Family</h1>
-              <p className="text-sm text-slate-500">
-                {stats?.totalMembers || 0} members • {stats?.marriageCount || 0} marriages
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-bold text-slate-900 sm:text-2xl">{familyName} Family</h1>
+              <p className="truncate text-[11px] text-slate-500 sm:text-sm">
+                {stats?.totalMembers || 0} members · {stats?.marriageCount || 0} marriages
               </p>
             </div>
           </div>
           {!isAuthenticated && (
             <Link
               href="/login"
-              className="flex items-center gap-2 px-4 py-2 bg-maroon-100 text-maroon-700 rounded-xl font-medium hover:bg-maroon-200 transition-colors"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-maroon-100 px-2.5 py-1.5 text-xs font-medium text-maroon-700 transition-colors hover:bg-maroon-200 sm:gap-2 sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm"
             >
-              <Lock className="w-4 h-4" />
-              Sign in to contribute
+              <Lock className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign in to contribute</span>
+              <span className="sm:hidden">Sign in</span>
             </Link>
           )}
         </div>
@@ -324,7 +325,7 @@ export default function FamilyViewPage() {
       {/* Tree is primary (left on lg+); overview on the right, collapsible on mobile */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
         <div className="order-1 flex min-h-0 w-full min-w-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+          <div className="hidden shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5 sm:flex">
             <h2 className="flex items-center gap-2 font-semibold text-slate-900">
               <TreePine className="h-4 w-4 text-maroon-500" />
               Family Tree
@@ -338,7 +339,7 @@ export default function FamilyViewPage() {
               <Maximize2 className="h-4 w-4 text-slate-500" />
             </button>
           </div>
-          <div className="relative min-h-0 min-h-[min(58dvh,520px)] flex-1 lg:min-h-0">
+          <div className="relative min-h-[min(70dvh,640px)] flex-1 lg:min-h-0">
             <FamilyTree
               data={tree}
               onNodeClick={handleNodeClick}

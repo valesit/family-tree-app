@@ -301,28 +301,30 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Family gallery — stock + uploads */}
-        <section className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-          <FamilyGallerySection rootPersonId={primaryId ?? null} compact />
-        </section>
-
-        {/* Tree + sidebar stats — tree is primary, stats alongside */}
-        <section className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
-          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-stretch min-h-0">
-            {/* Tree canvas — maximum vertical space */}
-            <div className="flex-1 min-w-0 flex flex-col order-1 min-h-[min(78vh,920px)] lg:min-h-[min(82vh,960px)]">
-              <div className="flex items-center justify-between gap-3 mb-3 px-0.5">
-                <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                  <TreePine className="w-4 h-4 text-maroon-600" />
+        {/* Tree + sidebar stats — tree is primary, stats alongside on lg+, below on mobile */}
+        <section className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+          <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:gap-8 lg:items-stretch min-h-0">
+            {/* Tree canvas — explicit height (h-*, not min-h-*) so the canvas's h-full resolves on mobile */}
+            <div className="order-1 flex min-w-0 flex-1 flex-col">
+              <div className="mb-2 flex items-center justify-between gap-3 px-0.5 sm:mb-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <TreePine className="h-4 w-4 text-maroon-600" />
                   Family tree
                 </h2>
-                <span className="text-xs text-slate-500 hidden sm:inline">Drag to move · Scroll to zoom</span>
+                <Link
+                  href={treeExploreHref}
+                  className="inline-flex items-center gap-1 rounded-full border border-maroon-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-maroon-800 shadow-sm hover:bg-maroon-50 sm:hidden"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                  Open full
+                </Link>
+                <span className="hidden text-xs text-slate-500 sm:inline">Drag to move · Scroll to zoom</span>
               </div>
-              <div className="flex-1 rounded-2xl border border-maroon-900/10 bg-white shadow-[0_20px_50px_-24px_rgba(101,26,26,0.15)] overflow-hidden min-h-[min(72vh,880px)] ring-1 ring-maroon-900/[0.04]">
+              <div className="relative h-[min(62dvh,560px)] overflow-hidden rounded-2xl border border-maroon-900/10 bg-white shadow-[0_20px_50px_-24px_rgba(101,26,26,0.15)] ring-1 ring-maroon-900/[0.04] sm:h-[min(70dvh,720px)] lg:h-[min(82vh,960px)]">
                 {isLoading ? (
-                  <div className="flex items-center justify-center h-full min-h-[inherit]">
+                  <div className="flex h-full items-center justify-center">
                     <div className="text-center">
-                      <Loader2 className="w-10 h-10 text-slate-400 animate-spin mx-auto mb-4" />
+                      <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-slate-400" />
                       <p className="text-slate-600">Loading family tree...</p>
                     </div>
                   </div>
@@ -335,7 +337,7 @@ export default function HomePage() {
             </div>
 
             {/* Stats — beside tree on lg+, below on small screens */}
-            <aside className="w-full lg:w-[min(100%,20rem)] xl:w-80 shrink-0 order-2 lg:pt-9">
+            <aside className="order-2 w-full shrink-0 lg:w-[min(100%,20rem)] lg:pt-9 xl:w-80">
               {stats && primaryFamily ? (
                 <div className="rounded-2xl border border-maroon-900/10 bg-gradient-to-b from-white to-maroon-50/30 p-5 shadow-md lg:sticky lg:top-28 space-y-4 ring-1 ring-maroon-900/[0.05]">
                   <h3 className="font-serif font-semibold text-slate-900 text-lg flex items-center gap-2">
@@ -384,6 +386,11 @@ export default function HomePage() {
               )}
             </aside>
           </div>
+        </section>
+
+        {/* Family gallery — stock + uploads, with category filters (now under the tree) */}
+        <section className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 pb-4 sm:pb-6">
+          <FamilyGallerySection rootPersonId={primaryId ?? null} compact />
         </section>
 
         {/* CTA for unauthenticated */}
