@@ -1,71 +1,96 @@
 'use client';
 
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface TreeControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
+  /** Optional explicit "fit to screen" handler; falls back to onReset if absent. */
+  onFit?: () => void;
   scale: number;
 }
 
-export function TreeControls({ onZoomIn, onZoomOut, onReset, scale }: TreeControlsProps) {
+/**
+ * Floating zoom & fit controls. Buttons are sized for thumbs (≥44 px) on
+ * touch devices and labelled for screen readers — single-icon buttons in
+ * the original version triggered "Buttons must have discernible text".
+ */
+export function TreeControls({ onZoomIn, onZoomOut, onReset, onFit, scale }: TreeControlsProps) {
   const zoomPercentage = Math.round(scale * 100);
+  const fitHandler = onFit ?? onReset;
 
   return (
-    <div className="absolute top-4 right-4 flex flex-col items-center space-y-2 z-10" data-tree-controls>
-      <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200 p-1 flex flex-col">
-        <button
+    <div
+      className="absolute right-2 top-2 z-10 flex flex-col items-center gap-2 sm:right-4 sm:top-4"
+      data-tree-controls
+      role="toolbar"
+      aria-label="Tree zoom controls"
+    >
+      <div className="flex flex-col rounded-xl border border-slate-200 bg-white/95 p-1 shadow-lg backdrop-blur-sm">
+        <ControlButton
           onClick={onZoomIn}
           disabled={scale >= 2}
-          className={clsx(
-            'p-2 rounded-lg transition-colors',
-            scale >= 2
-              ? 'text-slate-300 cursor-not-allowed'
-              : 'text-slate-600 hover:bg-slate-100'
-          )}
+          ariaLabel="Zoom in"
           title="Zoom in"
         >
-          <ZoomIn className="w-5 h-5" />
-        </button>
+          <ZoomIn className="h-5 w-5" aria-hidden />
+        </ControlButton>
 
-        <div className="px-2 py-1 text-center">
-          <span className="text-xs font-medium text-slate-500">{zoomPercentage}%</span>
+        <div className="px-1 py-0.5 text-center" aria-live="polite">
+          <span className="text-[11px] font-medium tabular-nums text-slate-500">
+            {zoomPercentage}%
+          </span>
         </div>
 
-        <button
+        <ControlButton
           onClick={onZoomOut}
-          disabled={scale <= 0.4}
-          className={clsx(
-            'p-2 rounded-lg transition-colors',
-            scale <= 0.4
-              ? 'text-slate-300 cursor-not-allowed'
-              : 'text-slate-600 hover:bg-slate-100'
-          )}
+          disabled={scale <= 0.25}
+          ariaLabel="Zoom out"
           title="Zoom out"
         >
-          <ZoomOut className="w-5 h-5" />
-        </button>
+          <ZoomOut className="h-5 w-5" aria-hidden />
+        </ControlButton>
 
-        <div className="w-full h-px bg-slate-200 my-1" />
+        <div className="my-1 h-px w-full bg-slate-200" aria-hidden />
 
-        <button
-          onClick={onReset}
-          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
-          title="Reset view"
-        >
-          <RotateCcw className="w-5 h-5" />
-        </button>
-      </div>
+        <ControlButton onClick={fitHandler} ariaLabel="Fit tree to screen" title="Fit to screen">
+          <Maximize2 className="h-5 w-5" aria-hidden />
+        </ControlButton>
 
-      {/* Instructions */}
-      <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow border border-slate-200">
-        <p className="text-[10px] text-slate-500 text-center">
-          Drag to pan • Scroll to zoom
-        </p>
+        <ControlButton onClick={onReset} ariaLabel="Reset view" title="Reset view">
+          <RotateCcw className="h-5 w-5" aria-hidden />
+        </ControlButton>
       </div>
     </div>
   );
 }
 
+interface ControlButtonProps {
+  onClick: () => void;
+  disabled?: boolean;
+  ariaLabel: string;
+  title?: string;
+  children: React.ReactNode;
+}
+
+function ControlButton({ onClick, disabled, ariaLabel, title, children }: ControlButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      title={title ?? ariaLabel}
+      className={clsx(
+        'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition-colors',
+        disabled
+          ? 'cursor-not-allowed text-slate-300'
+          : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'
+      )}
+    >
+      {children}
+    </button>
+  );
+}

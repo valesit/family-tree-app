@@ -360,7 +360,7 @@ export default function TreePage() {
   const hasMultipleFamilies = userFamilies.length > 1;
 
   return (
-    <div className="h-[calc(100dvh-4rem)] flex flex-col bg-slate-50">
+    <main className="h-[calc(100dvh-4rem)] flex flex-col bg-slate-50" aria-label="Family tree page">
       {/* Top Header Bar — compact on mobile to give the tree more room */}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
@@ -432,9 +432,10 @@ export default function TreePage() {
                     onClick={handleStartEditFamilyName}
                     className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-maroon-50 hover:text-maroon-600 sm:p-1.5"
                     title={isAdmin ? 'Edit family name' : 'Propose family name change'}
+                    aria-label={isAdmin ? 'Edit family name' : 'Propose family name change'}
                     type="button"
                   >
-                    <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
                   </button>
                 )}
               </div>
@@ -470,9 +471,10 @@ export default function TreePage() {
               onClick={() => setIsExpandedViewOpen(true)}
               className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
               title="Expand view"
+              aria-label="Expand tree view"
               type="button"
             >
-              <Maximize2 className="h-4 w-4" />
+              <Maximize2 className="h-4 w-4" aria-hidden />
             </button>
           </div>
 
@@ -522,9 +524,10 @@ export default function TreePage() {
               onClick={() => setIsExpandedViewOpen(true)}
               className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
               title="Expand view"
+              aria-label="Expand family overview"
               type="button"
             >
-              <Maximize2 className="h-4 w-4 text-slate-500" />
+              <Maximize2 className="h-4 w-4 text-slate-500" aria-hidden />
             </button>
           </div>
 
@@ -735,8 +738,10 @@ export default function TreePage() {
                 onClick={() => setIsModalOpen(false)}
                 className="absolute top-3 right-3 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white transition-colors backdrop-blur-sm"
                 title="Close"
+                aria-label="Close person details"
+                type="button"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden />
               </button>
               
               <div className={`h-32 bg-gradient-to-r ${
@@ -942,7 +947,7 @@ export default function TreePage() {
         onClose={() => setIsExpandedViewOpen(false)}
         currentUser={user || null}
       />
-    </div>
+    </main>
   );
 }
 

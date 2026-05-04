@@ -203,7 +203,7 @@ export default function FamilyViewPage() {
   // If left panel is expanded, show only left panel
   if (leftPanelExpanded) {
     return (
-      <div className="h-[calc(100vh-4rem)] flex flex-col">
+      <main className="h-[calc(100dvh-4rem)] flex flex-col" aria-label="Family overview, full screen">
         {/* Header */}
         <div className="bg-white border-b border-slate-200 px-6 py-4">
           <div className="flex items-center justify-between">
@@ -236,14 +236,14 @@ export default function FamilyViewPage() {
             birthdaysMonthName={monthName}
           />
         </div>
-      </div>
+      </main>
     );
   }
 
   // If right panel is expanded, show only tree
   if (rightPanelExpanded) {
     return (
-      <div className="h-[calc(100vh-4rem)] flex flex-col">
+      <main className="h-[calc(100dvh-4rem)] flex flex-col" aria-label="Family tree, full screen">
         {/* Header */}
         <div className="bg-white border-b border-slate-200 px-6 py-4">
           <div className="flex items-center justify-between">
@@ -288,13 +288,13 @@ export default function FamilyViewPage() {
             />
           )}
         </Modal>
-      </div>
+      </main>
     );
   }
 
   // Default: Split view
   return (
-    <div className="h-[calc(100dvh-4rem)] flex flex-col">
+    <main className="h-[calc(100dvh-4rem)] flex flex-col" aria-label="Family tree page">
       {/* Compact header on mobile to give the tree more room */}
       <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between gap-2">
@@ -334,9 +334,10 @@ export default function FamilyViewPage() {
               onClick={() => setRightPanelExpanded(true)}
               className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
               title="Expand Tree"
+              aria-label="Expand tree to full screen"
               type="button"
             >
-              <Maximize2 className="h-4 w-4 text-slate-500" />
+              <Maximize2 className="h-4 w-4 text-slate-500" aria-hidden />
             </button>
           </div>
           <div className="relative min-h-[min(70dvh,640px)] flex-1 lg:min-h-0">
@@ -381,9 +382,10 @@ export default function FamilyViewPage() {
               onClick={() => setLeftPanelExpanded(true)}
               className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
               title="Expand Overview"
+              aria-label="Expand family overview to full screen"
               type="button"
             >
-              <Maximize2 className="h-4 w-4 text-slate-500" />
+              <Maximize2 className="h-4 w-4 text-slate-500" aria-hidden />
             </button>
           </div>
 
@@ -447,7 +449,7 @@ export default function FamilyViewPage() {
           </div>
         )}
       </Modal>
-    </div>
+    </main>
   );
 }
 

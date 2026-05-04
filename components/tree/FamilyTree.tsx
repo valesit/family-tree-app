@@ -13,9 +13,13 @@ interface FamilyTreeProps {
   onAddChild?: (parentId: string) => void;
   onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
-  onViewBirthFamily?: (personId: string, maidenName?: string) => void;
+  onViewBirthFamily?: (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => void;
   readOnly?: boolean;
 }
+
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 2;
+const FIT_PADDING = 24; // px around bbox when fitting
 
 /** Open first two generations by default (depth 0–1 nodes with children). */
 function collectDefaultExpandedIds(node: TreeNodeType | null): Set<string> {
@@ -34,6 +38,8 @@ function collectDefaultExpandedIds(node: TreeNodeType | null): Set<string> {
   return ids;
 }
 
+type Transform = { x: number; y: number; scale: number };
+
 type PanSession = {
   pointerId: number;
   startX: number;
@@ -46,6 +52,20 @@ type PanSession = {
   startOnInteractive: boolean;
 };
 
+type PinchSession = {
+  /** Initial distance between the two pointers in client coords */
+  startDistance: number;
+  /** Initial midpoint between the two pointers in client coords */
+  startMidpointX: number;
+  startMidpointY: number;
+  /** Transform when the pinch began */
+  origTransform: Transform;
+};
+
+function clampScale(s: number) {
+  return Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+}
+
 function FamilyTreeInner({
   data,
   onNodeClick,
@@ -57,9 +77,16 @@ function FamilyTreeInner({
 }: FamilyTreeProps) {
   const treeView = useTreeViewOptional();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.85 });
+  /** Inner positioned wrapper around the tree (used for bbox / fit) */
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 0.85 });
   const transformRef = useRef(transform);
   const panSessionRef = useRef<PanSession | null>(null);
+  const pinchRef = useRef<PinchSession | null>(null);
+  /** Active pointers, tracked for pinch detection */
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+
   const [isDragging, setIsDragging] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
@@ -73,47 +100,98 @@ function FamilyTreeInner({
     }
   }, [data]);
 
-  // Center the tree on mount / data change
+  /**
+   * Fit the entire tree inside the visible container, with padding.
+   * Falls back to a sensible center if measurements aren't available yet.
+   */
+  const handleFit = useCallback(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+
+    const cRect = container.getBoundingClientRect();
+    const tRect = content.getBoundingClientRect();
+    /** Current scale must be backed out to recover the unscaled content size. */
+    const currentScale = transformRef.current.scale || 1;
+    const naturalW = tRect.width / currentScale;
+    const naturalH = tRect.height / currentScale;
+    if (naturalW <= 0 || naturalH <= 0) return;
+
+    const availW = Math.max(1, cRect.width - FIT_PADDING * 2);
+    const availH = Math.max(1, cRect.height - FIT_PADDING * 2);
+    const nextScale = clampScale(Math.min(availW / naturalW, availH / naturalH));
+
+    /** Translate so the content sits centered. */
+    const nextX = (cRect.width - naturalW * nextScale) / 2;
+    const nextY = FIT_PADDING; // pin to top with padding so deep trees stay visible
+    setTransform({ x: nextX, y: nextY, scale: nextScale });
+  }, []);
+
+  // Re-fit on data change so the user always sees the whole tree first.
   useEffect(() => {
-    if (containerRef.current) {
-      const { width } = containerRef.current.getBoundingClientRect();
-      setTransform((prev) => ({ ...prev, x: width / 3, y: 60 }));
-    }
-  }, [data]);
+    if (!data) return;
+    /** Defer until layout + node renders settle. */
+    const id = window.setTimeout(handleFit, 60);
+    return () => window.clearTimeout(id);
+  }, [data, handleFit]);
 
   const handleZoomIn = useCallback(() => {
-    setTransform((prev) => ({ ...prev, scale: Math.min(prev.scale + 0.15, 1.5) }));
+    setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + 0.15) }));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setTransform((prev) => ({ ...prev, scale: Math.max(prev.scale - 0.15, 0.3) }));
+    setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale - 0.15) }));
   }, []);
 
   const handleReset = useCallback(() => {
-    if (containerRef.current) {
-      const { width } = containerRef.current.getBoundingClientRect();
-      setTransform({ x: width / 3, y: 60, scale: 0.85 });
-    }
-  }, []);
+    handleFit();
+  }, [handleFit]);
 
+  // Wheel zoom for desktop (mobile uses pinch)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.08 : 0.08;
-      setTransform((prev) => ({
-        ...prev,
-        scale: Math.max(0.3, Math.min(1.5, prev.scale + delta)),
-      }));
+      setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + delta) }));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, [data]);
 
+  // ---------- Pointer / pan / pinch handling ----------
+
+  const startPinchIfNeeded = useCallback(() => {
+    const pts = Array.from(activePointersRef.current.values());
+    if (pts.length < 2) return;
+    const [a, b] = pts;
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    pinchRef.current = {
+      startDistance: Math.hypot(dx, dy) || 1,
+      startMidpointX: (a.x + b.x) / 2,
+      startMidpointY: (a.y + b.y) / 2,
+      origTransform: { ...transformRef.current },
+    };
+    // Cancel any single-finger pan so the gesture switches cleanly to pinch.
+    panSessionRef.current = null;
+    setIsDragging(false);
+  }, []);
+
   const handlePointerDownCapture = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('[data-tree-controls]')) return;
-    if (e.button !== 0) return;
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // If a second finger came down, switch to pinch and stop pan.
+    if (activePointersRef.current.size >= 2) {
+      startPinchIfNeeded();
+      return;
+    }
+
+    // Only buttons fire pointerdown reliably with `e.button === 0` for mouse;
+    // touch always reports 0, so this also works on touch.
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
 
     const startOnInteractive = !!(e.target as HTMLElement).closest(
       'button, a[href], [role="button"]'
@@ -130,10 +208,49 @@ function FamilyTreeInner({
       captureActive: false,
       startOnInteractive,
     };
-    /* Deliberately no setPointerCapture here — immediate capture steals clicks from buttons */
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    // Pinch zoom takes priority when two pointers are active.
+    if (activePointersRef.current.size >= 2 && pinchRef.current) {
+      const pts = Array.from(activePointersRef.current.values());
+      const [a, b] = pts;
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+
+      const orig = pinchRef.current.origTransform;
+      const ratio = dist / pinchRef.current.startDistance;
+      const nextScale = clampScale(orig.scale * ratio);
+
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+
+      // Convert original midpoint into content coordinates (pre-transform space).
+      const cx = pinchRef.current.startMidpointX - rect.left;
+      const cy = pinchRef.current.startMidpointY - rect.top;
+      const contentX = (cx - orig.x) / orig.scale;
+      const contentY = (cy - orig.y) / orig.scale;
+
+      // Move so the new midpoint anchors to the same content point + the
+      // user's current finger midpoint relative to the container.
+      const mx = midX - rect.left;
+      const my = midY - rect.top;
+      const nextX = mx - contentX * nextScale;
+      const nextY = my - contentY * nextScale;
+
+      setTransform({ x: nextX, y: nextY, scale: nextScale });
+      return;
+    }
+
+    // Single-finger pan
     const s = panSessionRef.current;
     if (!s || e.pointerId !== s.pointerId) return;
 
@@ -163,19 +280,25 @@ function FamilyTreeInner({
   };
 
   const endPan = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+
+    // If we drop below 2 pointers, end any pinch.
+    if (activePointersRef.current.size < 2 && pinchRef.current) {
+      pinchRef.current = null;
+    }
+
     const s = panSessionRef.current;
-    if (!s || e.pointerId !== s.pointerId) return;
-
-    panSessionRef.current = null;
-    setIsDragging(false);
-
-    if (s.captureActive) {
-      try {
-        if (containerRef.current?.hasPointerCapture?.(e.pointerId)) {
-          containerRef.current.releasePointerCapture(e.pointerId);
+    if (s && e.pointerId === s.pointerId) {
+      panSessionRef.current = null;
+      setIsDragging(false);
+      if (s.captureActive) {
+        try {
+          if (containerRef.current?.hasPointerCapture?.(e.pointerId)) {
+            containerRef.current.releasePointerCapture(e.pointerId);
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
       }
     }
   };
@@ -194,21 +317,25 @@ function FamilyTreeInner({
 
   if (!data) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-500">
-        <div className="w-24 h-24 mb-6 bg-slate-100 rounded-full flex items-center justify-center">
+      <div className="flex flex-col items-center justify-center h-full text-slate-500" role="status">
+        <div className="w-24 h-24 mb-6 bg-slate-100 rounded-full flex items-center justify-center" aria-hidden>
           <Move className="w-12 h-12 text-slate-300" />
         </div>
         <h3 className="text-xl font-semibold text-slate-700 mb-2">No Family Tree Yet</h3>
-        <p className="text-sm max-w-md text-center">
+        <p className="text-sm max-w-md text-center px-4">
           Start building your family tree by adding the first person.
-          Click the &quot;Add Person&quot; button to get started.
+          Tap &ldquo;Add Person&rdquo; to get started.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-white">
+    <div
+      className="relative w-full h-full overflow-hidden bg-white"
+      role="region"
+      aria-label="Interactive family tree"
+    >
       <div
         className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{
@@ -218,6 +345,7 @@ function FamilyTreeInner({
           `,
           backgroundSize: '40px 40px',
         }}
+        aria-hidden="true"
       />
 
       <div
@@ -230,11 +358,12 @@ function FamilyTreeInner({
         onLostPointerCapture={endPan}
       >
         <div
+          ref={contentRef}
           className="absolute"
           style={{
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
             transformOrigin: '0 0',
-            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+            transition: isDragging || pinchRef.current ? 'none' : 'transform 0.15s ease-out',
           }}
         >
           <TreeNode
@@ -257,11 +386,16 @@ function FamilyTreeInner({
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onReset={handleReset}
+        onFit={handleFit}
         scale={transform.scale}
       />
 
-      <div className="absolute bottom-4 left-4 text-xs text-slate-500 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200/80 shadow-sm pointer-events-none max-w-[min(100%,20rem)]">
-        Drag to pan · Scroll to zoom · Click a person for details
+      <div
+        className="pointer-events-none absolute bottom-3 left-3 max-w-[min(100%,20rem)] rounded-full border border-slate-200/80 bg-white/90 px-3 py-1.5 text-[11px] text-slate-500 shadow-sm backdrop-blur-sm sm:bottom-4 sm:left-4 sm:text-xs"
+        role="note"
+      >
+        <span className="hidden sm:inline">Drag to pan · Scroll or pinch to zoom · Tap a person for details</span>
+        <span className="sm:hidden">Drag to pan · Pinch to zoom · Tap to view</span>
       </div>
     </div>
   );
