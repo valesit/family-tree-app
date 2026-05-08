@@ -102,7 +102,14 @@ function FamilyTreeInner({
 
   /**
    * Fit the entire tree inside the visible container, with padding.
-   * Falls back to a sensible center if measurements aren't available yet.
+   *
+   * - We use `scrollWidth`/`scrollHeight` on the unscaled content so the
+   *   measurement is independent of the current scale — this is more robust
+   *   than dividing a transformed `getBoundingClientRect` by the scale, which
+   *   can be off by a fraction of a px and creep on repeated fits.
+   * - The Y axis centers when the tree is shorter than the viewport and
+   *   pins to the top (with padding) when it's taller, so deep trees never
+   *   get clipped at the bottom after expanding a branch.
    */
   const handleFit = useCallback(() => {
     const container = containerRef.current;
@@ -110,31 +117,63 @@ function FamilyTreeInner({
     if (!container || !content) return;
 
     const cRect = container.getBoundingClientRect();
-    const tRect = content.getBoundingClientRect();
-    /** Current scale must be backed out to recover the unscaled content size. */
-    const currentScale = transformRef.current.scale || 1;
-    const naturalW = tRect.width / currentScale;
-    const naturalH = tRect.height / currentScale;
+    /** scrollWidth/Height are pre-transform (intrinsic) sizes. */
+    const naturalW = content.scrollWidth;
+    const naturalH = content.scrollHeight;
     if (naturalW <= 0 || naturalH <= 0) return;
 
     const availW = Math.max(1, cRect.width - FIT_PADDING * 2);
     const availH = Math.max(1, cRect.height - FIT_PADDING * 2);
     const nextScale = clampScale(Math.min(availW / naturalW, availH / naturalH));
 
-    /** Translate so the content sits centered. */
-    const nextX = (cRect.width - naturalW * nextScale) / 2;
-    const nextY = FIT_PADDING; // pin to top with padding so deep trees stay visible
+    const scaledW = naturalW * nextScale;
+    const scaledH = naturalH * nextScale;
+    const nextX = Math.max(FIT_PADDING, (cRect.width - scaledW) / 2);
+    const nextY =
+      scaledH + FIT_PADDING * 2 <= cRect.height
+        ? (cRect.height - scaledH) / 2
+        : FIT_PADDING;
+
     setTransform({ x: nextX, y: nextY, scale: nextScale });
   }, []);
 
-  // Re-fit on data change AND whenever a branch is opened or collapsed so
-  // the user always sees the whole tree without having to pan.
+  /**
+   * Re-fit on data change AND whenever a branch is opened or collapsed so the
+   * whole tree (with all currently-open branches) stays visible.
+   *
+   * Two rAFs ensure React has committed the new DOM and the browser has
+   * painted it before we measure — a single setTimeout was sometimes firing
+   * mid-layout on slower devices, producing a measurement based on the
+   * pre-expand size.
+   */
   useEffect(() => {
     if (!data) return;
-    /** Defer until React renders the new (or removed) nodes and layout settles. */
-    const id = window.setTimeout(handleFit, 120);
-    return () => window.clearTimeout(id);
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(handleFit);
+    });
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+    };
   }, [data, expandedNodes, handleFit]);
+
+  /**
+   * Re-fit when the container itself resizes (rotation, address bar show/hide,
+   * keyboard appearing, etc). Without this, a viewport change leaves the tree
+   * either clipped or floating in dead space until the user touches it.
+   */
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      // Defer to avoid measuring during the same frame as the resize.
+      window.requestAnimationFrame(handleFit);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [handleFit]);
 
   const handleZoomIn = useCallback(() => {
     setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + 0.15) }));
