@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree } from '@/components/tree';
 import { FamilyGallerySection } from '@/components/gallery';
+import { PageScrollNav } from '@/components/shared';
 import { TreeNode, PersonWithRelations } from '@/types';
 import {
   TreePine,
@@ -439,6 +440,9 @@ export default function HomePage() {
           </div>
         </footer>
       </main>
+
+      {/* Floating page-scroll bubble — mobile only, helps users get past the tree canvas to the gallery */}
+      <PageScrollNav />
 
       {/* Person Detail Modal */}
       {isModalOpen && selectedPerson && (

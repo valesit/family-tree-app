@@ -127,13 +127,14 @@ function FamilyTreeInner({
     setTransform({ x: nextX, y: nextY, scale: nextScale });
   }, []);
 
-  // Re-fit on data change so the user always sees the whole tree first.
+  // Re-fit on data change AND whenever a branch is opened or collapsed so
+  // the user always sees the whole tree without having to pan.
   useEffect(() => {
     if (!data) return;
-    /** Defer until layout + node renders settle. */
-    const id = window.setTimeout(handleFit, 60);
+    /** Defer until React renders the new (or removed) nodes and layout settles. */
+    const id = window.setTimeout(handleFit, 120);
     return () => window.clearTimeout(id);
-  }, [data, handleFit]);
+  }, [data, expandedNodes, handleFit]);
 
   const handleZoomIn = useCallback(() => {
     setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + 0.15) }));
