@@ -4,7 +4,7 @@ import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
 import { useTreeViewOptional } from './TreeViewContext';
-import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink, Link2, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, AlertCircle } from 'lucide-react';
 
 interface TreeNodeProps {
   node: TreeNodeType;
@@ -110,11 +110,14 @@ export function TreeNode({
         </div>
       )}
 
-      {/* Unverified badge */}
+      {/* Quiet unverified indicator — small outline dot in the corner instead of a banner */}
       {person.isVerified === false && (
-        <div className="absolute -top-2 right-1/2 translate-x-1/2 px-2 py-0.5 bg-amber-500 text-white text-[8px] font-semibold rounded-full flex items-center gap-0.5 z-20">
-          <AlertCircle className="w-2.5 h-2.5" />
-          Unverified
+        <div
+          className="absolute -top-1.5 -left-1.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-white text-amber-500 ring-1 ring-amber-300"
+          title="Recently added — pending review"
+          aria-label="Recently added"
+        >
+          <AlertCircle className="h-3 w-3" aria-hidden />
         </div>
       )}
 
@@ -125,33 +128,14 @@ export function TreeNode({
         </div>
       )}
 
-      {/* Birth family badge for spouse */}
+      {/* Maiden name as a quiet "née ___" label — no longer a clickable link to a separate tree.
+          Spouse parents now grow the same tree horizontally via the standard Add Parent flow. */}
       {spouseHasBirthFamily && (
-        <div 
-          className={`absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 text-white text-[8px] font-medium rounded-full whitespace-nowrap flex items-center gap-0.5 z-10 ${
-            person.attributes?.birthFamilyId 
-              ? 'bg-purple-600 cursor-pointer hover:bg-purple-700' 
-              : 'bg-purple-400'
-          }`}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (treeView?.consumeIfSuppressClick()) return;
-            if (person.attributes?.birthFamilyId) {
-              // Direct link to birth family tree
-              onViewBirthFamily?.(person.id, person.attributes.maidenName, person.attributes.birthFamilyId);
-            } else {
-              // Search for birth family
-              onViewBirthFamily?.(person.id, person.attributes?.maidenName);
-            }
-          }}
-          title={person.attributes?.birthFamilyId ? 'View birth family tree' : `Search for ${person.attributes?.maidenName} family`}
+        <div
+          className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-purple-100 px-2 py-0.5 text-[8px] font-medium text-purple-700 ring-1 ring-purple-200"
+          title={`Maiden name: ${person.attributes?.maidenName}`}
         >
           née {person.attributes?.maidenName}
-          {person.attributes?.birthFamilyId ? (
-            <Link2 className="w-2 h-2" />
-          ) : (
-            <ExternalLink className="w-2 h-2" />
-          )}
         </div>
       )}
 
@@ -235,7 +219,7 @@ export function TreeNode({
         {allSpouses.map((spouse, index) => (
           <div key={spouse.id} className="flex items-center">
             {/* Marriage connector */}
-            <div className="flex items-center">
+            <div className="flex items-center" aria-hidden>
               <svg width="20" height="2" aria-hidden>
                 <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
               </svg>
@@ -252,12 +236,32 @@ export function TreeNode({
                 <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
               </svg>
             </div>
-            <PersonCard 
-              person={spouse} 
-              isSpouse 
-              marriageOrder={'marriageOrder' in spouse ? (spouse.marriageOrder as number) : index + 1}
-              totalSpouses={allSpouses.length}
-            />
+            {/* Spouse column: optional "Add parents" pill above the card, then the card itself.
+                This is how relatives grow the tree horizontally with the spouse's parents,
+                in the SAME tree. */}
+            <div className="flex flex-col items-center">
+              {!readOnly && onAddParent && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddParent(spouse.id);
+                  }}
+                  className="mb-1.5 inline-flex min-h-[28px] items-center gap-1 rounded-full border border-maroon-200 bg-white px-2.5 py-1 text-[10px] font-medium text-maroon-700 shadow-sm transition-colors hover:bg-maroon-50 active:bg-maroon-100"
+                  aria-label={`Add ${spouse.firstName}'s parents to the tree`}
+                  title={`Add ${spouse.firstName}'s parents`}
+                >
+                  <ChevronUp className="h-3 w-3" aria-hidden />
+                  Add parents
+                </button>
+              )}
+              <PersonCard
+                person={spouse}
+                isSpouse
+                marriageOrder={'marriageOrder' in spouse ? (spouse.marriageOrder as number) : index + 1}
+                totalSpouses={allSpouses.length}
+              />
+            </div>
           </div>
         ))}
 

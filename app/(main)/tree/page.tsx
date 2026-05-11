@@ -427,12 +427,14 @@ export default function TreePage() {
                 <h1 className="truncate text-base font-bold text-slate-900 sm:text-2xl">
                   {familyName || 'Family'}
                 </h1>
-                {isAuthenticated && (
+                {/* Only system admins see family-name editing. Regular contributors
+                    shouldn't be shown a path that triggers an approvals workflow. */}
+                {isAdmin && (
                   <button
                     onClick={handleStartEditFamilyName}
                     className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-maroon-50 hover:text-maroon-600 sm:p-1.5"
-                    title={isAdmin ? 'Edit family name' : 'Propose family name change'}
-                    aria-label={isAdmin ? 'Edit family name' : 'Propose family name change'}
+                    title="Edit family name"
+                    aria-label="Edit family name"
                     type="button"
                   >
                     <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
