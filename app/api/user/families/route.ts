@@ -33,8 +33,33 @@ export async function GET(request: NextRequest) {
       linkedPersonFamily = await findPersonFamilyRoot(user.linkedPersonId);
     }
 
-    // Determine default family
-    const defaultFamilyId = await getUserDefaultFamily(user.id);
+    // Determine default family. If no explicit family membership exists (stale Family
+    // records or fresh install), fall back to the topmost connected root in the tree.
+    let defaultFamilyId = await getUserDefaultFamily(user.id);
+    if (!defaultFamilyId) {
+      // Find the root of the largest real connected family via the same logic as /api/tree
+      const allRels = await prisma.relationship.findMany({
+        where: { type: 'PARENT_CHILD' },
+        select: { parentId: true, childId: true },
+      });
+      const childIdSet = new Set(allRels.map(r => r.childId).filter(Boolean) as string[]);
+      const childCountMap = new Map<string, number>();
+      for (const r of allRels) {
+        if (r.parentId) childCountMap.set(r.parentId, (childCountMap.get(r.parentId) ?? 0) + 1);
+      }
+      const allPersons = await prisma.person.findMany({ select: { id: true, birthDate: true } });
+      const roots = allPersons
+        .filter(p => !childIdSet.has(p.id))
+        .sort((a, b) => {
+          const ac = childCountMap.get(a.id) ?? 0;
+          const bc = childCountMap.get(b.id) ?? 0;
+          if (bc !== ac) return bc - ac;
+          if (!a.birthDate) return 1;
+          if (!b.birthDate) return -1;
+          return a.birthDate.getTime() - b.birthDate.getTime();
+        });
+      defaultFamilyId = roots[0]?.id ?? null;
+    }
 
     // Get family names for each membership
     const families = await Promise.all(

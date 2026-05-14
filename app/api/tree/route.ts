@@ -67,27 +67,40 @@ export async function GET(request: NextRequest) {
       // always renders from the very top (e.g. after adding a parent above current root)
       rootId = findTopmostAncestor(rootId);
     } else {
-      // Find the oldest person with no parents as root
+      // Auto-detect the root: among persons who have no parents, prefer the one
+      // with the most descendants so that isolated seed/test records (e.g. "John Doe 1800"
+      // with 0 children) don't win over the real family just because of an older birth date.
+      const parentChildRels = relationships.filter(
+        (r: { type: string }) => r.type === 'PARENT_CHILD'
+      );
       const childIds = new Set(
-        relationships
-          .filter((r: { type: string }) => r.type === 'PARENT_CHILD')
+        parentChildRels
           .map((r: { childId: string | null }) => r.childId)
           .filter(Boolean)
       );
+      // Build a parent→[children] map for fast child-count estimation
+      const childCountMap = new Map<string, number>();
+      for (const r of parentChildRels as { parentId: string | null }[]) {
+        if (r.parentId) childCountMap.set(r.parentId, (childCountMap.get(r.parentId) ?? 0) + 1);
+      }
 
-      // Find people who are not children of anyone (root ancestors)
       const potentialRoots = persons.filter((p: { id: string }) => !childIds.has(p.id));
-      
+
       if (potentialRoots.length > 0) {
-        // Sort by birth date (oldest first) or just take first one
-        const sorted = potentialRoots.sort((a: (typeof potentialRoots)[number], b: (typeof potentialRoots)[number]) => {
-          if (!a.birthDate) return 1;
-          if (!b.birthDate) return -1;
-          return a.birthDate.getTime() - b.birthDate.getTime();
-        });
+        // Sort: most direct children first (largest real family); break ties by oldest birth date.
+        const sorted = potentialRoots.sort(
+          (a: (typeof potentialRoots)[number], b: (typeof potentialRoots)[number]) => {
+            const aChildren = childCountMap.get(a.id) ?? 0;
+            const bChildren = childCountMap.get(b.id) ?? 0;
+            if (bChildren !== aChildren) return bChildren - aChildren; // more children first
+            if (!a.birthDate) return 1;
+            if (!b.birthDate) return -1;
+            return a.birthDate.getTime() - b.birthDate.getTime(); // older first as tiebreaker
+          }
+        );
         rootId = sorted[0].id;
       } else {
-        // Fall back to first person
+        // Fallback: any person
         rootId = persons[0].id;
       }
     }

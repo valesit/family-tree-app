@@ -101,16 +101,23 @@ export async function GET() {
         })
       );
       const validFamilies = families.filter((f): f is NonNullable<typeof f> => f !== null);
-      const sorted = validFamilies.sort((a, b) => b.memberCount - a.memberCount);
-      const primary = sorted.find((f) => f.familyName.toLowerCase().includes('sithole')) || sorted[0] || null;
-      return NextResponse.json({
-        success: true,
-        data: {
-          families: sorted,
-          primaryFamilyId: primary?.id || null,
-          stats: await getStats(),
-        },
-      });
+
+      // Only return early if we actually built valid families from the Family table.
+      // If every Family record pointed to a non-existent/deleted person (stale data),
+      // fall through to the auto-detection fallback below.
+      if (validFamilies.length > 0) {
+        const sorted = validFamilies.sort((a, b) => b.memberCount - a.memberCount);
+        const primary = sorted.find((f) => f.familyName.toLowerCase().includes('sithole')) || sorted[0] || null;
+        return NextResponse.json({
+          success: true,
+          data: {
+            families: sorted,
+            primaryFamilyId: primary?.id || null,
+            stats: await getStats(),
+          },
+        });
+      }
+      // Fall through to auto-detection below.
     }
 
     // 2. Fallback: infer from Person/Relationship (roots = never the child in parent-child relations)
