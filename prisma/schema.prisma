@@ -525,6 +525,13 @@ model GalleryPhoto {
   rootPersonId String
   url          String   @db.Text
   label        String   @default("")
+  /**
+   * Optional category. May be one of the built-in GalleryCategoryId values
+   * ('generations', 'celebrations', 'heritage', 'moments', 'milestones') OR a
+   * user-coined custom category. NULL means uncategorized — shows under
+   * "Your family's" in the UI.
+   */
+  category     String?
   sortOrder    Int      @default(0)
   uploadedById String?
   uploadedBy   User?    @relation("GalleryUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
@@ -533,4 +540,5 @@ model GalleryPhoto {
 
   @@index([rootPersonId])
   @@index([uploadedById])
+  @@index([category])
 }

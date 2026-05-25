@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         id: true,
         url: true,
         label: true,
+        category: true,
         uploadedById: true,
         createdAt: true,
       },
@@ -61,6 +62,10 @@ export async function POST(request: NextRequest) {
     const file = formData.get('image') as File | null;
     const label = (formData.get('label') as string) || '';
     const rootPersonId = formData.get('rootPersonId') as string | null;
+    // Category: either a built-in id, a user-coined slug, or '' (uncategorized).
+    // Trim aggressively and cap length so we don't end up with junky pill labels.
+    const categoryRaw = ((formData.get('category') as string) || '').trim().slice(0, 60);
+    const category = categoryRaw.length > 0 ? categoryRaw : null;
 
     if (!file || !rootPersonId) {
       return NextResponse.json(
@@ -97,6 +102,7 @@ export async function POST(request: NextRequest) {
         rootPersonId,
         url,
         label: label.slice(0, 500),
+        category,
         sortOrder: count,
         uploadedById: user.id,
       },
@@ -104,6 +110,7 @@ export async function POST(request: NextRequest) {
         id: true,
         url: true,
         label: true,
+        category: true,
         uploadedById: true,
         createdAt: true,
       },
