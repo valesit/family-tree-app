@@ -59,22 +59,45 @@ function AddPersonContent() {
     data: { items: PersonWithRelations[] };
   }>('/api/persons?limit=500', fetcher);
 
+  /** Eagerly fetch the prefilled person so it's visible the instant Step 1 mounts,
+      even if the bulk list hasn't loaded yet (matters for spouse "Add parents"). */
+  const { data: prefillRes } = useSWR<{
+    success: boolean;
+    data: PersonWithRelations;
+  }>(initialPersonId ? `/api/persons/${initialPersonId}` : null, fetcher, {
+    revalidateOnFocus: false,
+  });
+  const prefillPerson = prefillRes?.success ? prefillRes.data : undefined;
+
   const allPersons = personsData?.data?.items || [];
   const isEmptyTree = !personsLoading && allPersons.length === 0;
 
-  /** Filter the list as the user types. */
+  /** Filter the list as the user types. The currently-selected person is always
+      pinned to the top — even when the user is searching and even when the bulk
+      list is still loading — so the user immediately sees what they clicked. */
   const filteredPersons = useMemo(() => {
-    if (!search.trim()) return allPersons.slice(0, 30);
     const q = search.trim().toLowerCase();
-    return allPersons
-      .filter((p) => {
-        const name = `${p.firstName} ${p.lastName} ${p.nickname ?? ''}`.toLowerCase();
-        return name.includes(q);
-      })
-      .slice(0, 30);
-  }, [allPersons, search]);
+    const list = q
+      ? allPersons.filter((p) => {
+          const name = `${p.firstName} ${p.lastName} ${p.nickname ?? ''}`.toLowerCase();
+          return name.includes(q);
+        })
+      : allPersons.slice(0, 30);
 
-  const selectedPerson = allPersons.find((p) => p.id === selectedPersonId);
+    // Build the pin entry from whichever source has the selected person.
+    const pin = (allPersons.find((p) => p.id === selectedPersonId) ??
+      (selectedPersonId && prefillPerson?.id === selectedPersonId
+        ? prefillPerson
+        : undefined)) as PersonWithRelations | undefined;
+
+    if (!pin) return list;
+    const rest = list.filter((p) => p.id !== pin.id);
+    return [pin, ...rest].slice(0, 30);
+  }, [allPersons, search, selectedPersonId, prefillPerson]);
+
+  const selectedPerson =
+    allPersons.find((p) => p.id === selectedPersonId) ??
+    (selectedPersonId && prefillPerson?.id === selectedPersonId ? prefillPerson : undefined);
 
   // If deep-link points at a person who hasn't loaded yet, prefill once loaded.
   useEffect(() => {
@@ -269,7 +292,7 @@ function AddPersonContent() {
                   aria-label="Search family members"
                 />
 
-                {personsLoading ? (
+                {personsLoading && filteredPersons.length === 0 ? (
                   <div className="flex justify-center py-3">
                     <Loader2 className="h-5 w-5 animate-spin text-maroon-500" aria-hidden />
                   </div>

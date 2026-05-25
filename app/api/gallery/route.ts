@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { put } from '@vercel/blob';
 import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { STOCK_GALLERY } from '@/lib/gallery-stock';
@@ -80,17 +81,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Family not found' }, { status: 404 });
     }
 
-    const buf = Buffer.from(await file.arrayBuffer());
-    const dataUrl = `data:${file.type};base64,${buf.toString('base64')}`;
-    if (dataUrl.length > 6_000_000) {
-      return NextResponse.json({ success: false, error: 'Image too large after encoding' }, { status: 400 });
-    }
+    const { url } = await put(
+      `gallery/${rootPersonId}/${Date.now()}-${file.name}`,
+      file,
+      {
+        access: 'public',
+        addRandomSuffix: true,
+        token: process.env.FAMILY_BLOB_READ_WRITE_TOKEN,
+      }
+    );
 
     const count = await prisma.galleryPhoto.count({ where: { rootPersonId } });
     const photo = await prisma.galleryPhoto.create({
       data: {
         rootPersonId,
-        url: dataUrl,
+        url,
         label: label.slice(0, 500),
         sortOrder: count,
         uploadedById: user.id,

@@ -1,17 +1,21 @@
 'use client';
 
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree, ExpandedTreeView } from '@/components/tree';
+import { ExportTreeDialog } from '@/components/tree/ExportTreeDialog';
 import { Modal, Button, Avatar } from '@/components/ui';
 import { PersonCard } from '@/components/person';
-import { TreeNode, PersonWithRelations, SessionUser } from '@/types';
+import { TreeNode, PersonWithRelations, PersonWithImage, SessionUser } from '@/types';
+import { flattenTree } from '@/lib/tree-utils';
+import { PeopleListView, PeopleDirectoryView, type PersonExtras } from '@/components/people';
 import { 
   Loader2, AlertCircle, Users, TreePine, Calendar, Heart, Lock, 
   Maximize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
-  ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save, Cake
+  ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save, Cake,
+  LayoutGrid, List as ListIcon, Contact, Download,
 } from 'lucide-react';
 import Link from 'next/link';
 import { clsx } from 'clsx';
@@ -102,6 +106,13 @@ export default function TreePage() {
   /** On small screens, overview is secondary — collapsed by default so the tree is primary. */
   const [mobileOverviewOpen, setMobileOverviewOpen] = useState(false);
 
+  /** Active main view. Tabs are only shown when authenticated. */
+  const [activeView, setActiveView] = useState<'tree' | 'list' | 'directory'>('tree');
+  /** Export dialog visibility (Tree tab only). */
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  /** Live capture target for "Match what's on screen" PNG/PDF export. */
+  const liveCanvasRef = useRef<HTMLDivElement>(null);
+
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
   const isAdmin = user?.role === 'ADMIN';
@@ -168,9 +179,20 @@ export default function TreePage() {
     }>;
   }>(data?.data?.rootPersonId ? `/api/notable?familyId=${data.data.rootPersonId}` : null, fetcher);
 
-  const handleNodeClick = async (node: TreeNode) => {
+  /**
+   * Fetch the full person rows so List/Directory views can show fields that
+   * /api/tree omits (birthPlace, occupation, etc.). Only fired for signed-in
+   * users browsing the List or Directory tab — keeps anonymous tree loads light.
+   */
+  const shouldLoadExtras = isAuthenticated && (activeView === 'list' || activeView === 'directory');
+  const { data: personsData } = useSWR<{
+    success: boolean;
+    data: { items: PersonWithImage[] };
+  }>(shouldLoadExtras ? '/api/persons?limit=500' : null, fetcher, { revalidateOnFocus: false });
+
+  const openPersonModal = useCallback(async (personId: string) => {
     try {
-      const response = await fetch(`/api/persons/${node.id}`);
+      const response = await fetch(`/api/persons/${personId}`);
       const result = await response.json();
       if (result.success) {
         setSelectedPerson(result.data);
@@ -179,7 +201,9 @@ export default function TreePage() {
     } catch (error) {
       console.error('Error fetching person:', error);
     }
-  };
+  }, []);
+
+  const handleNodeClick = (node: TreeNode) => openPersonModal(node.id);
 
   const handleAddChild = (parentId: string) => {
     if (!isAuthenticated) {
@@ -284,6 +308,18 @@ export default function TreePage() {
   const monthIndex = new Date().getMonth();
   const monthName = new Date().toLocaleString(undefined, { month: 'long' });
   const birthdaysThisMonth = useMemo(() => getBirthdaysInMonth(tree, monthIndex), [tree, monthIndex]);
+
+  /** Flat list of every person in this tree — for List & Directory views. */
+  const flatPeople = useMemo(() => flattenTree(tree), [tree]);
+  /** Map of personId -> birthPlace/occupation pulled from /api/persons. */
+  const extrasMap = useMemo(() => {
+    const m = new Map<string, PersonExtras>();
+    const items = personsData?.data?.items ?? [];
+    for (const p of items) {
+      m.set(p.id, { birthPlace: p.birthPlace, occupation: p.occupation });
+    }
+    return m;
+  }, [personsData]);
 
   // Show loading while checking for redirect or loading tree
   const isCheckingRedirect = isAuthenticated && !rootIdParam && !hasRedirected && !userFamiliesData;
@@ -460,24 +496,79 @@ export default function TreePage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
         {/* Family tree — first in DOM: left on desktop, full-width focus on mobile */}
         <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
-          {/* Panel Header — hidden on mobile (top header already names the family) */}
-          <div className="hidden shrink-0 items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
-            <div className="flex items-center gap-2">
-              <TreePine className="h-5 w-5 text-slate-600" />
-              <span className="font-semibold text-slate-900">Family Tree</span>
+          {/* View tabs — only visible to signed-in users. */}
+          {isAuthenticated && (
+            <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 sm:px-6">
+              <ViewTab
+                active={activeView === 'tree'}
+                onClick={() => setActiveView('tree')}
+                icon={<LayoutGrid className="h-4 w-4" aria-hidden />}
+                label="Tree"
+              />
+              <ViewTab
+                active={activeView === 'list'}
+                onClick={() => setActiveView('list')}
+                icon={<ListIcon className="h-4 w-4" aria-hidden />}
+                label="List"
+              />
+              <ViewTab
+                active={activeView === 'directory'}
+                onClick={() => setActiveView('directory')}
+                icon={<Contact className="h-4 w-4" aria-hidden />}
+                label="Directory"
+              />
+              <div className="ml-auto flex items-center gap-2">
+                {activeView === 'tree' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsExportOpen(true)}
+                  >
+                    <Download className="mr-1.5 h-4 w-4" aria-hidden />
+                    Export
+                  </Button>
+                )}
+                <button
+                  onClick={() => setIsExpandedViewOpen(true)}
+                  className="hidden rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 lg:inline-flex"
+                  title="Expand view"
+                  aria-label="Expand tree view"
+                  type="button"
+                >
+                  <Maximize2 className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => setIsExpandedViewOpen(true)}
-              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
-              title="Expand view"
-              aria-label="Expand tree view"
-              type="button"
-            >
-              <Maximize2 className="h-4 w-4" aria-hidden />
-            </button>
-          </div>
+          )}
 
-          <div className="relative min-h-[min(70dvh,640px)] flex-1 lg:min-h-0">
+          {/* Panel Header — only shown when no tab strip is present (signed-out users) */}
+          {!isAuthenticated && (
+            <div className="hidden shrink-0 items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
+              <div className="flex items-center gap-2">
+                <TreePine className="h-5 w-5 text-slate-600" />
+                <span className="font-semibold text-slate-900">Family Tree</span>
+              </div>
+              <button
+                onClick={() => setIsExpandedViewOpen(true)}
+                className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+                title="Expand view"
+                aria-label="Expand tree view"
+                type="button"
+              >
+                <Maximize2 className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          )}
+
+          {/* Tree view (always rendered; hidden when not active so re-mount cost is avoided) */}
+          <div
+            ref={liveCanvasRef}
+            className={clsx(
+              'relative min-h-[min(70dvh,640px)] flex-1 lg:min-h-0',
+              activeView !== 'tree' && 'hidden'
+            )}
+          >
             <FamilyTree
               data={tree}
               onNodeClick={handleNodeClick}
@@ -487,6 +578,26 @@ export default function TreePage() {
               onViewBirthFamily={handleViewBirthFamily}
             />
           </div>
+
+          {activeView === 'list' && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <PeopleListView
+                people={flatPeople}
+                extras={extrasMap}
+                onPersonClick={openPersonModal}
+              />
+            </div>
+          )}
+
+          {activeView === 'directory' && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <PeopleDirectoryView
+                people={flatPeople}
+                extras={extrasMap}
+                onPersonClick={openPersonModal}
+              />
+            </div>
+          )}
         </div>
 
         {/* Family overview — right on desktop, below on mobile, collapsible on &lt;lg via mobileOverviewOpen */}
@@ -946,7 +1057,45 @@ export default function TreePage() {
         onClose={() => setIsExpandedViewOpen(false)}
         currentUser={user || null}
       />
+
+      {/* Export Tree Dialog */}
+      <ExportTreeDialog
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        tree={tree}
+        liveCanvasRef={liveCanvasRef}
+        familyName={familyName}
+      />
     </main>
+  );
+}
+
+function ViewTab({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={clsx(
+        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+        active
+          ? 'bg-maroon-50 text-maroon-700 ring-1 ring-maroon-200'
+          : 'text-slate-600 hover:bg-slate-100'
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

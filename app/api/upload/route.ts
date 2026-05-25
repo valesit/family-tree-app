@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { put } from '@vercel/blob';
 import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { SessionUser } from '@/types';
@@ -50,20 +51,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In a real application, you would upload to cloud storage here
-    // For now, we'll store a placeholder URL (you would replace this with actual upload logic)
-    // Example with Vercel Blob:
-    // const { url } = await put(image.name, image, { access: 'public' });
+    const { url } = await put(
+      `persons/${personId}/${Date.now()}-${image.name}`,
+      image,
+      {
+        access: 'public',
+        addRandomSuffix: true,
+        token: process.env.FAMILY_BLOB_READ_WRITE_TOKEN,
+      }
+    );
 
-    // Generate a placeholder URL (in production, this would be the actual uploaded URL)
-    const timestamp = Date.now();
-    const fileName = `${personId}-${timestamp}-${image.name}`;
-    const placeholderUrl = `/uploads/${fileName}`; // Placeholder - implement actual upload
-
-    // Create the image record
     const personImage = await prisma.personImage.create({
       data: {
-        url: placeholderUrl,
+        url,
         personId,
         isPrimary: isProfile,
       },
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: personImage,
-      message: 'Image uploaded successfully. Note: In production, configure cloud storage.',
+      message: 'Image uploaded successfully.',
     });
   } catch (error) {
     console.error('Error uploading image:', error);
