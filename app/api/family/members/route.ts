@@ -299,7 +299,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.notification.create({
       data: {
         userId: targetUserId,
-        type: 'FAMILY_ADMIN_REMOVED',
+        type: 'NEW_FAMILY_MEMBER',
         title: 'Removed from family tree',
         message: 'You have been removed from a family tree.',
         data: { familyId },

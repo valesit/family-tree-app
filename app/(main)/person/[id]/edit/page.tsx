@@ -70,7 +70,7 @@ export default function EditPersonPage({ params }: PageProps) {
   const person = data.data;
 
   // Convert person data to form format
-  const initialData: Partial<PersonInput> & { birthFamilyRootPersonId?: string | null } = {
+  const initialData: Partial<PersonInput> = {
     firstName: person.firstName,
     lastName: person.lastName,
     middleName: person.middleName || '',
@@ -97,10 +97,9 @@ export default function EditPersonPage({ params }: PageProps) {
     occupation: person.occupation || '',
     isLiving: person.isLiving,
     isPrivate: person.isPrivate,
-    birthFamilyRootPersonId: (person as any).birthFamilyRootPersonId || null,
   };
 
-  const handleSubmit = async (formData: PersonInput & { birthFamilyRootPersonId?: string | null }, profileImage?: File) => {
+  const handleSubmit = async (formData: PersonInput, profileImage?: File) => {
     try {
       // Prepare the data
       const updateData = {
@@ -108,7 +107,6 @@ export default function EditPersonPage({ params }: PageProps) {
         birthDate: formData.birthDate ? new Date(formData.birthDate).toISOString() : null,
         deathDate: formData.deathDate ? new Date(formData.deathDate).toISOString() : null,
         facts: formData.facts?.length ? JSON.stringify(formData.facts) : null,
-        birthFamilyRootPersonId: formData.birthFamilyRootPersonId || null,
       };
 
       // Update person

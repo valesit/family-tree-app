@@ -12,7 +12,8 @@ interface TreeNodeProps {
   onAddChild?: (parentId: string) => void;
   onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
-  onViewBirthFamily?: (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => void;
+  /** Kept on the prop type only for backwards-compat with existing callers. */
+  onViewBirthFamily?: (personId: string, maidenName?: string) => void;
   expandedNodes: Set<string>;
   toggleExpanded: (nodeId: string) => void;
   level: number;

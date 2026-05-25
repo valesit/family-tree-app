@@ -427,10 +427,6 @@ export default function FamilyViewPage() {
                 setIsModalOpen(false);
                 router.push(`/person/${selectedPerson.id}/edit`);
               } : undefined}
-              onRequestCorrection={isAuthenticated ? () => {
-                setIsModalOpen(false);
-                router.push(`/corrections/new?personId=${selectedPerson.id}`);
-              } : undefined}
             />
             {!isAuthenticated && (
               <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">

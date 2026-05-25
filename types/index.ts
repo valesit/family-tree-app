@@ -1,13 +1,10 @@
-import { 
-  User, 
-  Person, 
-  Relationship, 
-  PendingChange, 
-  CorrectionRequest, 
-  Message, 
+import {
+  User,
+  Person,
+  Relationship,
+  Message,
   Notification,
   PersonImage,
-  Approval,
   Activity,
   Conversation,
   WikiArticle,
@@ -17,21 +14,17 @@ import {
   NotableImage,
   Family,
   FamilyMembership,
-  AdminRemovalRequest,
-  FamilyRole
+  FamilyRole,
 } from '@prisma/client';
 
 // Re-export Prisma types
-export type { 
-  User, 
-  Person, 
-  Relationship, 
-  PendingChange, 
-  CorrectionRequest, 
-  Message, 
+export type {
+  User,
+  Person,
+  Relationship,
+  Message,
   Notification,
   PersonImage,
-  Approval,
   Activity,
   Conversation,
   WikiArticle,
@@ -41,8 +34,7 @@ export type {
   NotableImage,
   Family,
   FamilyMembership,
-  AdminRemovalRequest,
-  FamilyRole
+  FamilyRole,
 };
 
 // Extended types with relations
@@ -63,19 +55,6 @@ export type RelationshipWithPersons = Relationship & {
   child?: PersonWithImage | null;
   spouse1?: PersonWithImage | null;
   spouse2?: PersonWithImage | null;
-};
-
-export type ApprovalWithApprover = Approval & { approver: User };
-
-export type PendingChangeWithDetails = PendingChange & {
-  createdBy: User;
-  person?: Person | null;
-  approvals: ApprovalWithApprover[];
-};
-
-export type CorrectionWithDetails = CorrectionRequest & {
-  requestedBy: User;
-  person: Person & { profileImage?: PersonImage | null };
 };
 
 export type MessageWithUsers = Message & {
@@ -116,7 +95,6 @@ export interface TreeNode {
     deathYear?: string;
     occupation?: string;
     maidenName?: string;
-    birthFamilyId?: string;
   };
 }
 
@@ -220,13 +198,6 @@ export type FamilyMembershipWithFamily = FamilyMembership & {
 export type FamilyWithMemberships = Family & {
   memberships: FamilyMembershipWithUser[];
   createdBy?: User | null;
-};
-
-export type AdminRemovalRequestWithDetails = AdminRemovalRequest & {
-  family: Family;
-  targetUser: User;
-  requestedBy: User;
-  resolvedBy?: User | null;
 };
 
 // Check if user is Family Admin for a specific tree

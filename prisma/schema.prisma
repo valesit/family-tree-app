@@ -27,9 +27,6 @@ model User {
   accounts          Account[]
   sessions          Session[]
   linkedPerson      Person?           @relation("UserPerson")
-  pendingChanges    PendingChange[]   @relation("ChangeCreator")
-  approvalsGiven    Approval[]
-  corrections       CorrectionRequest[] @relation("CorrectionCreator")
   messagesSent      Message[]         @relation("MessageSender")
   messagesReceived  Message[]         @relation("MessageReceiver")
   notifications     Notification[]
@@ -38,30 +35,21 @@ model User {
   // Wiki relations
   wikiArticles      WikiArticle[]     @relation("WikiAuthor")
   wikiComments      WikiComment[]     @relation("WikiCommentAuthor")
-  
+
   // Notable nominations
   notableNominations NotableNomination[] @relation("NominationCreator")
 
   // Family memberships (which trees this user belongs to)
   familyMemberships FamilyMembership[]
-  
+
   // Families created by this user
   familiesCreated   Family[]            @relation("FamilyCreator")
-  
+
   // Persons added by this user
   personsAdded      Person[]            @relation("PersonAddedBy")
-  
+
   // Persons verified by this user
   personsVerified   Person[]            @relation("PersonVerifiedBy")
-  
-  // Admin removal requests created by this user
-  adminRemovalRequests AdminRemovalRequest[] @relation("RemovalRequester")
-  
-  // Admin removal requests targeting this user
-  adminRemovalTargets  AdminRemovalRequest[] @relation("RemovalTarget")
-  
-  // Admin removal requests resolved by this user (System Admin)
-  adminRemovalsResolved AdminRemovalRequest[] @relation("RemovalResolver")
 
   // Family gallery uploads (scoped by founding person / family root)
   galleryPhotosUploaded GalleryPhoto[] @relation("GalleryUploader")
@@ -114,9 +102,8 @@ enum UserRole {
 
 // Role within a specific family tree
 enum FamilyRole {
-  ADMIN    // Family Admin - can approve edits, manage tree admins
-  MEMBER   // Verified member - can approve new persons
-  PENDING  // Unverified - awaiting approval
+  ADMIN    // Family Admin
+  MEMBER   // Regular contributor
 }
 
 // Family member in the tree (can be linked to a user account or not)
@@ -150,12 +137,8 @@ model Person {
   notableDescription String?  @db.Text
   notableAchievements String? @db.Text // JSON array of achievements
 
-  // Birth family link (for spouses who married into this family)
-  // Links to the root person of their birth family tree
-  birthFamilyRootPersonId String?
-
   // Verification status for new family members
-  isVerified    Boolean   @default(false)  // Shows "Unverified" badge if false
+  isVerified    Boolean   @default(false)  // Shows a subtle "recently added" dot if false
   verifiedAt    DateTime?                   // When the person was verified
   
   // Who added this person
@@ -180,8 +163,6 @@ model Person {
   childRelations    Relationship[]      @relation("ParentRelation")
   spouseRelations1  Relationship[]      @relation("Spouse1Relation")
   spouseRelations2  Relationship[]      @relation("Spouse2Relation")
-  pendingChanges    PendingChange[]
-  corrections       CorrectionRequest[]
   wikiArticles      WikiArticle[]       @relation("PersonWikiArticles")
   notableNominations NotableNomination[] @relation("NotableNominations")
 
@@ -253,97 +234,12 @@ enum RelationshipType {
   FOSTER
 }
 
-// Pending changes awaiting approval
-model PendingChange {
-  id          String            @id @default(cuid())
-  changeType  ChangeType
-  changeData  Json              // The proposed changes
-  status      ApprovalStatus    @default(PENDING)
-  comment     String?           @db.Text
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  // Who created this change
-  createdById String
-  createdBy   User   @relation("ChangeCreator", fields: [createdById], references: [id])
-
-  // What person is being changed (null for new persons)
-  personId String?
-  person   Person? @relation(fields: [personId], references: [id], onDelete: Cascade)
-
-  // Which family tree this change belongs to (for scoping approvers)
-  familyId String?
-
-  // Approvals required
-  approvals Approval[]
-
-  @@index([createdById])
-  @@index([personId])
-  @@index([familyId])
-  @@index([status])
-}
-
-enum ChangeType {
-  CREATE_PERSON
-  UPDATE_PERSON
-  DELETE_PERSON
-  ADD_RELATIONSHIP
-  UPDATE_RELATIONSHIP
-  DELETE_RELATIONSHIP
-  ADD_IMAGE
-  DELETE_IMAGE
-}
-
+// Status enum kept for NotableNomination
 enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
   CANCELLED
-}
-
-// Individual approvals for a pending change
-model Approval {
-  id        String          @id @default(cuid())
-  status    ApprovalStatus  @default(PENDING)
-  comment   String?
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-
-  // Who is the approver
-  approverId String
-  approver   User   @relation(fields: [approverId], references: [id])
-
-  // Which pending change
-  pendingChangeId String
-  pendingChange   PendingChange @relation(fields: [pendingChangeId], references: [id], onDelete: Cascade)
-
-  @@unique([approverId, pendingChangeId])
-  @@index([approverId])
-  @@index([pendingChangeId])
-}
-
-// Correction requests for existing information
-model CorrectionRequest {
-  id              String          @id @default(cuid())
-  currentData     Json            // Current data snapshot
-  proposedData    Json            // Proposed corrections
-  reason          String          @db.Text
-  status          ApprovalStatus  @default(PENDING)
-  adminComment    String?         @db.Text
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  // Who requested the correction
-  requestedById String
-  requestedBy   User   @relation("CorrectionCreator", fields: [requestedById], references: [id])
-
-  // Which person needs correction
-  personId String
-  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
-
-  @@index([requestedById])
-  @@index([personId])
-  @@index([status])
 }
 
 // Messages between users
@@ -416,11 +312,6 @@ model Notification {
 }
 
 enum NotificationType {
-  APPROVAL_REQUEST
-  APPROVAL_GRANTED
-  APPROVAL_REJECTED
-  CORRECTION_REQUEST
-  CORRECTION_RESOLVED
   NEW_MESSAGE
   NEW_FAMILY_MEMBER
   WELCOME
@@ -430,14 +321,10 @@ enum NotificationType {
   NOTABLE_NOMINATION_APPROVED
   NOTABLE_NOMINATION_REJECTED
   RELATIVE_SUGGESTION
-  // New notification types for family management
-  NEW_PERSON_PENDING       // New unverified person added to family
+  NEW_PERSON_PENDING       // New "recently added" person (soft)
   PERSON_VERIFIED          // Person was verified
   PROFILE_CLAIMED          // Someone claimed "This is me"
   FAMILY_ADMIN_ADDED       // User promoted to Family Admin
-  FAMILY_ADMIN_REMOVAL_REQUEST  // Request to remove Family Admin
-  FAMILY_ADMIN_REMOVED     // Family Admin was removed
-  EDIT_APPROVAL_REQUEST    // Request to approve an edit (Family Admin only)
 }
 
 // Activity log for the family tree
@@ -483,17 +370,14 @@ model Family {
 
   // Link to the root/founding person of this family tree
   rootPersonId String  @unique
-  
+
   // Who created this family tree (auto becomes Family Admin)
   createdById  String?
   createdBy    User?   @relation("FamilyCreator", fields: [createdById], references: [id])
-  
+
   // Family memberships
   memberships  FamilyMembership[]
-  
-  // Admin removal requests for this family
-  adminRemovalRequests AdminRemovalRequest[]
-  
+
   @@index([rootPersonId])
   @@index([createdById])
 }
@@ -521,40 +405,6 @@ model FamilyMembership {
   @@index([userId])
   @@index([familyId])
   @@index([role])
-}
-
-// ============================================
-// ADMIN REMOVAL REQUESTS
-// ============================================
-
-// Requests to remove a Family Admin (requires System Admin approval)
-model AdminRemovalRequest {
-  id            String   @id @default(cuid())
-  reason        String?  @db.Text
-  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED
-  createdAt     DateTime @default(now())
-  resolvedAt    DateTime?
-  
-  // Which family tree
-  familyId      String
-  family        Family   @relation(fields: [familyId], references: [rootPersonId], onDelete: Cascade)
-  
-  // The Family Admin to be removed
-  targetUserId  String
-  targetUser    User     @relation("RemovalTarget", fields: [targetUserId], references: [id])
-  
-  // Who requested the removal (another Family Admin)
-  requestedById String
-  requestedBy   User     @relation("RemovalRequester", fields: [requestedById], references: [id])
-  
-  // System Admin who resolved this request
-  resolvedById  String?
-  resolvedBy    User?    @relation("RemovalResolver", fields: [resolvedById], references: [id])
-  
-  @@index([familyId])
-  @@index([targetUserId])
-  @@index([requestedById])
-  @@index([status])
 }
 
 // ============================================

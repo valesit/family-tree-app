@@ -36,7 +36,8 @@ export async function canManageTree(userId: string, familyId: string): Promise<b
 }
 
 /**
- * Check if a user is a verified member of a family tree
+ * Check if a user is a member of a family tree.
+ * (We no longer model a PENDING state — any membership row counts.)
  */
 export async function isVerifiedMember(userId: string, familyId: string): Promise<boolean> {
   const membership = await prisma.familyMembership.findUnique({
@@ -44,7 +45,7 @@ export async function isVerifiedMember(userId: string, familyId: string): Promis
       userId_familyId: { userId, familyId },
     },
   });
-  return membership !== null && membership.role !== 'PENDING';
+  return membership !== null;
 }
 
 /**
@@ -203,13 +204,10 @@ export async function promoteToFamilyAdmin(
     return { success: false, error: 'Not authorized to promote Family Admins' };
   }
 
-  // Check target is a verified member
+  // Check target is a member
   const targetMembership = await getFamilyMembership(targetUserId, familyId);
   if (!targetMembership) {
     return { success: false, error: 'User must be a member of this family tree' };
-  }
-  if (targetMembership.role === 'PENDING') {
-    return { success: false, error: 'User must be verified before becoming Family Admin' };
   }
 
   // Promote
@@ -241,13 +239,8 @@ export async function getFamilyAdmins(familyId: string) {
  */
 export async function getVerifiedFamilyMembers(familyId: string) {
   return prisma.familyMembership.findMany({
-    where: {
-      familyId,
-      role: { in: ['ADMIN', 'MEMBER'] },
-    },
-    include: {
-      user: true,
-    },
+    where: { familyId },
+    include: { user: true },
   });
 }
 

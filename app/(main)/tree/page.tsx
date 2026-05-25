@@ -205,11 +205,8 @@ export default function TreePage() {
     router.push(`/add-person?childId=${childId}`);
   };
 
-  const handleViewBirthFamily = (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => {
-    if (birthFamilyRootPersonId) {
-      // Direct link to the birth family tree
-      router.push(`/tree?rootId=${birthFamilyRootPersonId}`);
-    } else if (maidenName) {
+  const handleViewBirthFamily = (personId: string, maidenName?: string) => {
+    if (maidenName) {
       // Search for families with this surname
       router.push(`/?search=${encodeURIComponent(maidenName)}`);
     }

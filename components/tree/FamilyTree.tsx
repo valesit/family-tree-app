@@ -13,7 +13,8 @@ interface FamilyTreeProps {
   onAddChild?: (parentId: string) => void;
   onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
-  onViewBirthFamily?: (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => void;
+  /** No-op kept on the prop type only for backwards-compat with existing callers. */
+  onViewBirthFamily?: (personId: string, maidenName?: string) => void;
   readOnly?: boolean;
 }
 

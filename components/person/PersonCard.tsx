@@ -12,7 +12,6 @@ import {
   Heart,
   Users,
   Edit,
-  Flag,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
@@ -20,14 +19,12 @@ import Link from 'next/link';
 interface PersonCardProps {
   person: PersonWithRelations;
   onEdit?: () => void;
-  onRequestCorrection?: () => void;
   showActions?: boolean;
 }
 
 export function PersonCard({
   person,
   onEdit,
-  onRequestCorrection,
   showActions = true,
 }: PersonCardProps) {
   const age = person.birthDate
@@ -57,14 +54,6 @@ export function PersonCard({
                 className="p-2 bg-white/20 backdrop-blur-sm rounded-lg text-white hover:bg-white/30 transition-colors"
               >
                 <Edit className="w-4 h-4" />
-              </button>
-            )}
-            {onRequestCorrection && (
-              <button
-                onClick={onRequestCorrection}
-                className="p-2 bg-white/20 backdrop-blur-sm rounded-lg text-white hover:bg-white/30 transition-colors"
-              >
-                <Flag className="w-4 h-4" />
               </button>
             )}
           </div>
