@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -8,7 +8,9 @@ import useSWR from 'swr';
 import { FamilyTree } from '@/components/tree';
 import { FamilyGallerySection } from '@/components/gallery';
 import { PageScrollNav } from '@/components/shared';
-import { TreeNode, PersonWithRelations } from '@/types';
+import { PeopleListView, PeopleDirectoryView, type PersonExtras } from '@/components/people';
+import { TreeNode, PersonWithRelations, PersonWithImage } from '@/types';
+import { flattenTree } from '@/lib/tree-utils';
 import {
   TreePine,
   Users,
@@ -28,7 +30,11 @@ import {
   BookOpen,
   BookMarked,
   Images,
+  LayoutGrid,
+  List as ListIcon,
+  Contact,
 } from 'lucide-react';
+import { clsx } from 'clsx';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -66,6 +72,8 @@ export default function HomePage() {
 
   const [selectedPerson, setSelectedPerson] = useState<PersonWithRelations | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  /** Home page main view. Tabs only render when signed in. */
+  const [activeView, setActiveView] = useState<'tree' | 'list' | 'directory'>('tree');
 
   // 1. Fetch families to get primaryFamilyId
   const { data: familiesData, isLoading: familiesLoading } = useSWR<{
@@ -105,6 +113,38 @@ export default function HomePage() {
   const tree = treeData?.data?.tree || null;
   const familyName = primaryFamily?.familyName || treeData?.data?.familyName || 'Family Tree';
   const ancestor = treeData?.data?.foundingAncestor || primaryFamily?.foundingAncestor;
+
+  /**
+   * Pull every person record (incl. birthPlace/occupation) only when a signed-in
+   * visitor switches to List or Directory. Keeps anonymous loads light.
+   */
+  const shouldLoadExtras = isAuthenticated && (activeView === 'list' || activeView === 'directory');
+  const { data: personsData } = useSWR<{
+    success: boolean;
+    data: { items: PersonWithImage[] };
+  }>(shouldLoadExtras ? '/api/persons?limit=500' : null, fetcher, { revalidateOnFocus: false });
+
+  const flatPeople = useMemo(() => flattenTree(tree), [tree]);
+  const extrasMap = useMemo(() => {
+    const m = new Map<string, PersonExtras>();
+    for (const p of personsData?.data?.items ?? []) {
+      m.set(p.id, { birthPlace: p.birthPlace, occupation: p.occupation });
+    }
+    return m;
+  }, [personsData]);
+
+  const handlePersonClick = async (personId: string) => {
+    try {
+      const response = await fetch(`/api/persons/${personId}`);
+      const result = await response.json();
+      if (result.success) {
+        setSelectedPerson(result.data);
+        setIsModalOpen(true);
+      }
+    } catch (e) {
+      console.error('Error fetching person:', e);
+    }
+  };
 
   const handleNodeClick = async (node: TreeNode) => {
     try {
@@ -307,19 +347,50 @@ export default function HomePage() {
           <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:gap-8 lg:items-stretch min-h-0">
             {/* Tree canvas — explicit height (h-*, not min-h-*) so the canvas's h-full resolves on mobile */}
             <div className="order-1 flex min-w-0 flex-1 flex-col">
-              <div className="mb-2 flex items-center justify-between gap-3 px-0.5 sm:mb-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-0.5 sm:mb-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
                   <TreePine className="h-4 w-4 text-maroon-600" />
                   Family tree
                 </h2>
-                <Link
-                  href={treeExploreHref}
-                  className="inline-flex items-center gap-1 rounded-full border border-maroon-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-maroon-800 shadow-sm hover:bg-maroon-50 sm:hidden"
-                >
-                  <Maximize2 className="h-3 w-3" />
-                  Open full
-                </Link>
-                <span className="hidden text-xs text-slate-500 sm:inline">Drag to move · Scroll to zoom</span>
+
+                {/* View tabs — signed-in only. */}
+                {isAuthenticated && (
+                  <div className="order-3 flex items-center gap-1 rounded-full border border-slate-200 bg-white p-0.5 shadow-sm w-full sm:order-2 sm:w-auto">
+                    <HomeViewTab
+                      active={activeView === 'tree'}
+                      onClick={() => setActiveView('tree')}
+                      icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />}
+                      label="Tree"
+                    />
+                    <HomeViewTab
+                      active={activeView === 'list'}
+                      onClick={() => setActiveView('list')}
+                      icon={<ListIcon className="h-3.5 w-3.5" aria-hidden />}
+                      label="List"
+                    />
+                    <HomeViewTab
+                      active={activeView === 'directory'}
+                      onClick={() => setActiveView('directory')}
+                      icon={<Contact className="h-3.5 w-3.5" aria-hidden />}
+                      label="Directory"
+                    />
+                  </div>
+                )}
+
+                <div className="order-2 ml-auto flex items-center gap-3 sm:order-3">
+                  <Link
+                    href={treeExploreHref}
+                    className="inline-flex items-center gap-1 rounded-full border border-maroon-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-maroon-800 shadow-sm hover:bg-maroon-50 sm:hidden"
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                    Open full
+                  </Link>
+                  {activeView === 'tree' && (
+                    <span className="hidden text-xs text-slate-500 sm:inline">
+                      Drag to move · Scroll to zoom
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="relative h-[min(62dvh,560px)] overflow-hidden rounded-2xl border border-maroon-900/10 bg-white shadow-[0_20px_50px_-24px_rgba(101,26,26,0.15)] ring-1 ring-maroon-900/[0.04] sm:h-[min(70dvh,720px)] lg:h-[min(82vh,960px)]">
                 {isLoading ? (
@@ -331,6 +402,18 @@ export default function HomePage() {
                   </div>
                 ) : hasNoData ? (
                   <EmptyState isAuthenticated={isAuthenticated} />
+                ) : activeView === 'list' ? (
+                  <PeopleListView
+                    people={flatPeople}
+                    extras={extrasMap}
+                    onPersonClick={handlePersonClick}
+                  />
+                ) : activeView === 'directory' ? (
+                  <PeopleDirectoryView
+                    people={flatPeople}
+                    extras={extrasMap}
+                    onPersonClick={handlePersonClick}
+                  />
                 ) : (
                   <FamilyTree data={tree} onNodeClick={handleNodeClick} readOnly />
                 )}
@@ -656,5 +739,34 @@ function EmptyState({ isAuthenticated }: { isAuthenticated: boolean }) {
         </Link>
       )}
     </div>
+  );
+}
+
+function HomeViewTab({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={clsx(
+        'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors sm:flex-none',
+        active
+          ? 'bg-maroon-600 text-white shadow-sm'
+          : 'text-slate-600 hover:bg-slate-100'
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
