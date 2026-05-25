@@ -9,14 +9,12 @@ import {
   TreePine,
   MessageSquare,
   Bell,
-  CheckCircle,
   Settings,
   LogOut,
   Menu,
   X,
   Search,
   Plus,
-  FileEdit,
   LogIn,
   UserPlus,
   Home,
@@ -36,13 +34,12 @@ export function Navbar() {
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
 
-  // Navigation items for authenticated users
+  // Navigation items for authenticated users — kept short and focused on
+  // viewing & contributing (one tree, no approval queue surfaced here).
   const authNavItems = [
     { href: '/tree', label: 'Family Tree', icon: TreePine },
     { href: '/wiki', label: 'Wiki', icon: BookOpen },
     { href: '/gallery', label: 'Gallery', icon: Images },
-    { href: '/approvals', label: 'Approvals', icon: CheckCircle },
-    { href: '/corrections', label: 'Corrections', icon: FileEdit },
     { href: '/messages', label: 'Messages', icon: MessageSquare },
   ];
 

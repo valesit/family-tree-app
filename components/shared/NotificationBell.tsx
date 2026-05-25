@@ -12,24 +12,20 @@ import Link from 'next/link';
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 const notificationIcons: Record<string, string> = {
-  APPROVAL_REQUEST: '📋',
-  APPROVAL_GRANTED: '✅',
-  APPROVAL_REJECTED: '❌',
-  CORRECTION_REQUEST: '📝',
-  CORRECTION_RESOLVED: '✔️',
   NEW_MESSAGE: '💬',
   NEW_FAMILY_MEMBER: '👥',
+  PROFILE_CLAIMED: '🤝',
+  NEW_PERSON_PENDING: '🌱',
+  PERSON_VERIFIED: '✅',
   WELCOME: '👋',
 };
 
-const notificationLinks: Record<string, (data: { changeId?: string; personId?: string; senderId?: string }) => string> = {
-  APPROVAL_REQUEST: () => '/approvals',
-  APPROVAL_GRANTED: () => '/approvals?type=mine',
-  APPROVAL_REJECTED: () => '/approvals?type=mine',
-  CORRECTION_REQUEST: () => '/corrections',
-  CORRECTION_RESOLVED: () => '/corrections?type=mine',
-  NEW_MESSAGE: (data) => data.senderId ? `/messages?userId=${data.senderId}` : '/messages',
-  NEW_FAMILY_MEMBER: (data) => data.personId ? `/person/${data.personId}` : '/tree',
+const notificationLinks: Record<string, (data: { personId?: string; senderId?: string }) => string> = {
+  NEW_MESSAGE: (data) => (data.senderId ? `/messages?userId=${data.senderId}` : '/messages'),
+  NEW_FAMILY_MEMBER: (data) => (data.personId ? `/person/${data.personId}` : '/tree'),
+  PROFILE_CLAIMED: (data) => (data.personId ? `/person/${data.personId}` : '/tree'),
+  NEW_PERSON_PENDING: (data) => (data.personId ? `/person/${data.personId}` : '/tree'),
+  PERSON_VERIFIED: (data) => (data.personId ? `/person/${data.personId}` : '/tree'),
   WELCOME: () => '/tree',
 };
 

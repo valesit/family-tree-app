@@ -53,8 +53,6 @@ export const personSchema = z.object({
   occupation: z.string().max(200).optional().or(z.literal('')),
   isLiving: z.boolean(),
   isPrivate: z.boolean(),
-  // Birth family link for spouses
-  birthFamilyRootPersonId: z.string().optional().nullable(),
 }).refine(data => {
   if (data.birthDate && data.deathDate) {
     return new Date(data.birthDate) < new Date(data.deathDate);
@@ -79,20 +77,6 @@ export const relationshipSchema = z.object({
   path: ['person2Id'],
 });
 
-// Correction request schema
-export const correctionSchema = z.object({
-  personId: z.string().min(1, 'Person ID is required'),
-  proposedChanges: z.object({
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
-    birthDate: z.string().optional(),
-    deathDate: z.string().optional(),
-    biography: z.string().optional(),
-    // ... other optional fields
-  }),
-  reason: z.string().min(10, 'Please provide a detailed reason for the correction').max(2000),
-});
-
 // Message schema
 export const messageSchema = z.object({
   content: z.string().min(1, 'Message cannot be empty').max(5000),
@@ -103,13 +87,6 @@ export const messageSchema = z.object({
   path: ['receiverId'],
 });
 
-// Approval schema
-export const approvalSchema = z.object({
-  pendingChangeId: z.string().min(1, 'Change ID is required'),
-  status: z.enum(['APPROVED', 'REJECTED']),
-  comment: z.string().max(1000).optional().or(z.literal('')),
-});
-
 // Search schema
 export const searchSchema = z.object({
   query: z.string().max(200).optional(),
@@ -118,24 +95,6 @@ export const searchSchema = z.object({
   birthYearFrom: z.number().int().min(1800).max(2100).optional(),
   birthYearTo: z.number().int().min(1800).max(2100).optional(),
   location: z.string().max(200).optional(),
-});
-
-// Change request with approvers
-export const changeRequestSchema = z.object({
-  changeType: z.enum([
-    'CREATE_PERSON',
-    'UPDATE_PERSON',
-    'DELETE_PERSON',
-    'ADD_RELATIONSHIP',
-    'UPDATE_RELATIONSHIP',
-    'DELETE_RELATIONSHIP',
-    'ADD_IMAGE',
-    'DELETE_IMAGE',
-  ]),
-  changeData: z.record(z.string(), z.unknown()),
-  personId: z.string().min(1).optional(),
-  approverIds: z.array(z.string().min(1)).min(0).max(2),
-  comment: z.string().max(1000).optional(),
 });
 
 // Profile update schema
@@ -164,11 +123,8 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PersonInput = z.infer<typeof personSchema>;
 export type RelationshipInput = z.infer<typeof relationshipSchema>;
-export type CorrectionInput = z.infer<typeof correctionSchema>;
 export type MessageInput = z.infer<typeof messageSchema>;
-export type ApprovalInput = z.infer<typeof approvalSchema>;
 export type SearchInput = z.infer<typeof searchSchema>;
-export type ChangeRequestInput = z.infer<typeof changeRequestSchema>;
 export type ProfileInput = z.infer<typeof profileSchema>;
 export type PasswordChangeInput = z.infer<typeof passwordChangeSchema>;
 

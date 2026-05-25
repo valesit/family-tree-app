@@ -1,444 +1,432 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { PersonForm } from '@/components/person';
-import { Card, Select, Button, Avatar } from '@/components/ui';
+import { Card, Button, Avatar } from '@/components/ui';
 import { PersonInput } from '@/lib/validators';
 import { PersonWithRelations } from '@/types';
-import { ArrowLeft, Check, AlertCircle, Loader2, Users, UserPlus, Heart, ChevronDown } from 'lucide-react';
+import {
+  ArrowLeft,
+  AlertCircle,
+  Loader2,
+  Users,
+  UserPlus,
+  Heart,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import Link from 'next/link';
 import { clsx } from 'clsx';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-type RelationshipMode = 'none' | 'child_of' | 'parent_of' | 'spouse_of';
+/**
+ * Add-Person modes — one tree, contribution always anchors to someone existing.
+ * The exception is the very first person in an empty database (handled below).
+ */
+type RelationshipMode = 'child_of' | 'parent_of' | 'spouse_of';
 
 function AddPersonContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
-  // URL params for direct links from tree
+
+  /** Deep-link parameters set by the tree's "Add child/parent/spouse" buttons */
   const parentIdParam = searchParams.get('parentId');
   const spouseIdParam = searchParams.get('spouseId');
   const childIdParam = searchParams.get('childId');
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Relationship selection state
-  const [relationshipMode, setRelationshipMode] = useState<RelationshipMode>('none');
-  const [selectedPersonId, setSelectedPersonId] = useState<string>('');
-  const [relationshipSubtype, setRelationshipSubtype] = useState<string>('PARENT_CHILD');
 
-  // Fetch all existing persons for dropdown
+  /** Initial mode from deep-link, fallback to 'child_of' (most common). */
+  const initialMode: RelationshipMode = spouseIdParam
+    ? 'spouse_of'
+    : childIdParam
+    ? 'parent_of'
+    : 'child_of';
+  const initialPersonId = parentIdParam || spouseIdParam || childIdParam || '';
+
+  const [relationshipMode, setRelationshipMode] = useState<RelationshipMode>(initialMode);
+  const [selectedPersonId, setSelectedPersonId] = useState<string>(initialPersonId);
+  /** Free-text search for the related person; saves the user from a 500-row dropdown. */
+  const [search, setSearch] = useState('');
+
+  // Load all persons for the relationship picker
   const { data: personsData, isLoading: personsLoading } = useSWR<{
     success: boolean;
     data: { items: PersonWithRelations[] };
   }>('/api/persons?limit=500', fetcher);
 
   const allPersons = personsData?.data?.items || [];
+  const isEmptyTree = !personsLoading && allPersons.length === 0;
 
-  // Initialize from URL params
+  /** Filter the list as the user types. */
+  const filteredPersons = useMemo(() => {
+    if (!search.trim()) return allPersons.slice(0, 30);
+    const q = search.trim().toLowerCase();
+    return allPersons
+      .filter((p) => {
+        const name = `${p.firstName} ${p.lastName} ${p.nickname ?? ''}`.toLowerCase();
+        return name.includes(q);
+      })
+      .slice(0, 30);
+  }, [allPersons, search]);
+
+  const selectedPerson = allPersons.find((p) => p.id === selectedPersonId);
+
+  // If deep-link points at a person who hasn't loaded yet, prefill once loaded.
   useEffect(() => {
-    if (parentIdParam) {
-      setRelationshipMode('child_of');
-      setSelectedPersonId(parentIdParam);
-      setRelationshipSubtype('PARENT_CHILD');
-    } else if (spouseIdParam) {
-      setRelationshipMode('spouse_of');
-      setSelectedPersonId(spouseIdParam);
-      setRelationshipSubtype('SPOUSE');
-    } else if (childIdParam) {
-      setRelationshipMode('parent_of');
-      setSelectedPersonId(childIdParam);
-      setRelationshipSubtype('PARENT_CHILD');
+    if (!selectedPersonId && initialPersonId) {
+      setSelectedPersonId(initialPersonId);
     }
-  }, [parentIdParam, spouseIdParam, childIdParam]);
+  }, [initialPersonId, selectedPersonId]);
 
   const handleSubmit = async (data: PersonInput, profileImage?: File) => {
-    setIsLoading(true);
+    setIsSubmitting(true);
     setError(null);
 
     try {
-      // First create the person (link to family via related person when adding with a relationship)
-      const response = await fetch('/api/persons', {
+      // 1. Create the person. Pass relatedPersonId so the API can find the right family tree.
+      const personRes = await fetch('/api/persons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
-          ...(relationshipMode !== 'none' && selectedPersonId ? { relatedPersonId: selectedPersonId } : {}),
+          ...(selectedPersonId && !isEmptyTree
+            ? { relatedPersonId: selectedPersonId }
+            : {}),
         }),
       });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create person');
+      const personJson = await personRes.json();
+      if (!personJson.success) {
+        throw new Error(personJson.error || 'Could not save this person.');
       }
+      const newPersonId: string = personJson.data?.id;
+      if (!newPersonId) throw new Error('No id returned for new person.');
 
-      const newPersonId = result.data?.id;
-
-      // Create relationship if one is selected
-      if (relationshipMode !== 'none' && selectedPersonId && newPersonId) {
-        let relationshipData;
+      // 2. Create the relationship if we anchored to someone (we always do unless empty tree).
+      if (selectedPersonId && !isEmptyTree) {
+        let relPayload:
+          | { type: 'PARENT_CHILD'; person1Id: string; person2Id: string }
+          | { type: 'SPOUSE'; person1Id: string; person2Id: string }
+          | null = null;
 
         if (relationshipMode === 'child_of') {
-          // New person is a child of selected person
-          relationshipData = {
-            type: relationshipSubtype,
-            person1Id: selectedPersonId, // Parent
-            person2Id: newPersonId,       // Child (new person)
+          // New person is a child of selectedPersonId
+          relPayload = {
+            type: 'PARENT_CHILD',
+            person1Id: selectedPersonId, // parent
+            person2Id: newPersonId,       // child (new)
           };
         } else if (relationshipMode === 'parent_of') {
-          // New person is a parent of selected person
-          relationshipData = {
-            type: relationshipSubtype,
-            person1Id: newPersonId,       // Parent (new person)
-            person2Id: selectedPersonId,  // Child
+          // New person is a parent of selectedPersonId
+          relPayload = {
+            type: 'PARENT_CHILD',
+            person1Id: newPersonId,       // parent (new)
+            person2Id: selectedPersonId,  // child
           };
         } else if (relationshipMode === 'spouse_of') {
-          // New person is spouse of selected person
-          relationshipData = {
+          relPayload = {
             type: 'SPOUSE',
             person1Id: selectedPersonId,
             person2Id: newPersonId,
           };
         }
 
-        if (relationshipData) {
-          const relationshipResponse = await fetch('/api/relationships', {
+        if (relPayload) {
+          const relRes = await fetch('/api/relationships', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(relationshipData),
+            body: JSON.stringify(relPayload),
           });
-
-          const relationshipResult = await relationshipResponse.json();
-          if (!relationshipResult.success) {
-            throw new Error(relationshipResult.error || 'Person created but linking to family member failed. You can add the relationship from the tree.');
+          const relJson = await relRes.json();
+          if (!relJson.success) {
+            // We don't roll back the person — non-fatal, surface the message.
+            throw new Error(
+              relJson.error ||
+                'Person was saved but the family link did not. You can add the relationship from the tree.'
+            );
           }
         }
       }
 
-      // Upload profile image if provided
-      if (profileImage && newPersonId) {
-        const formData = new FormData();
-        formData.append('image', profileImage);
-        formData.append('personId', newPersonId);
-
-        await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+      // 3. Optional profile image upload
+      if (profileImage) {
+        const fd = new FormData();
+        fd.append('image', profileImage);
+        fd.append('personId', newPersonId);
+        await fetch('/api/upload', { method: 'POST', body: fd });
       }
 
-      // Redirect to tree or show success
       router.push('/tree');
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  // Get selected person details
-  const selectedPerson = allPersons.find(p => p.id === selectedPersonId);
+  const pageTitle =
+    relationshipMode === 'parent_of'
+      ? 'Add a parent'
+      : relationshipMode === 'spouse_of'
+      ? 'Add a spouse'
+      : 'Add a child';
 
-  // Get relationship type options based on mode
-  const getRelationshipOptions = () => {
-    if (relationshipMode === 'child_of') {
-      return [
-        { value: 'PARENT_CHILD', label: 'Biological Child' },
-        { value: 'ADOPTED', label: 'Adopted Child' },
-        { value: 'STEP_CHILD', label: 'Step Child' },
-        { value: 'FOSTER', label: 'Foster Child' },
-      ];
-    } else if (relationshipMode === 'parent_of') {
-      return [
-        { value: 'PARENT_CHILD', label: 'Biological Parent' },
-        { value: 'ADOPTED', label: 'Adoptive Parent' },
-        { value: 'STEP_CHILD', label: 'Step Parent' },
-        { value: 'FOSTER', label: 'Foster Parent' },
-      ];
-    }
-    return [];
-  };
+  const relationshipExplainer =
+    relationshipMode === 'parent_of'
+      ? 'The new person will be added as a parent of the family member you pick below.'
+      : relationshipMode === 'spouse_of'
+      ? 'The new person will be married to the family member you pick below.'
+      : 'The new person will be added as a child of the family member you pick below.';
 
-  // Page title based on mode
-  const getPageTitle = () => {
-    if (relationshipMode === 'parent_of') return 'Add Parent';
-    if (relationshipMode === 'child_of') return 'Add Child';
-    if (relationshipMode === 'spouse_of') return 'Add Spouse';
-    return 'Add Family Member';
-  };
+  // Friendly message for the very first person in a brand-new tree
+  const firstPersonHint = isEmptyTree
+    ? "This will be the first person in your family tree — you don't need to link them to anyone yet."
+    : null;
 
   return (
     <>
-      {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <Link
           href="/tree"
-          className="inline-flex items-center text-slate-600 hover:text-slate-900 mb-4"
+          className="mb-3 inline-flex items-center text-sm text-slate-600 hover:text-slate-900"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Tree
+          <ArrowLeft className="mr-1.5 h-4 w-4" aria-hidden />
+          Back to tree
         </Link>
-        <h1 className="text-3xl font-bold text-slate-900">{getPageTitle()}</h1>
-        <p className="text-slate-600 mt-1">
-          Add a new person to your family tree and define their relationship to existing members
+        <h1 className="font-serif text-2xl font-semibold text-slate-900 sm:text-3xl">
+          {pageTitle}
+        </h1>
+        <p className="mt-1 text-sm text-slate-600 sm:text-base">
+          {firstPersonHint ?? 'Two quick steps: pick how this person fits, then fill in their details.'}
         </p>
       </div>
 
-      {/* Error message */}
       {error && (
-        <Card className="mb-6 bg-rose-50 border-rose-200">
-          <div className="flex items-center gap-3 text-rose-700">
-            <AlertCircle className="w-5 h-5" />
-            <p>{error}</p>
+        <Card className="mb-5 border-rose-200 bg-rose-50">
+          <div className="flex items-start gap-3 text-rose-700">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+            <p className="text-sm">{error}</p>
           </div>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main form */}
-        <div className="lg:col-span-2">
-          <PersonForm
-            onSubmit={handleSubmit}
-            onCancel={() => router.back()}
-            isLoading={isLoading}
-            title="New Family Member"
-            submitLabel="Add to Family Tree"
-          />
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Relationship Selection - NEW SECTION */}
-          <Card className="border-2 border-maroon-100">
-            <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-maroon-500" />
-              Relationship to Existing Member
-            </h3>
-
-            {/* Relationship Mode Selection */}
-            <div className="space-y-3 mb-4">
-              <p className="text-sm text-slate-600">
-                How is this person related to existing family members?
-              </p>
-              
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRelationshipMode('none');
-                    setSelectedPersonId('');
-                  }}
-                  className={clsx(
-                    'flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left',
-                    relationshipMode === 'none'
-                      ? 'border-maroon-500 bg-maroon-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  )}
-                >
-                  <div className={clsx(
-                    'w-8 h-8 rounded-full flex items-center justify-center',
-                    relationshipMode === 'none' ? 'bg-maroon-500 text-white' : 'bg-slate-100 text-slate-500'
-                  )}>
-                    <UserPlus className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900 text-sm">No Relationship Yet</p>
-                    <p className="text-xs text-slate-500">Add person without connecting to tree</p>
-                  </div>
-                  {relationshipMode === 'none' && <Check className="w-5 h-5 text-maroon-500" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRelationshipMode('child_of');
-                    setRelationshipSubtype('PARENT_CHILD');
-                  }}
-                  className={clsx(
-                    'flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left',
-                    relationshipMode === 'child_of'
-                      ? 'border-maroon-500 bg-maroon-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  )}
-                >
-                  <div className={clsx(
-                    'w-8 h-8 rounded-full flex items-center justify-center',
-                    relationshipMode === 'child_of' ? 'bg-maroon-500 text-white' : 'bg-slate-100 text-slate-500'
-                  )}>
-                    <ChevronDown className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900 text-sm">Child of...</p>
-                    <p className="text-xs text-slate-500">This person is a child of someone</p>
-                  </div>
-                  {relationshipMode === 'child_of' && <Check className="w-5 h-5 text-maroon-500" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRelationshipMode('parent_of');
-                    setRelationshipSubtype('PARENT_CHILD');
-                  }}
-                  className={clsx(
-                    'flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left',
-                    relationshipMode === 'parent_of'
-                      ? 'border-maroon-500 bg-maroon-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  )}
-                >
-                  <div className={clsx(
-                    'w-8 h-8 rounded-full flex items-center justify-center rotate-180',
-                    relationshipMode === 'parent_of' ? 'bg-maroon-500 text-white' : 'bg-slate-100 text-slate-500'
-                  )}>
-                    <ChevronDown className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900 text-sm">Parent of...</p>
-                    <p className="text-xs text-slate-500">This person is a parent of someone</p>
-                  </div>
-                  {relationshipMode === 'parent_of' && <Check className="w-5 h-5 text-maroon-500" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRelationshipMode('spouse_of');
-                    setRelationshipSubtype('SPOUSE');
-                  }}
-                  className={clsx(
-                    'flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left',
-                    relationshipMode === 'spouse_of'
-                      ? 'border-maroon-500 bg-maroon-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  )}
-                >
-                  <div className={clsx(
-                    'w-8 h-8 rounded-full flex items-center justify-center',
-                    relationshipMode === 'spouse_of' ? 'bg-maroon-500 text-white' : 'bg-slate-100 text-slate-500'
-                  )}>
-                    <Heart className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900 text-sm">Spouse of...</p>
-                    <p className="text-xs text-slate-500">This person is married to someone</p>
-                  </div>
-                  {relationshipMode === 'spouse_of' && <Check className="w-5 h-5 text-maroon-500" />}
-                </button>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:gap-8">
+        {/* Step 1 — Relationship picker */}
+        {!isEmptyTree && (
+          <div className="lg:col-span-2 lg:order-1">
+            <Card className="border-2 border-maroon-100/60">
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-maroon-700/80">
+                  Step 1
+                </p>
+                <h2 className="mt-0.5 flex items-center gap-2 font-semibold text-slate-900">
+                  <Users className="h-5 w-5 text-maroon-500" aria-hidden />
+                  Who are they to the family?
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">{relationshipExplainer}</p>
               </div>
-            </div>
 
-            {/* Person Selector - only shown when a relationship mode is selected */}
-            {relationshipMode !== 'none' && (
-              <div className="space-y-4 pt-4 border-t border-slate-200">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    {relationshipMode === 'child_of' && 'Select Parent'}
-                    {relationshipMode === 'parent_of' && 'Select Child'}
-                    {relationshipMode === 'spouse_of' && 'Select Spouse'}
-                  </label>
-                  
-                  {personsLoading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-5 h-5 text-maroon-500 animate-spin" />
-                    </div>
-                  ) : (
-                    <select
-                      value={selectedPersonId}
-                      onChange={(e) => setSelectedPersonId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-maroon-500 focus:border-maroon-500 text-sm"
-                    >
-                      <option value="">-- Select a person --</option>
-                      {allPersons.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.firstName} {person.lastName}
-                          {person.birthDate && ` (${new Date(person.birthDate).getFullYear()})`}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+              <div className="grid grid-cols-3 gap-2">
+                <ModeButton
+                  active={relationshipMode === 'child_of'}
+                  onClick={() => setRelationshipMode('child_of')}
+                  icon={<ChevronDown className="h-4 w-4" aria-hidden />}
+                  label="Child of…"
+                />
+                <ModeButton
+                  active={relationshipMode === 'parent_of'}
+                  onClick={() => setRelationshipMode('parent_of')}
+                  icon={<ChevronUp className="h-4 w-4" aria-hidden />}
+                  label="Parent of…"
+                />
+                <ModeButton
+                  active={relationshipMode === 'spouse_of'}
+                  onClick={() => setRelationshipMode('spouse_of')}
+                  icon={<Heart className="h-4 w-4" aria-hidden />}
+                  label="Spouse of…"
+                />
+              </div>
 
-                {/* Selected person preview */}
+              {/* Existing-person picker with type-ahead */}
+              <div className="mt-5 space-y-3">
+                <label className="block text-sm font-medium text-slate-700">
+                  {relationshipMode === 'child_of' && 'Select the parent'}
+                  {relationshipMode === 'parent_of' && 'Select the child'}
+                  {relationshipMode === 'spouse_of' && 'Select the spouse'}
+                </label>
+                <input
+                  type="search"
+                  inputMode="search"
+                  placeholder="Search by name…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-maroon-500 focus:outline-none focus:ring-2 focus:ring-maroon-500"
+                  aria-label="Search family members"
+                />
+
+                {personsLoading ? (
+                  <div className="flex justify-center py-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-maroon-500" aria-hidden />
+                  </div>
+                ) : filteredPersons.length === 0 ? (
+                  <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    No matches — try a different name.
+                  </p>
+                ) : (
+                  <ul className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1">
+                    {filteredPersons.map((p) => {
+                      const isActive = selectedPersonId === p.id;
+                      const year = p.birthDate
+                        ? new Date(p.birthDate).getFullYear()
+                        : null;
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPersonId(p.id)}
+                            aria-pressed={isActive}
+                            className={clsx(
+                              'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                              isActive
+                                ? 'bg-maroon-50 text-maroon-900 ring-1 ring-maroon-300'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            )}
+                          >
+                            <Avatar
+                              src={p.profileImage?.url}
+                              name={`${p.firstName} ${p.lastName}`}
+                              size="sm"
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              {p.firstName} {p.lastName}
+                              {year && (
+                                <span className="ml-1 text-xs text-slate-400">({year})</span>
+                              )}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
                 {selectedPerson && (
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar
-                        src={selectedPerson.profileImage?.url}
-                        name={`${selectedPerson.firstName} ${selectedPerson.lastName}`}
-                        size="md"
-                      />
-                      <div>
-                        <p className="font-medium text-slate-900 text-sm">
-                          {selectedPerson.firstName} {selectedPerson.lastName}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {relationshipMode === 'child_of' && 'Will be the parent'}
-                          {relationshipMode === 'parent_of' && 'Will be the child'}
-                          {relationshipMode === 'spouse_of' && 'Will be the spouse'}
-                        </p>
-                      </div>
+                  <div className="flex items-center gap-3 rounded-lg bg-maroon-50/60 p-3 ring-1 ring-maroon-200/70">
+                    <Avatar
+                      src={selectedPerson.profileImage?.url}
+                      name={`${selectedPerson.firstName} ${selectedPerson.lastName}`}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {selectedPerson.firstName} {selectedPerson.lastName}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {relationshipMode === 'child_of' && 'Will be the new person\u2019s parent'}
+                        {relationshipMode === 'parent_of' && 'Will be the new person\u2019s child'}
+                        {relationshipMode === 'spouse_of' && 'Will be the new person\u2019s spouse'}
+                      </p>
                     </div>
                   </div>
                 )}
-
-                {/* Relationship subtype - only for parent/child */}
-                {(relationshipMode === 'child_of' || relationshipMode === 'parent_of') && selectedPersonId && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Relationship Type
-                    </label>
-                    <Select
-                      value={relationshipSubtype}
-                      onChange={(e) => setRelationshipSubtype(e.target.value)}
-                      options={getRelationshipOptions()}
-                    />
-                  </div>
-                )}
               </div>
-            )}
-          </Card>
+            </Card>
+          </div>
+        )}
 
-          {/* Tips */}
-          <Card className="bg-maroon-50 border-maroon-200">
-            <h3 className="font-semibold text-maroon-900 mb-2">Tips</h3>
-            <ul className="text-sm text-maroon-700 space-y-2">
-              <li>• Fill in as much information as you know</li>
-              <li>• Upload a photo to help family members recognize them</li>
-              <li>• Select a relationship to connect them to the tree</li>
-              <li>• New additions show as &quot;Unverified&quot; until approved</li>
-              <li>• Any family member can verify new additions</li>
-            </ul>
-          </Card>
+        {/* Step 2 — Person details form */}
+        <div
+          className={clsx(
+            'lg:order-2',
+            isEmptyTree ? 'lg:col-span-5' : 'lg:col-span-3'
+          )}
+        >
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-maroon-700/80">
+              {isEmptyTree ? 'New person' : 'Step 2'}
+            </p>
+            <h2 className="mt-0.5 flex items-center gap-2 font-semibold text-slate-900">
+              <UserPlus className="h-5 w-5 text-maroon-500" aria-hidden />
+              Their details
+            </h2>
+          </div>
+
+          <PersonForm
+            onSubmit={(data, image) => handleSubmit(data, image)}
+            onCancel={() => router.back()}
+            isLoading={isSubmitting}
+            title="New family member"
+            submitLabel={pageTitle.replace('Add ', 'Save ')}
+          />
+
+          {!isEmptyTree && !selectedPersonId && (
+            <p className="mt-3 text-xs text-amber-700">
+              Pick an existing family member above before saving — every new person needs to fit into the tree.
+            </p>
+          )}
         </div>
       </div>
     </>
   );
 }
 
+function ModeButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={clsx(
+        'flex flex-col items-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-center text-xs font-medium transition-all',
+        active
+          ? 'border-maroon-500 bg-maroon-50 text-maroon-900 shadow-sm'
+          : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+      )}
+    >
+      <span
+        className={clsx(
+          'flex h-7 w-7 items-center justify-center rounded-full',
+          active ? 'bg-maroon-500 text-white' : 'bg-slate-100 text-slate-500'
+        )}
+      >
+        {icon}
+      </span>
+      {label}
+    </button>
+  );
+}
+
 function AddPersonFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[50vh]">
-      <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <Loader2 className="h-7 w-7 animate-spin text-maroon-500" aria-hidden />
     </div>
   );
 }
 
 export default function AddPersonPage() {
   return (
-    <div className="min-h-screen bg-slate-50 py-8">
-      <div className="max-w-5xl mx-auto px-4">
+    <main className="min-h-screen bg-slate-50 py-6 sm:py-8" aria-label="Add a family member">
+      <div className="mx-auto max-w-5xl px-4">
         <Suspense fallback={<AddPersonFallback />}>
           <AddPersonContent />
         </Suspense>
       </div>
-    </div>
+    </main>
   );
 }

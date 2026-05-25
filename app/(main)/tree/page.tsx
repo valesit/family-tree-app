@@ -14,6 +14,7 @@ import {
   ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save, Cake
 } from 'lucide-react';
 import Link from 'next/link';
+import { clsx } from 'clsx';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -98,6 +99,8 @@ export default function TreePage() {
   const [isEditingFamilyName, setIsEditingFamilyName] = useState(false);
   const [editedFamilyName, setEditedFamilyName] = useState('');
   const [isSavingFamilyName, setIsSavingFamilyName] = useState(false);
+  /** On small screens, overview is secondary — collapsed by default so the tree is primary. */
+  const [mobileOverviewOpen, setMobileOverviewOpen] = useState(false);
 
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
@@ -202,11 +205,8 @@ export default function TreePage() {
     router.push(`/add-person?childId=${childId}`);
   };
 
-  const handleViewBirthFamily = (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => {
-    if (birthFamilyRootPersonId) {
-      // Direct link to the birth family tree
-      router.push(`/tree?rootId=${birthFamilyRootPersonId}`);
-    } else if (maidenName) {
+  const handleViewBirthFamily = (personId: string, maidenName?: string) => {
+    if (maidenName) {
       // Search for families with this surname
       router.push(`/?search=${encodeURIComponent(maidenName)}`);
     }
@@ -357,20 +357,21 @@ export default function TreePage() {
   const hasMultipleFamilies = userFamilies.length > 1;
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-slate-50">
-      {/* Top Header Bar */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <button 
+    <main className="h-[calc(100dvh-4rem)] flex flex-col bg-slate-50" aria-label="Family tree page">
+      {/* Top Header Bar — compact on mobile to give the tree more room */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+          <button
             onClick={() => router.push('/')}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            className="rounded-lg p-1.5 transition-colors hover:bg-slate-100 sm:p-2"
+            type="button"
+            aria-label="Back to home"
           >
-            <ChevronLeft className="w-5 h-5 text-slate-600" />
+            <ChevronLeft className="h-5 w-5 text-slate-600" />
           </button>
-          
-          {/* Family Switcher for users with multiple families */}
+
           {hasMultipleFamilies && (
-            <div className="relative group">
+            <div className="relative hidden sm:block">
               <select
                 value={data?.data?.rootPersonId || ''}
                 onChange={(e) => {
@@ -378,7 +379,7 @@ export default function TreePage() {
                     router.push(`/tree?rootId=${e.target.value}`);
                   }
                 }}
-                className="appearance-none bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-maroon-500 cursor-pointer"
+                className="cursor-pointer appearance-none rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 pr-8 text-sm font-medium text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-maroon-500"
               >
                 {userFamilies.map((family) => (
                   <option key={family.id} value={family.id}>
@@ -386,88 +387,161 @@ export default function TreePage() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             </div>
           )}
-          
-          <div>
+
+          <div className="min-w-0">
             {isEditingFamilyName ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={editedFamilyName}
                   onChange={(e) => setEditedFamilyName(e.target.value)}
-                  className="text-xl font-bold text-slate-900 px-3 py-1 border-2 border-maroon-300 rounded-lg focus:border-maroon-500 focus:outline-none"
+                  className="min-w-0 rounded-lg border-2 border-maroon-300 px-2 py-1 text-base font-bold text-slate-900 focus:border-maroon-500 focus:outline-none sm:text-xl"
                   placeholder="e.g., Sithole Family"
                   autoFocus
                 />
                 <button
                   onClick={handleSaveFamilyName}
                   disabled={isSavingFamilyName || !editedFamilyName.trim()}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-maroon-600 text-white text-sm rounded-lg hover:bg-maroon-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1 rounded-lg bg-maroon-600 px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-maroon-700 disabled:opacity-50 sm:px-3 sm:text-sm"
+                  type="button"
                 >
-                  {isSavingFamilyName ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {isAdmin ? 'Save' : 'Submit'}
+                  {isSavingFamilyName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  <span className="hidden sm:inline">{isAdmin ? 'Save' : 'Submit'}</span>
                 </button>
                 <button
                   onClick={() => setIsEditingFamilyName(false)}
-                  className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition-colors hover:bg-slate-100 sm:px-3 sm:text-sm"
+                  type="button"
                 >
                   Cancel
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-slate-900">{familyName || 'Family'}</h1>
-                {isAuthenticated && (
+              <div className="flex min-w-0 items-center gap-1.5">
+                <h1 className="truncate text-base font-bold text-slate-900 sm:text-2xl">
+                  {familyName || 'Family'}
+                </h1>
+                {/* Only system admins see family-name editing. Regular contributors
+                    shouldn't be shown a path that triggers an approvals workflow. */}
+                {isAdmin && (
                   <button
                     onClick={handleStartEditFamilyName}
-                    className="p-1.5 text-slate-400 hover:text-maroon-600 hover:bg-maroon-50 rounded-lg transition-colors"
-                    title={isAdmin ? "Edit family name" : "Propose family name change"}
+                    className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-maroon-50 hover:text-maroon-600 sm:p-1.5"
+                    title="Edit family name"
+                    aria-label="Edit family name"
+                    type="button"
                   >
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
                   </button>
                 )}
               </div>
             )}
-            <p className="text-sm text-slate-500">
-              {stats ? `${stats.totalMembers} members • ${stats.marriageCount} marriages` : 'Loading...'}
+            <p className="truncate text-[11px] text-slate-500 sm:text-sm">
+              {stats ? `${stats.totalMembers} members · ${stats.marriageCount} marriages` : 'Loading...'}
             </p>
           </div>
         </div>
-        
+
         {!isAuthenticated && (
           <Link
             href="/login"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 transition-colors hover:bg-slate-50 sm:gap-2 sm:px-4 sm:py-2"
           >
-            <Lock className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">Sign in to contribute</span>
+            <Lock className="h-4 w-4 text-slate-500" />
+            <span className="hidden text-sm font-medium text-slate-700 sm:inline">Sign in</span>
           </Link>
         )}
       </div>
 
-      {/* Main Content - Two Panels */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Family Overview (20%) */}
-        <div className="w-1/5 min-w-[280px] border-r border-slate-200 flex flex-col bg-white">
-          {/* Panel Header */}
-          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+      {/* Main content: tree is primary (left on lg+, first on mobile); overview is collapsible on small screens. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
+        {/* Family tree — first in DOM: left on desktop, full-width focus on mobile */}
+        <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
+          {/* Panel Header — hidden on mobile (top header already names the family) */}
+          <div className="hidden shrink-0 items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
             <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-slate-600" />
+              <TreePine className="h-5 w-5 text-slate-600" />
+              <span className="font-semibold text-slate-900">Family Tree</span>
+            </div>
+            <button
+              onClick={() => setIsExpandedViewOpen(true)}
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+              title="Expand view"
+              aria-label="Expand tree view"
+              type="button"
+            >
+              <Maximize2 className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+
+          <div className="relative min-h-[min(70dvh,640px)] flex-1 lg:min-h-0">
+            <FamilyTree
+              data={tree}
+              onNodeClick={handleNodeClick}
+              onAddChild={handleAddChild}
+              onAddSpouse={handleAddSpouse}
+              onAddParent={handleAddParent}
+              onViewBirthFamily={handleViewBirthFamily}
+            />
+          </div>
+        </div>
+
+        {/* Family overview — right on desktop, below on mobile, collapsible on &lt;lg via mobileOverviewOpen */}
+        <div className="order-2 flex min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-slate-200 bg-white lg:order-2 lg:h-full lg:max-h-none lg:w-1/5 lg:shrink-0 lg:min-h-0 lg:min-w-[220px] lg:flex-col lg:border-t-0 lg:border-l lg:border-slate-200">
+          <button
+            type="button"
+            onClick={() => setMobileOverviewOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left text-slate-800 transition-colors hover:bg-slate-50 lg:hidden"
+            aria-expanded={mobileOverviewOpen}
+            aria-controls="tree-page-family-overview"
+          >
+            <span className="flex items-center gap-2 font-semibold">
+              <BookOpen className="h-5 w-5 text-slate-600" />
+              Family overview
+              {stats && (
+                <span className="text-xs font-normal text-slate-500">
+                  · {stats.totalMembers} members
+                </span>
+              )}
+            </span>
+            {mobileOverviewOpen ? (
+              <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" />
+            ) : (
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" />
+            )}
+          </button>
+
+          <div className="hidden items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-slate-600" />
               <span className="font-semibold text-slate-900">Family Overview</span>
             </div>
             <button
               onClick={() => setIsExpandedViewOpen(true)}
-              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
               title="Expand view"
+              aria-label="Expand family overview"
+              type="button"
             >
-              <Maximize2 className="w-4 h-4 text-slate-500" />
+              <Maximize2 className="h-4 w-4 text-slate-500" aria-hidden />
             </button>
           </div>
-          
-          {/* Panel Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          <div
+            id="tree-page-family-overview"
+            className={clsx(
+              'min-h-0 w-full',
+              'overflow-y-auto',
+              mobileOverviewOpen
+                ? 'max-h-[min(52vh,28rem)] sm:max-h-[min(50vh,32rem)]'
+                : 'max-h-0 overflow-y-hidden',
+              'lg:max-h-none lg:flex-1 lg:overflow-y-auto'
+            )}
+          >
+          <div className="space-y-6 p-4 sm:p-6">
             {/* Founding Ancestor Card */}
             {foundingAncestor && (
               <div className="bg-gradient-to-br from-maroon-600 to-maroon-800 rounded-xl p-4 text-white">
@@ -645,35 +719,6 @@ export default function TreePage() {
             </div>
           </div>
         </div>
-
-        {/* Right Panel - Family Tree (80%) */}
-        <div className="w-4/5 flex flex-col bg-white">
-          {/* Panel Header */}
-          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TreePine className="w-5 h-5 text-slate-600" />
-              <span className="font-semibold text-slate-900">Family Tree</span>
-            </div>
-            <button
-              onClick={() => setIsExpandedViewOpen(true)}
-              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Expand view"
-            >
-              <Maximize2 className="w-4 h-4 text-slate-500" />
-            </button>
-          </div>
-          
-          {/* Tree Content */}
-          <div className="flex-1 relative">
-      <FamilyTree
-        data={tree}
-        onNodeClick={handleNodeClick}
-        onAddChild={handleAddChild}
-        onAddSpouse={handleAddSpouse}
-          onAddParent={handleAddParent}
-              onViewBirthFamily={handleViewBirthFamily}
-      />
-          </div>
         </div>
       </div>
 
@@ -692,8 +737,10 @@ export default function TreePage() {
                 onClick={() => setIsModalOpen(false)}
                 className="absolute top-3 right-3 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white transition-colors backdrop-blur-sm"
                 title="Close"
+                aria-label="Close person details"
+                type="button"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden />
               </button>
               
               <div className={`h-32 bg-gradient-to-r ${
@@ -899,7 +946,7 @@ export default function TreePage() {
         onClose={() => setIsExpandedViewOpen(false)}
         currentUser={user || null}
       />
-    </div>
+    </main>
   );
 }
 

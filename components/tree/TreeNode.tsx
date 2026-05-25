@@ -4,7 +4,7 @@ import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
 import { useTreeViewOptional } from './TreeViewContext';
-import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, ExternalLink, Link2, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, AlertCircle } from 'lucide-react';
 
 interface TreeNodeProps {
   node: TreeNodeType;
@@ -12,7 +12,8 @@ interface TreeNodeProps {
   onAddChild?: (parentId: string) => void;
   onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
-  onViewBirthFamily?: (personId: string, maidenName?: string, birthFamilyRootPersonId?: string) => void;
+  /** Kept on the prop type only for backwards-compat with existing callers. */
+  onViewBirthFamily?: (personId: string, maidenName?: string) => void;
   expandedNodes: Set<string>;
   toggleExpanded: (nodeId: string) => void;
   level: number;
@@ -110,11 +111,14 @@ export function TreeNode({
         </div>
       )}
 
-      {/* Unverified badge */}
+      {/* Quiet unverified indicator — small outline dot in the corner instead of a banner */}
       {person.isVerified === false && (
-        <div className="absolute -top-2 right-1/2 translate-x-1/2 px-2 py-0.5 bg-amber-500 text-white text-[8px] font-semibold rounded-full flex items-center gap-0.5 z-20">
-          <AlertCircle className="w-2.5 h-2.5" />
-          Unverified
+        <div
+          className="absolute -top-1.5 -left-1.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-white text-amber-500 ring-1 ring-amber-300"
+          title="Recently added — pending review"
+          aria-label="Recently added"
+        >
+          <AlertCircle className="h-3 w-3" aria-hidden />
         </div>
       )}
 
@@ -125,33 +129,14 @@ export function TreeNode({
         </div>
       )}
 
-      {/* Birth family badge for spouse */}
+      {/* Maiden name as a quiet "née ___" label — no longer a clickable link to a separate tree.
+          Spouse parents now grow the same tree horizontally via the standard Add Parent flow. */}
       {spouseHasBirthFamily && (
-        <div 
-          className={`absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 text-white text-[8px] font-medium rounded-full whitespace-nowrap flex items-center gap-0.5 z-10 ${
-            person.attributes?.birthFamilyId 
-              ? 'bg-purple-600 cursor-pointer hover:bg-purple-700' 
-              : 'bg-purple-400'
-          }`}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (treeView?.consumeIfSuppressClick()) return;
-            if (person.attributes?.birthFamilyId) {
-              // Direct link to birth family tree
-              onViewBirthFamily?.(person.id, person.attributes.maidenName, person.attributes.birthFamilyId);
-            } else {
-              // Search for birth family
-              onViewBirthFamily?.(person.id, person.attributes?.maidenName);
-            }
-          }}
-          title={person.attributes?.birthFamilyId ? 'View birth family tree' : `Search for ${person.attributes?.maidenName} family`}
+        <div
+          className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-purple-100 px-2 py-0.5 text-[8px] font-medium text-purple-700 ring-1 ring-purple-200"
+          title={`Maiden name: ${person.attributes?.maidenName}`}
         >
           née {person.attributes?.maidenName}
-          {person.attributes?.birthFamilyId ? (
-            <Link2 className="w-2 h-2" />
-          ) : (
-            <ExternalLink className="w-2 h-2" />
-          )}
         </div>
       )}
 
@@ -193,15 +178,17 @@ export function TreeNode({
       {isRoot && onAddParent && !readOnly && (
         <div className="flex flex-col items-center mb-3">
           <button
+            type="button"
             onClick={() => onAddParent(node.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-maroon-500 text-white text-xs font-medium rounded-lg shadow hover:bg-maroon-600 transition-all"
+            className="flex min-h-[40px] items-center gap-1.5 rounded-lg bg-maroon-500 px-3 py-2 text-xs font-medium text-white shadow transition-all hover:bg-maroon-600"
+            aria-label={`Add parent to ${node.firstName}`}
           >
-            <ChevronUp className="w-3 h-3" />
-            <Users className="w-3 h-3" />
+            <ChevronUp className="h-3 w-3" aria-hidden />
+            <Users className="h-3 w-3" aria-hidden />
             Add Parent
           </button>
           {/* SVG connector down */}
-          <svg width="2" height="16" className="mt-1">
+          <svg width="2" height="16" className="mt-1" aria-hidden>
             <line x1="1" y1="0" x2="1" y2="16" stroke="#9f1239" strokeWidth="2" />
           </svg>
         </div>
@@ -215,14 +202,16 @@ export function TreeNode({
           {/* Add child button on hover - hidden in read-only mode */}
           {!readOnly && onAddChild && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onAddChild(node.id);
               }}
-              className="absolute -right-1 top-1/2 -translate-y-1/2 p-1 bg-maroon-500 text-white rounded-full shadow opacity-0 hover:opacity-100 transition-opacity group-hover:opacity-100"
+              className="absolute -right-1 top-1/2 flex min-h-[28px] min-w-[28px] -translate-y-1/2 items-center justify-center rounded-full bg-maroon-500 p-1.5 text-white shadow transition-opacity hover:bg-maroon-600"
               title="Add child"
+              aria-label={`Add a child to ${node.firstName}`}
             >
-              <UserPlus className="w-3 h-3" />
+              <UserPlus className="h-3.5 w-3.5" aria-hidden />
             </button>
           )}
         </div>
@@ -231,8 +220,8 @@ export function TreeNode({
         {allSpouses.map((spouse, index) => (
           <div key={spouse.id} className="flex items-center">
             {/* Marriage connector */}
-            <div className="flex items-center">
-              <svg width="20" height="2">
+            <div className="flex items-center" aria-hidden>
+              <svg width="20" height="2" aria-hidden>
                 <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
               </svg>
               <div className="relative">
@@ -244,38 +233,64 @@ export function TreeNode({
                   </span>
                 )}
               </div>
-              <svg width="20" height="2">
+              <svg width="20" height="2" aria-hidden>
                 <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
               </svg>
             </div>
-            <PersonCard 
-              person={spouse} 
-              isSpouse 
-              marriageOrder={'marriageOrder' in spouse ? (spouse.marriageOrder as number) : index + 1}
-              totalSpouses={allSpouses.length}
-            />
+            {/* Spouse column: optional "Add parents" pill above the card, then the card itself.
+                This is how relatives grow the tree horizontally with the spouse's parents,
+                in the SAME tree. */}
+            <div className="flex flex-col items-center">
+              {!readOnly && onAddParent && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddParent(spouse.id);
+                  }}
+                  className="mb-1.5 inline-flex min-h-[28px] items-center gap-1 rounded-full border border-maroon-200 bg-white px-2.5 py-1 text-[10px] font-medium text-maroon-700 shadow-sm transition-colors hover:bg-maroon-50 active:bg-maroon-100"
+                  aria-label={`Add ${spouse.firstName}'s parents to the tree`}
+                  title={`Add ${spouse.firstName}'s parents`}
+                >
+                  <ChevronUp className="h-3 w-3" aria-hidden />
+                  Add parents
+                </button>
+              )}
+              <PersonCard
+                person={spouse}
+                isSpouse
+                marriageOrder={'marriageOrder' in spouse ? (spouse.marriageOrder as number) : index + 1}
+                totalSpouses={allSpouses.length}
+              />
+            </div>
           </div>
         ))}
 
         {/* Add spouse button - hidden in read-only mode */}
         {!readOnly && onAddSpouse && (
           <div className="flex items-center">
-            <svg width="16" height="2">
+            <svg width="16" height="2" aria-hidden>
               <line x1="0" y1="1" x2="16" y2="1" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
             </svg>
             <button
+              type="button"
               onClick={() => onAddSpouse(node.id)}
               className={clsx(
-                'flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-colors bg-slate-50/50',
-                'hover:border-maroon-400 hover:text-maroon-500',
-                allSpouses.length === 0 
-                  ? 'w-[100px] h-[100px] border-slate-300 text-slate-400'
-                  : 'w-14 h-14 border-slate-200 text-slate-300'
+                'flex flex-col items-center justify-center rounded-xl border-2 border-dashed bg-slate-50/50 transition-colors',
+                'hover:border-maroon-400 hover:text-maroon-500 active:bg-slate-100',
+                allSpouses.length === 0
+                  ? 'h-[100px] w-[100px] border-slate-300 text-slate-400'
+                  : 'h-14 w-14 border-slate-200 text-slate-300'
               )}
-              title={allSpouses.length > 0 ? "Add another spouse" : "Add spouse"}
+              title={allSpouses.length > 0 ? 'Add another spouse' : 'Add spouse'}
+              aria-label={
+                allSpouses.length > 0
+                  ? `Add another spouse to ${node.firstName}`
+                  : `Add spouse to ${node.firstName}`
+              }
             >
-              <Plus className={allSpouses.length === 0 ? "w-4 h-4" : "w-3 h-3"} />
-              {allSpouses.length === 0 && <span className="text-[10px] mt-1">Spouse</span>}
+              <Plus className={allSpouses.length === 0 ? 'h-4 w-4' : 'h-3 w-3'} aria-hidden />
+              {allSpouses.length === 0 && <span className="mt-1 text-[10px]">Spouse</span>}
             </button>
           </div>
         )}
@@ -285,32 +300,36 @@ export function TreeNode({
       {hasChildren && (
         <div className="flex flex-col items-center">
           {/* Vertical line down from couple */}
-          <svg width="2" height="20">
+          <svg width="2" height="20" aria-hidden>
             <line x1="1" y1="0" x2="1" y2="20" stroke="#9f1239" strokeWidth="2" />
           </svg>
 
-          {/* Expand/collapse button */}
+          {/* Expand/collapse button — sized for touch */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               toggleExpanded(node.id);
             }}
-            className="p-1 bg-white rounded-full shadow border-2 border-maroon-300 hover:bg-maroon-50 transition-colors z-10"
+            className="z-10 flex h-8 min-w-[2rem] items-center justify-center rounded-full border-2 border-maroon-300 bg-white shadow transition-colors hover:bg-maroon-50 active:bg-maroon-100"
             aria-expanded={isExpanded}
-            aria-label={isExpanded ? 'Collapse branch' : 'Expand branch'}
+            aria-label={
+              isExpanded
+                ? `Collapse ${node.firstName}'s descendants`
+                : `Expand ${node.firstName}'s descendants`
+            }
           >
             {isExpanded ? (
-              <ChevronDown className="w-3 h-3 text-maroon-600" />
+              <ChevronDown className="h-4 w-4 text-maroon-600" aria-hidden />
             ) : (
-              <ChevronRight className="w-3 h-3 text-maroon-600" />
+              <ChevronRight className="h-4 w-4 text-maroon-600" aria-hidden />
             )}
           </button>
 
           {isExpanded && (
             <>
               {/* Vertical line from button to horizontal bar */}
-              <svg width="2" height="16">
+              <svg width="2" height="16" aria-hidden>
                 <line x1="1" y1="0" x2="1" y2="16" stroke="#9f1239" strokeWidth="2" />
               </svg>
 
@@ -322,7 +341,7 @@ export function TreeNode({
                     className="absolute top-0 left-0 right-0" 
                     height="2" 
                     style={{ width: '100%' }}
-                  >
+                   aria-hidden>
                     <line x1="0" y1="1" x2="100%" y2="1" stroke="#9f1239" strokeWidth="2" />
                   </svg>
                 )}
@@ -332,7 +351,7 @@ export function TreeNode({
                   {node.children!.map((child, index) => (
                     <div key={child.id} className="flex flex-col items-center">
                       {/* Vertical connector from horizontal bar to child */}
-                      <svg width="2" height="24">
+                      <svg width="2" height="24" aria-hidden>
                         <line x1="1" y1="0" x2="1" y2="24" stroke="#9f1239" strokeWidth="2" />
                       </svg>
                       <TreeNode
@@ -359,14 +378,16 @@ export function TreeNode({
       {/* Add child button when no children - hidden in read-only mode */}
       {!hasChildren && level < 4 && !readOnly && onAddChild && (
         <div className="flex flex-col items-center mt-2">
-          <svg width="2" height="12">
+          <svg width="2" height="12" aria-hidden>
             <line x1="1" y1="0" x2="1" y2="12" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
           </svg>
           <button
+            type="button"
             onClick={() => onAddChild(node.id)}
-            className="flex flex-col items-center justify-center w-14 h-14 border-2 border-dashed border-slate-300 rounded-lg text-slate-400 hover:border-maroon-400 hover:text-maroon-500 transition-colors bg-slate-50/50"
+            className="flex h-14 w-14 flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/50 text-slate-400 transition-colors hover:border-maroon-400 hover:text-maroon-500 active:bg-slate-100"
+            aria-label={`Add a child to ${node.firstName}`}
           >
-            <Plus className="w-3 h-3" />
+            <Plus className="h-4 w-4" aria-hidden />
             <span className="text-[9px]">Child</span>
           </button>
         </div>

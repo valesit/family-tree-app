@@ -78,7 +78,9 @@ export async function PUT(
     const user = session.user as SessionUser;
     const { id } = await params;
     const body = await request.json();
-    const { approverIds, ...personData } = body;
+    // Ignore any legacy `approverIds` payload — approval workflow has been removed.
+    const { approverIds: _unusedApprovers, ...personData } = body;
+    void _unusedApprovers;
 
     // Check if person exists
     const existingPerson = await prisma.person.findUnique({
@@ -98,72 +100,28 @@ export async function PUT(
       );
     }
 
-    // If admin, update directly
-    if (user.role === 'ADMIN') {
-      const { birthFamilyRootPersonId, ...personFields } = validationResult.data;
-      const person = await prisma.person.update({
-        where: { id },
-        data: {
-          ...personFields,
-          birthDate: personFields.birthDate ? new Date(personFields.birthDate) : null,
-          deathDate: personFields.deathDate ? new Date(personFields.deathDate) : null,
-          facts: personFields.facts ? JSON.stringify(personFields.facts) : null,
-          birthFamilyRootPersonId: birthFamilyRootPersonId || null,
-        },
-        include: {
-          profileImage: true,
-        },
-      });
-
-      // Log activity
-      await prisma.activity.create({
-        data: {
-          type: 'PERSON_UPDATED',
-          description: `${person.firstName} ${person.lastName}'s information was updated`,
-          userId: user.id,
-          data: { personId: person.id },
-        },
-      });
-
-      return NextResponse.json({ success: true, data: person });
-    }
-
-    // Create pending change for non-admins
-    const pendingChange = await prisma.pendingChange.create({
+    // Anyone signed in can edit directly — no approval queue.
+    const updated = await prisma.person.update({
+      where: { id },
       data: {
-        changeType: 'UPDATE_PERSON',
-        changeData: validationResult.data,
-        personId: id,
-        createdById: user.id,
-        approvals: {
-          create: approverIds && approverIds.length > 0
-            ? approverIds.map((approverId: string) => ({
-                approverId,
-                status: 'PENDING',
-              }))
-            : [],
-        },
+        ...validationResult.data,
+        birthDate: validationResult.data.birthDate ? new Date(validationResult.data.birthDate) : null,
+        deathDate: validationResult.data.deathDate ? new Date(validationResult.data.deathDate) : null,
+        facts: validationResult.data.facts ? JSON.stringify(validationResult.data.facts) : null,
+      },
+      include: { profileImage: true },
+    });
+
+    await prisma.activity.create({
+      data: {
+        type: 'PERSON_UPDATED',
+        description: `${updated.firstName} ${updated.lastName}'s information was updated`,
+        userId: user.id,
+        data: { personId: updated.id },
       },
     });
 
-    // Notify approvers
-    if (approverIds && approverIds.length > 0) {
-      await prisma.notification.createMany({
-        data: approverIds.map((approverId: string) => ({
-          userId: approverId,
-          type: 'APPROVAL_REQUEST',
-          title: 'Update Approval Request',
-          message: `${user.name} wants to update ${existingPerson.firstName} ${existingPerson.lastName}'s information.`,
-          data: { changeId: pendingChange.id },
-        })),
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: pendingChange,
-      message: 'Your changes have been submitted for approval.',
-    });
+    return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error('Error updating person:', error);
     return NextResponse.json(

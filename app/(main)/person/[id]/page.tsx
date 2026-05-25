@@ -320,7 +320,6 @@ export default function PersonDetailPage({ params }: PageProps) {
               person={person}
               showActions={isAuthenticated}
               onEdit={isAuthenticated ? () => router.push(`/person/${id}/edit`) : undefined}
-              onRequestCorrection={isAuthenticated ? () => router.push(`/corrections/new?personId=${id}`) : undefined}
             />
 
             {/* Sign in prompt for guests */}

@@ -112,11 +112,6 @@ export async function POST(request: NextRequest) {
           role: 'ADMIN',
         },
       });
-    } else if (targetMembership.role === 'PENDING') {
-      return NextResponse.json(
-        { success: false, error: 'User must be verified before becoming Family Admin' },
-        { status: 400 }
-      );
     } else if (targetMembership.role === 'ADMIN') {
       return NextResponse.json(
         { success: false, error: 'User is already a Family Admin' },

@@ -58,7 +58,6 @@ export function buildFamilyTree(
         deathYear: person.deathDate ? new Date(person.deathDate).getFullYear().toString() : undefined,
         occupation: person.occupation || undefined,
         maidenName: person.maidenName || undefined,
-        birthFamilyId: (person as any).birthFamilyRootPersonId || undefined,
       },
     };
 
@@ -105,7 +104,6 @@ export function buildFamilyTree(
             deathYear: spousePerson.deathDate ? new Date(spousePerson.deathDate).getFullYear().toString() : undefined,
             occupation: spousePerson.occupation || undefined,
             maidenName: spousePerson.maidenName || undefined,
-            birthFamilyId: (spousePerson as any).birthFamilyRootPersonId || undefined,
           },
         });
       }
