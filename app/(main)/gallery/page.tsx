@@ -23,8 +23,7 @@ export default function GalleryPage() {
             Family gallery
           </h1>
           <p className="text-slate-600 mt-2 max-w-xl">
-            Shared photos for the family tree. Everyone sees curated highlights; signed-in members can add
-            images with captions.
+            Authentic photos shared by family members. Sign in to add your own with a caption.
           </p>
         </div>
         <Link

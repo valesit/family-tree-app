@@ -11,9 +11,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Viewing a person is public - no authentication required
-
     const { id } = await params;
+    const session = await getServerSession(authOptions);
+    const isAuthenticated = !!session?.user;
 
     const person = await prisma.person.findUnique({
       where: { id },
@@ -45,6 +45,8 @@ export async function GET(
             id: true,
             name: true,
             email: true,
+            phone: true,
+            whatsappOptIn: true,
           },
         },
       },
@@ -54,7 +56,24 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: person });
+    // Privacy: only expose the linked user's phone number to authenticated
+    // family members AND only when they've opted in to WhatsApp contact.
+    // Anonymous viewers never see phone numbers.
+    type PersonShape = typeof person;
+    let safePerson: PersonShape = person;
+    if (person.user) {
+      const optedIn = person.user.whatsappOptIn && !!person.user.phone;
+      const phoneVisible = isAuthenticated && optedIn;
+      safePerson = {
+        ...person,
+        user: {
+          ...person.user,
+          phone: phoneVisible ? person.user.phone : null,
+        },
+      };
+    }
+
+    return NextResponse.json({ success: true, data: safePerson });
   } catch (error) {
     console.error('Error fetching person:', error);
     return NextResponse.json(

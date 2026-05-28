@@ -102,6 +102,7 @@ export const profileSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email().optional().or(z.literal('')),
   phone: z.string().regex(phoneRegex).optional().or(z.literal('')),
+  whatsappOptIn: z.boolean().optional(),
 });
 
 // Password change schema

@@ -29,6 +29,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
+  Phone,
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -498,14 +499,38 @@ export default function PersonDetailPage({ params }: PageProps) {
                     This person has a linked account and can receive messages.
                   </p>
                   {isAuthenticated ? (
-                    <Button
-                      fullWidth
-                      onClick={() => router.push(`/messages?userId=${person.userId}`)}
-                      className="bg-blue-500 hover:bg-blue-600"
-                    >
-                      <MessageSquare className="w-4 h-4 mr-2" />
-                      Send Direct Message
-                    </Button>
+                    <>
+                      <Button
+                        fullWidth
+                        onClick={() => router.push(`/messages?userId=${person.userId}`)}
+                        className="bg-blue-500 hover:bg-blue-600"
+                      >
+                        <MessageSquare className="w-4 h-4 mr-2" />
+                        Send Direct Message
+                      </Button>
+
+                      {/* WhatsApp button surfaces only when the person opted in
+                          AND has a phone. Server strips the phone otherwise. */}
+                      {person.user?.whatsappOptIn && person.user?.phone && (() => {
+                        const digits = person.user.phone.replace(/[^\d]/g, '');
+                        if (!digits) return null;
+                        const greeting = encodeURIComponent(
+                          `Hi ${person.firstName}, reaching out via the family tree.`
+                        );
+                        const url = `https://wa.me/${digits}?text=${greeting}`;
+                        return (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                          >
+                            <Phone className="w-4 h-4" />
+                            Contact via WhatsApp
+                          </a>
+                        );
+                      })()}
+                    </>
                   ) : (
                     <Link href={`/login?callbackUrl=/person/${id}`}>
                       <Button variant="outline" fullWidth>

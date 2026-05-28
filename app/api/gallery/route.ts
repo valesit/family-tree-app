@@ -3,13 +3,12 @@ import { getServerSession } from 'next-auth';
 import { put } from '@vercel/blob';
 import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
-import { STOCK_GALLERY } from '@/lib/gallery-stock';
 import { SessionUser } from '@/types';
 
 const MAX_BYTES = 4 * 1024 * 1024;
 const ALLOWED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-/** GET — stock images + uploaded photos for a family (root person id). */
+/** GET — uploaded family photos for a family (root person id). */
 export async function GET(request: NextRequest) {
   try {
     const rootPersonId = request.nextUrl.searchParams.get('rootPersonId');
@@ -17,7 +16,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: {
-          stock: STOCK_GALLERY,
           uploads: [] as unknown[],
         },
       });
@@ -39,7 +37,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        stock: STOCK_GALLERY,
         uploads,
       },
     });
@@ -62,7 +59,6 @@ export async function POST(request: NextRequest) {
     const file = formData.get('image') as File | null;
     const label = (formData.get('label') as string) || '';
     const rootPersonId = formData.get('rootPersonId') as string | null;
-    // Category: either a built-in id, a user-coined slug, or '' (uncategorized).
     // Trim aggressively and cap length so we don't end up with junky pill labels.
     const categoryRaw = ((formData.get('category') as string) || '').trim().slice(0, 60);
     const category = categoryRaw.length > 0 ? categoryRaw : null;

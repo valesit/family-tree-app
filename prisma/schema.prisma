@@ -20,6 +20,10 @@ model User {
   name          String?
   image         String?
   role          UserRole  @default(MEMBER)
+  // WhatsApp contact opt-in. Only honored when `phone` is also present.
+  // Members must explicitly opt in before other family members see a
+  // "Contact via WhatsApp" button on their profile.
+  whatsappOptIn Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
