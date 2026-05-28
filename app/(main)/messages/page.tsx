@@ -44,7 +44,21 @@ interface FamilyPersonItem {
     image?: string | null;
     phone?: string | null;
     whatsappOptIn?: boolean;
+    role?: 'ADMIN' | 'MEMBER' | 'VIEWER';
   } | null;
+}
+
+/**
+ * Display rule for the messages directory:
+ * - System ADMINs keep their account `name` (so platform admins stay
+ *   recognizable even if they're not in any family tree).
+ * - Everyone else is shown by the canonical first+last name from their
+ *   tree profile, which is the source of truth for how relatives know them.
+ */
+function displayNameFor(p: FamilyPersonItem): string {
+  if (p.user?.role === 'ADMIN' && p.user.name) return p.user.name;
+  const tree = `${p.firstName} ${p.lastName}`.trim();
+  return tree || p.user?.name || 'Family member';
 }
 
 function MessagesContent() {
@@ -99,7 +113,7 @@ function MessagesContent() {
     preselectAppliedRef.current = true;
     setSelectedContact({
       id: person.user.id,
-      name: person.user.name,
+      name: displayNameFor(person),
       email: null,
       image: person.user.image || null,
     });
@@ -135,7 +149,7 @@ function MessagesContent() {
       .filter((p) => p.user && p.user.id !== user?.id)
       .map((p) => ({
         id: p.user!.id,
-        name: p.user!.name || `${p.firstName} ${p.lastName}`,
+        name: displayNameFor(p),
         image: p.user!.image || null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -237,11 +251,11 @@ function MessagesContent() {
 
           <div className="p-4 border-t border-slate-200">
             <RelativeDiscovery
-              onStartConversation={(userId) => {
-                const target = familyDirectory.find((u) => u.id === userId);
-                if (target) {
-                  selectContactFromDirectory(target);
-                }
+              onStartConversation={(contact) => {
+                // Pass through the suggestion's contact info directly so the
+                // chat opens even when the relative isn't in the (possibly
+                // truncated) family directory list.
+                selectContactFromDirectory(contact);
               }}
             />
           </div>
