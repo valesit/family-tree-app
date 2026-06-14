@@ -4,7 +4,12 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
-import { findPersonFamilyRoot, isFamilyAdmin, isSystemAdmin } from '@/lib/family-membership';
+import {
+  findPersonFamilyRoot,
+  isFamilyAdmin,
+  isSystemAdmin,
+  promoteFamilyRootIfHigher,
+} from '@/lib/family-membership';
 
 // GET /api/persons/[id] - Get a single person (public - no auth required)
 export async function GET(
@@ -193,6 +198,20 @@ export async function DELETE(
 
     if (!person) {
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
+    }
+
+    // Heal stale Family.rootPersonId values before evaluating the root
+    // guardrail. Older trees may still point at a mid-tree "root" because
+    // the auto-promote hook in /api/relationships only fires on new
+    // relationships. Walking up to the actual topmost ancestor here
+    // ensures the guardrail blocks only the *current* root, not a stale
+    // pointer at someone (like Thandiwe) who is no longer topmost.
+    // Failures are non-fatal — if healing breaks for any reason, fall
+    // through to the original guardrail logic below.
+    try {
+      await promoteFamilyRootIfHigher(id);
+    } catch (err) {
+      console.error('Heal family root before delete failed:', err);
     }
 
     // Refuse to delete the root of any family tree — that would cascade
