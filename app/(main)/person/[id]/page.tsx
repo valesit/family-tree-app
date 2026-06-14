@@ -31,6 +31,7 @@ import {
   X,
   Phone,
   Trash2,
+  Crown,
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -63,6 +64,9 @@ export default function PersonDetailPage({ params }: PageProps) {
   // Delete-member state (admins only)
   const [isDeletingPerson, setIsDeletingPerson] = useState(false);
 
+  // Set-as-family-root state (admins only)
+  const [isAssigningRoot, setIsAssigningRoot] = useState(false);
+
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
   const isAdmin = user?.role === 'ADMIN';
@@ -80,6 +84,18 @@ export default function PersonDetailPage({ params }: PageProps) {
     (f) => f.role === 'ADMIN'
   );
   const canDeleteThisPerson = isAdmin || isFamilyAdminAnywhere;
+
+  // Look up whether this person is currently the stored root of any Family.
+  // The /api/family endpoint returns null when no Family is anchored to this id.
+  const { data: familyAtThisPerson, mutate: refetchFamilyAtThisPerson } = useSWR<{
+    success: boolean;
+    data: { id: string; rootPersonId: string } | null;
+  }>(
+    isAuthenticated ? `/api/family?rootPersonId=${encodeURIComponent(id)}` : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const isCurrentRoot = !!familyAtThisPerson?.data;
 
   const { data, error, isLoading, mutate } = useSWR<{
     success: boolean;
@@ -246,6 +262,42 @@ export default function PersonDetailPage({ params }: PageProps) {
     } catch (error) {
       console.error('Error unlinking profile:', error);
       alert('Failed to unlink profile');
+    }
+  };
+
+  // Promote this person to be the family's root ancestor. Server enforces
+  // admin authorization and cleans up the FamilyMembership FK swap.
+  const handleSetAsRoot = async () => {
+    const fullName = `${person.firstName} ${person.lastName}`.trim();
+    if (
+      !confirm(
+        `Make ${fullName} the root ancestor of this family tree?\n\n` +
+          `This re-anchors the tree's canonical "topmost" person. ` +
+          `Family Admin permissions follow the new root.`
+      )
+    ) {
+      return;
+    }
+    setIsAssigningRoot(true);
+    try {
+      const response = await fetch('/api/family/root', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId: id }),
+      });
+      const result = await response.json();
+      if (!result.success) {
+        alert(result.error || 'Failed to set family root');
+        return;
+      }
+      alert(result.message || `${fullName} is now the family root.`);
+      await Promise.all([mutate(), refetchFamilyAtThisPerson()]);
+      router.refresh();
+    } catch (error) {
+      console.error('Error setting family root:', error);
+      alert('Failed to set family root. Please try again.');
+    } finally {
+      setIsAssigningRoot(false);
     }
   };
 
@@ -739,6 +791,30 @@ export default function PersonDetailPage({ params }: PageProps) {
                     <Flag className="w-4 h-4 mr-2" />
                     Request Correction
                   </Button>
+
+                  {/* Admin: re-anchor the tree to this person. Hidden when
+                      this person is already the stored root. The auto-promote
+                      hook in /api/relationships handles most cases — this is
+                      the manual override. */}
+                  {canDeleteThisPerson && !isCurrentRoot && (
+                    <Button
+                      variant="outline"
+                      fullWidth
+                      onClick={handleSetAsRoot}
+                      isLoading={isAssigningRoot}
+                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      <Crown className="w-4 h-4 mr-2" />
+                      Set as Family Root
+                    </Button>
+                  )}
+
+                  {canDeleteThisPerson && isCurrentRoot && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                      <Crown className="w-4 h-4 shrink-0" />
+                      <span>This person is the current family root.</span>
+                    </div>
+                  )}
 
                   {/* Destructive action — only for System Admins or Family
                       Admins; the API enforces it as well. Hidden for the

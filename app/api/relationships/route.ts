@@ -4,7 +4,12 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { relationshipSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
-import { isSystemAdmin, isFamilyAdmin, findPersonFamilyRoot } from '@/lib/family-membership';
+import {
+  isSystemAdmin,
+  isFamilyAdmin,
+  findPersonFamilyRoot,
+  promoteFamilyRootIfHigher,
+} from '@/lib/family-membership';
 
 // GET /api/relationships - Get all relationships (public - no auth required)
 export async function GET(request: NextRequest) {
@@ -124,6 +129,33 @@ export async function POST(request: NextRequest) {
         spouse2: true,
       },
     });
+
+    // If a new parent was just slotted in above the existing root, promote
+    // them to be the family root. Best-effort — failures here shouldn't
+    // poison the user-visible relationship creation, so we log and move on.
+    if (
+      type === 'PARENT_CHILD' ||
+      type === 'ADOPTED' ||
+      type === 'STEP_PARENT' ||
+      type === 'STEP_CHILD' ||
+      type === 'FOSTER'
+    ) {
+      try {
+        const promotedRoot = await promoteFamilyRootIfHigher(person2Id);
+        if (promotedRoot && familyId && promotedRoot !== familyId) {
+          await prisma.activity.create({
+            data: {
+              type: 'PERSON_UPDATED',
+              description: `Family root reassigned to ${person1.firstName} ${person1.lastName} (added as ancestor).`,
+              userId: user.id,
+              data: { newRootPersonId: promotedRoot, previousRootPersonId: familyId },
+            },
+          });
+        }
+      } catch (err) {
+        console.error('Auto-promote family root failed:', err);
+      }
+    }
 
     // For spouse relationships, add both spouses to each other's family trees
     // This enables cross-family navigation (e.g., viewing spouse's birth family)
