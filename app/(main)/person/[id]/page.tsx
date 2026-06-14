@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   X,
   Phone,
+  Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -59,9 +60,26 @@ export default function PersonDetailPage({ params }: PageProps) {
   const [disputeReason, setDisputeReason] = useState('');
   const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
+  // Delete-member state (admins only)
+  const [isDeletingPerson, setIsDeletingPerson] = useState(false);
+
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
   const isAdmin = user?.role === 'ADMIN';
+
+  // Pull the current user's family memberships so we can show the delete
+  // affordance to Family Admins (in addition to System Admins). The server
+  // is the source of truth on authorization; this just gates the UI.
+  const { data: userFamiliesData } = useSWR<{
+    success: boolean;
+    data: { families: Array<{ id: string; role: 'ADMIN' | 'MEMBER' }> };
+  }>(isAuthenticated ? '/api/user/families' : null, fetcher, {
+    revalidateOnFocus: false,
+  });
+  const isFamilyAdminAnywhere = !!userFamiliesData?.data?.families?.some(
+    (f) => f.role === 'ADMIN'
+  );
+  const canDeleteThisPerson = isAdmin || isFamilyAdminAnywhere;
 
   const { data, error, isLoading, mutate } = useSWR<{
     success: boolean;
@@ -228,6 +246,43 @@ export default function PersonDetailPage({ params }: PageProps) {
     } catch (error) {
       console.error('Error unlinking profile:', error);
       alert('Failed to unlink profile');
+    }
+  };
+
+  // Permanently remove this person from the family tree. Requires a typed
+  // confirmation of the person's full name to guard against fat-finger
+  // deletes — the cascade is destructive (relationships, images, etc.).
+  const handleDeletePerson = async () => {
+    const fullName = `${person.firstName} ${person.lastName}`.trim();
+    const typed = window.prompt(
+      `Permanently delete ${fullName}?\n\n` +
+        `This will remove their relationships, photos, and notable nominations. ` +
+        `This cannot be undone.\n\n` +
+        `Type "${fullName}" to confirm:`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== fullName) {
+      alert('Name did not match — deletion cancelled.');
+      return;
+    }
+
+    setIsDeletingPerson(true);
+    try {
+      const response = await fetch(`/api/persons/${id}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!result.success) {
+        alert(result.error || 'Failed to delete person');
+        return;
+      }
+      // Navigate away — this person no longer exists.
+      alert(result.message || `${fullName} was removed.`);
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      console.error('Error deleting person:', error);
+      alert('Failed to delete person. Please try again.');
+    } finally {
+      setIsDeletingPerson(false);
     }
   };
 
@@ -684,6 +739,28 @@ export default function PersonDetailPage({ params }: PageProps) {
                     <Flag className="w-4 h-4 mr-2" />
                     Request Correction
                   </Button>
+
+                  {/* Destructive action — only for System Admins or Family
+                      Admins; the API enforces it as well. Hidden for the
+                      person's own linked profile. */}
+                  {canDeleteThisPerson && !isLinkedToCurrentUser && (
+                    <div className="pt-2 mt-2 border-t border-slate-200">
+                      <Button
+                        variant="outline"
+                        fullWidth
+                        onClick={handleDeletePerson}
+                        isLoading={isDeletingPerson}
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete from Tree
+                      </Button>
+                      <p className="mt-1.5 text-[11px] text-slate-500 leading-snug">
+                        Admins only. Use this to remove a member that was added
+                        in error. This cannot be undone.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </Card>
             )}
