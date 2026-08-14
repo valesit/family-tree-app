@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Determine root person
     let rootId: string | null = rootPersonId;
+    let didAutoDetectRoot = false;
     if (rootId) {
       // Even if a rootId was given, walk up to the topmost ancestor so the tree
       // always renders from the very top (e.g. after adding a parent above current root)
@@ -103,6 +104,7 @@ export async function GET(request: NextRequest) {
         // Fallback: any person
         rootId = persons[0].id;
       }
+      didAutoDetectRoot = true;
     }
 
     // At this point we should always have a rootId, but guard to satisfy strict TS
@@ -142,6 +144,32 @@ export async function GET(request: NextRequest) {
         if (spouse && spouse.lastName !== rootPerson.lastName) {
           familyName = `${rootPerson.lastName}/${spouse.lastName}`;
         }
+      }
+    }
+
+    // If the client didn't specify a root and we auto-detected one, persist it
+    // as a Family record. Once stored, subsequent /api/families calls will
+    // resolve this tree via the primary (stored) path rather than re-inferring
+    // it every time — which was the source of the "root flips to a different
+    // spouse when birth dates change" bug. Best-effort: never fail the read.
+    if (didAutoDetectRoot && !familySettings) {
+      try {
+        await prisma.family.upsert({
+          where: { rootPersonId: rootId },
+          create: {
+            rootPersonId: rootId,
+            name: familyName || rootPerson.lastName,
+            description: null,
+            motto: null,
+            crestImage: null,
+          },
+          update: {},
+        });
+      } catch (upsertError) {
+        console.error(
+          'Failed to persist auto-detected tree root:',
+          upsertError
+        );
       }
     }
 
