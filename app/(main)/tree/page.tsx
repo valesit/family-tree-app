@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree, ExpandedTreeView } from '@/components/tree';
+import { CanonicalRootPrompt } from '@/components/tree/CanonicalRootPrompt';
 import { ExportTreeDialog } from '@/components/tree/ExportTreeDialog';
 import { Modal, Button, Avatar } from '@/components/ui';
 import { PersonCard } from '@/components/person';
@@ -491,6 +492,10 @@ export default function TreePage() {
           </Link>
         )}
       </div>
+
+      {/* Admin-only prompt to pick the canonical root. Silent for non-admins,
+          guests, and dismissed sessions — see the component for gating. */}
+      <CanonicalRootPrompt />
 
       {/* Main content: tree is primary (left on lg+, first on mobile); overview is collapsible on small screens. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">

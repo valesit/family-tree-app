@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree } from '@/components/tree';
+import { CanonicalRootPrompt } from '@/components/tree/CanonicalRootPrompt';
 import { FamilyGallerySection } from '@/components/gallery';
 import { PageScrollNav } from '@/components/shared';
 import { PeopleListView, PeopleDirectoryView, type PersonExtras } from '@/components/people';
@@ -341,6 +342,11 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* One-time admin prompt to pick the canonical family root. Rendered
+            here (above the tree) so it's visible on first paint but does not
+            block scrolling to the tree itself. */}
+        <CanonicalRootPrompt />
 
         {/* Tree + sidebar stats — tree is primary, stats alongside on lg+, below on mobile */}
         <section className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
