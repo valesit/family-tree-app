@@ -48,18 +48,84 @@ export async function PATCH(request: NextRequest) {
     }
 
     const currentRoot = await findPersonFamilyRoot(personId);
+
+    // Case 1: No Family record exists yet for this person's tree.
+    // Create one anchored at `personId`. Only System Admins can do this,
+    // since there's no existing FamilyMembership to derive family-admin
+    // scope from.
     if (!currentRoot) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            'This person is not connected to any registered family tree yet. Connect them via a relationship first.',
+      const sysAdmin = await isSystemAdmin(user.id);
+      if (!sysAdmin) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'Only System Admins can create a new family tree root when no Family record exists.',
+          },
+          { status: 403 }
+        );
+      }
+
+      // Derive family name: lastName, or lastName/spouseLastName if the
+      // person has a current spouse with a different last name. Mirrors
+      // the fallback naming convention used by GET /api/tree.
+      const spouseRel = await prisma.relationship.findFirst({
+        where: {
+          type: 'SPOUSE',
+          OR: [{ spouse1Id: personId }, { spouse2Id: personId }],
         },
-        { status: 400 }
-      );
+        select: { spouse1Id: true, spouse2Id: true },
+      });
+      let derivedName = person.lastName;
+      if (spouseRel) {
+        const spouseId =
+          spouseRel.spouse1Id === personId ? spouseRel.spouse2Id : spouseRel.spouse1Id;
+        if (spouseId) {
+          const spouse = await prisma.person.findUnique({
+            where: { id: spouseId },
+            select: { lastName: true },
+          });
+          if (spouse && spouse.lastName && spouse.lastName !== person.lastName) {
+            derivedName = `${person.lastName}/${spouse.lastName}`;
+          }
+        }
+      }
+
+      // Idempotent create: if two callers race, the second falls through
+      // to the "already the root" fast-path below on the next request.
+      await prisma.family.upsert({
+        where: { rootPersonId: personId },
+        create: {
+          rootPersonId: personId,
+          name: derivedName,
+          description: null,
+          motto: null,
+          crestImage: null,
+          createdById: user.id,
+        },
+        update: {},
+      });
+
+      await prisma.activity.create({
+        data: {
+          type: 'PERSON_UPDATED',
+          description: `${derivedName} was set as the root ancestor of the family tree`,
+          userId: user.id,
+          data: {
+            newRootPersonId: personId,
+          },
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: { rootPersonId: personId, previousRootPersonId: null },
+        message: `${person.firstName} ${person.lastName} is now the family root.`,
+      });
     }
 
-    // Authorization: System Admin or Family Admin of THIS tree.
+    // Case 2: A Family record already exists. Reassignment path — require
+    // System Admin or Family Admin of THIS tree.
     const sysAdmin = await isSystemAdmin(user.id);
     const famAdmin = sysAdmin ? true : await isFamilyAdmin(user.id, currentRoot);
     if (!sysAdmin && !famAdmin) {
