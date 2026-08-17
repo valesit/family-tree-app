@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
@@ -14,6 +14,7 @@ import {
   Eye, 
   Loader2,
   Image as ImageIcon,
+  Upload,
   X,
   Plus,
   BookOpen,
@@ -35,8 +36,35 @@ export default function NewWikiArticlePage() {
   const [isPublished, setIsPublished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [coverUploadError, setCoverUploadError] = useState('');
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const user = session?.user as SessionUser | undefined;
+
+  const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setIsUploadingCover(true);
+    setCoverUploadError('');
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch('/api/wiki/upload', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.success) {
+        setCoverUploadError(json.error || 'Upload failed');
+        return;
+      }
+      setCoverImage(json.data.url);
+    } catch {
+      setCoverUploadError('Upload failed. Please try again.');
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
 
   // Fetch persons for "about" dropdown
   const { data: personsData } = useSWR<{
@@ -195,11 +223,35 @@ export default function NewWikiArticlePage() {
                 <ImageIcon className="w-4 h-4 text-slate-400" />
                 Cover Image
               </h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => coverInputRef.current?.click()}
+                disabled={isUploadingCover}
+                className="w-full mb-3"
+              >
+                {isUploadingCover ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4 mr-2" />
+                )}
+                {isUploadingCover ? 'Uploading...' : 'Upload Image'}
+              </Button>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleCoverFile}
+                className="hidden"
+              />
               <Input
-                placeholder="Enter image URL..."
+                placeholder="...or paste image URL"
                 value={coverImage}
                 onChange={(e) => setCoverImage(e.target.value)}
               />
+              {coverUploadError && (
+                <p className="mt-2 text-sm text-rose-700">{coverUploadError}</p>
+              )}
               {coverImage && (
                 <div className="mt-3 relative rounded-lg overflow-hidden">
                   <img
@@ -210,6 +262,14 @@ export default function NewWikiArticlePage() {
                       e.currentTarget.style.display = 'none';
                     }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setCoverImage('')}
+                    className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80"
+                    aria-label="Remove cover image"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </Card>

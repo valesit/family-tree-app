@@ -366,6 +366,209 @@ export function formatPersonName(person: Pick<Person, 'firstName' | 'lastName' |
 }
 
 /**
+ * A flattened, view-friendly representation of one person in a built tree.
+ * Used by the List and Directory views so they share the same relation strings.
+ */
+export type PersonFlat = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  maidenName?: string;
+  nickname?: string;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER';
+  profileImage?: string;
+  birthDate?: string;
+  deathDate?: string;
+  birthYear?: number;
+  deathYear?: number;
+  isLiving: boolean;
+  /** Depth from root (root = 0); spouses inherit their partner's generation. */
+  generation: number;
+  parentNames: string[];
+  spouseNames: string[];
+  childCount: number;
+  siblingCount: number;
+};
+
+/**
+ * Walk a built TreeNode and produce a deduped, flat list of people enriched
+ * with relation summaries. Used by alternate views (List, Directory).
+ */
+export function flattenTree(tree: TreeNode | null): PersonFlat[] {
+  if (!tree) return [];
+
+  // Index every person we see by id so spouse and parent lookups are O(1).
+  type Indexed = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    maidenName?: string;
+    gender?: 'MALE' | 'FEMALE' | 'OTHER';
+    profileImage?: string;
+    birthDate?: string;
+    deathDate?: string;
+    isLiving: boolean;
+    generation: number;
+    parentIds: string[];
+    spouseIds: string[];
+    childIds: string[];
+    /** parent id of this person's siblings — used to count siblings */
+    siblingParentIds: string[];
+  };
+
+  const byId = new Map<string, Indexed>();
+
+  const ensure = (
+    n: TreeNode,
+    generation: number,
+    parentIds: string[],
+    siblingParentIds: string[]
+  ): Indexed => {
+    const existing = byId.get(n.id);
+    if (existing) return existing;
+    const rec: Indexed = {
+      id: n.id,
+      firstName: n.firstName,
+      lastName: n.lastName,
+      maidenName: n.attributes?.maidenName,
+      gender: n.gender,
+      profileImage: n.profileImage,
+      birthDate: n.birthDate,
+      deathDate: n.deathDate,
+      isLiving: n.isLiving,
+      generation,
+      parentIds: [...parentIds],
+      spouseIds: [],
+      childIds: [],
+      siblingParentIds: [...siblingParentIds],
+    };
+    byId.set(n.id, rec);
+    return rec;
+  };
+
+  const walk = (n: TreeNode, generation: number, parentIds: string[]) => {
+    const me = ensure(n, generation, parentIds, parentIds);
+
+    const allSpouses = [
+      ...(n.spouses ?? []),
+      ...(n.spouse && !(n.spouses ?? []).some((s) => s.id === n.spouse!.id)
+        ? [n.spouse]
+        : []),
+    ];
+
+    for (const s of allSpouses) {
+      const spouseRec = ensure(s, generation, [], []);
+      if (!me.spouseIds.includes(s.id)) me.spouseIds.push(s.id);
+      if (!spouseRec.spouseIds.includes(n.id)) spouseRec.spouseIds.push(n.id);
+    }
+
+    const children = n.children ?? [];
+    // Both parents for a child are this person and (at most) the first spouse.
+    const coParentId = allSpouses[0]?.id;
+    for (const c of children) {
+      const childParents = coParentId ? [n.id, coParentId] : [n.id];
+      if (!me.childIds.includes(c.id)) me.childIds.push(c.id);
+      if (coParentId) {
+        const sp = byId.get(coParentId);
+        if (sp && !sp.childIds.includes(c.id)) sp.childIds.push(c.id);
+      }
+      walk(c, generation + 1, childParents);
+    }
+  };
+
+  walk(tree, 0, []);
+
+  // Derive sibling counts: for each person, find any sibling (another child of any same parent).
+  const parentToChildren = new Map<string, Set<string>>();
+  for (const rec of byId.values()) {
+    for (const pid of rec.parentIds) {
+      const set = parentToChildren.get(pid) ?? new Set<string>();
+      set.add(rec.id);
+      parentToChildren.set(pid, set);
+    }
+  }
+
+  const out: PersonFlat[] = [];
+  for (const rec of byId.values()) {
+    const siblingSet = new Set<string>();
+    for (const pid of rec.parentIds) {
+      const sibs = parentToChildren.get(pid);
+      if (!sibs) continue;
+      for (const id of sibs) {
+        if (id !== rec.id) siblingSet.add(id);
+      }
+    }
+    const parentNames = rec.parentIds
+      .map((id) => byId.get(id))
+      .filter((p): p is Indexed => !!p)
+      .map((p) => `${p.firstName} ${p.lastName}`);
+    const spouseNames = rec.spouseIds
+      .map((id) => byId.get(id))
+      .filter((p): p is Indexed => !!p)
+      .map((p) => `${p.firstName} ${p.lastName}`);
+    out.push({
+      id: rec.id,
+      firstName: rec.firstName,
+      lastName: rec.lastName,
+      maidenName: rec.maidenName,
+      gender: rec.gender,
+      profileImage: rec.profileImage,
+      birthDate: rec.birthDate,
+      deathDate: rec.deathDate,
+      birthYear: rec.birthDate ? new Date(rec.birthDate).getFullYear() : undefined,
+      deathYear: rec.deathDate ? new Date(rec.deathDate).getFullYear() : undefined,
+      isLiving: rec.isLiving,
+      generation: rec.generation,
+      parentNames,
+      spouseNames,
+      childCount: rec.childIds.length,
+      siblingCount: siblingSet.size,
+    });
+  }
+
+  // Stable order: by generation, then by last name, then first name.
+  out.sort((a, b) => {
+    if (a.generation !== b.generation) return a.generation - b.generation;
+    const lastCmp = a.lastName.localeCompare(b.lastName);
+    if (lastCmp !== 0) return lastCmp;
+    return a.firstName.localeCompare(b.firstName);
+  });
+
+  return out;
+}
+
+/**
+ * Build a short, human-friendly summary of a person's relations.
+ * Examples: ["Daughter of Joseph & Mary Sithole", "Married to John Doe", "Mother of 3", "9 siblings"].
+ */
+export function buildRelationLines(p: PersonFlat): string[] {
+  const lines: string[] = [];
+  if (p.parentNames.length > 0) {
+    const childWord =
+      p.gender === 'FEMALE' ? 'Daughter' : p.gender === 'MALE' ? 'Son' : 'Child';
+    lines.push(`${childWord} of ${p.parentNames.join(' & ')}`);
+  }
+  if (p.spouseNames.length === 1) {
+    lines.push(`Married to ${p.spouseNames[0]}`);
+  } else if (p.spouseNames.length > 1) {
+    lines.push(`Spouses: ${p.spouseNames.join(', ')}`);
+  }
+  if (p.childCount > 0) {
+    const parentWord =
+      p.gender === 'FEMALE' ? 'Mother' : p.gender === 'MALE' ? 'Father' : 'Parent';
+    lines.push(
+      `${parentWord} of ${p.childCount} ${p.childCount === 1 ? 'child' : 'children'}`
+    );
+  }
+  if (p.siblingCount > 0) {
+    lines.push(
+      `${p.siblingCount} ${p.siblingCount === 1 ? 'sibling' : 'siblings'}`
+    );
+  }
+  return lines;
+}
+
+/**
  * Calculate age from birth date
  */
 export function calculateAge(birthDate: Date, deathDate?: Date | null): number {

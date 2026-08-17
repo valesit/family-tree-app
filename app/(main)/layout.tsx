@@ -12,6 +12,7 @@ interface MainLayoutProps {
 // Pages that require authentication
 const protectedPaths = [
   '/add-person',
+  '/admin',
   '/approvals',
   '/corrections',
   '/messages',

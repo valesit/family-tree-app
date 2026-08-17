@@ -216,6 +216,33 @@ export async function GET() {
     const sortedFallback = families.sort((a: (typeof families)[number], b: (typeof families)[number]) => b.memberCount - a.memberCount);
     const primaryFallback = sortedFallback.find((f) => f.familyName.toLowerCase().includes('sithole')) || sortedFallback[0] || null;
 
+    // Persist the auto-detected root as a Family record so subsequent requests
+    // hit the primary (stored) path instead of re-inferring. This makes the
+    // choice stable across data changes — e.g. adding a birth date to a
+    // spouse won't flip the "topmost" tiebreaker underneath us.
+    // Best-effort: any DB failure is logged and swallowed so a public GET
+    // never 500s because of a persistence side-effect.
+    if (primaryFallback) {
+      try {
+        await prisma.family.upsert({
+          where: { rootPersonId: primaryFallback.id },
+          create: {
+            rootPersonId: primaryFallback.id,
+            name: primaryFallback.familyName,
+            description: null,
+            motto: null,
+            crestImage: null,
+          },
+          update: {},
+        });
+      } catch (upsertError) {
+        console.error(
+          'Failed to persist auto-detected family root:',
+          upsertError
+        );
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {

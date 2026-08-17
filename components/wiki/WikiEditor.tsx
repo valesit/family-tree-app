@@ -12,6 +12,7 @@ import {
   Heading2,
   Link as LinkIcon,
   Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 
 interface WikiEditorProps {
@@ -22,9 +23,12 @@ interface WikiEditorProps {
 
 export function WikiEditor({ value, onChange, placeholder }: WikiEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const insertMarkdown = (before: string, after: string = '', defaultText: string = '') => {
     const textarea = textareaRef.current;
@@ -72,10 +76,33 @@ export function WikiEditor({ value, onChange, placeholder }: WikiEditorProps) {
     setLinkText('');
   };
 
-  const handleImageUrl = () => {
-    const url = prompt('Enter image URL:');
-    if (url) {
-      insertMarkdown(`\n![Image](${url})\n`, '', '');
+  const handleImageButton = () => {
+    setUploadError('');
+    imageInputRef.current?.click();
+  };
+
+  const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch('/api/wiki/upload', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.success) {
+        setUploadError(json.error || 'Upload failed');
+        return;
+      }
+      const alt = file.name.replace(/\.[^.]+$/, '');
+      insertMarkdown(`\n![${alt}](${json.data.url})\n`, '', '');
+    } catch {
+      setUploadError('Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -91,7 +118,13 @@ export function WikiEditor({ value, onChange, placeholder }: WikiEditorProps) {
     { icon: Quote, action: handleQuote, title: 'Quote' },
     { type: 'divider' as const },
     { icon: LinkIcon, action: () => setShowLinkModal(true), title: 'Insert Link' },
-    { icon: ImageIcon, action: handleImageUrl, title: 'Insert Image' },
+    {
+      icon: isUploading ? Loader2 : ImageIcon,
+      action: handleImageButton,
+      title: isUploading ? 'Uploading...' : 'Upload Image',
+      disabled: isUploading,
+      spin: isUploading,
+    },
   ];
 
   return (
@@ -109,13 +142,28 @@ export function WikiEditor({ value, onChange, placeholder }: WikiEditorProps) {
               type="button"
               onClick={button.action}
               title={button.title}
-              className="p-2 rounded-lg hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors"
+              disabled={button.disabled}
+              className="p-2 rounded-lg hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Icon className="w-4 h-4" />
+              <Icon className={`w-4 h-4 ${button.spin ? 'animate-spin' : ''}`} />
             </button>
           );
         })}
       </div>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        onChange={handleImageFile}
+        className="hidden"
+      />
+
+      {uploadError && (
+        <div className="px-4 py-2 bg-rose-50 border-b border-rose-200 text-sm text-rose-700">
+          {uploadError}
+        </div>
+      )}
 
       {/* Editor */}
       <textarea

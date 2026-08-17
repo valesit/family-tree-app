@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { put } from '@vercel/blob';
 import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
-import { STOCK_GALLERY } from '@/lib/gallery-stock';
 import { SessionUser } from '@/types';
 
 const MAX_BYTES = 4 * 1024 * 1024;
 const ALLOWED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-/** GET — stock images + uploaded photos for a family (root person id). */
+/** GET — uploaded family photos for a family (root person id). */
 export async function GET(request: NextRequest) {
   try {
     const rootPersonId = request.nextUrl.searchParams.get('rootPersonId');
@@ -16,7 +16,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: {
-          stock: STOCK_GALLERY,
           uploads: [] as unknown[],
         },
       });
@@ -29,6 +28,7 @@ export async function GET(request: NextRequest) {
         id: true,
         url: true,
         label: true,
+        category: true,
         uploadedById: true,
         createdAt: true,
       },
@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        stock: STOCK_GALLERY,
         uploads,
       },
     });
@@ -60,6 +59,9 @@ export async function POST(request: NextRequest) {
     const file = formData.get('image') as File | null;
     const label = (formData.get('label') as string) || '';
     const rootPersonId = formData.get('rootPersonId') as string | null;
+    // Trim aggressively and cap length so we don't end up with junky pill labels.
+    const categoryRaw = ((formData.get('category') as string) || '').trim().slice(0, 60);
+    const category = categoryRaw.length > 0 ? categoryRaw : null;
 
     if (!file || !rootPersonId) {
       return NextResponse.json(
@@ -80,18 +82,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Family not found' }, { status: 404 });
     }
 
-    const buf = Buffer.from(await file.arrayBuffer());
-    const dataUrl = `data:${file.type};base64,${buf.toString('base64')}`;
-    if (dataUrl.length > 6_000_000) {
-      return NextResponse.json({ success: false, error: 'Image too large after encoding' }, { status: 400 });
-    }
+    const { url } = await put(
+      `gallery/${rootPersonId}/${Date.now()}-${file.name}`,
+      file,
+      {
+        access: 'public',
+        addRandomSuffix: true,
+        token: process.env.FAMILY_BLOB_READ_WRITE_TOKEN,
+      }
+    );
 
     const count = await prisma.galleryPhoto.count({ where: { rootPersonId } });
     const photo = await prisma.galleryPhoto.create({
       data: {
         rootPersonId,
-        url: dataUrl,
+        url,
         label: label.slice(0, 500),
+        category,
         sortOrder: count,
         uploadedById: user.id,
       },
@@ -99,6 +106,7 @@ export async function POST(request: NextRequest) {
         id: true,
         url: true,
         label: true,
+        category: true,
         uploadedById: true,
         createdAt: true,
       },

@@ -104,6 +104,118 @@ export async function getUserDefaultFamily(userId: string): Promise<string | nul
 }
 
 /**
+ * Walk up parent-child relationships from `personId` and return the topmost
+ * ancestor. Treats every PARENT_CHILD-style edge (including ADOPTED) as a
+ * step upward. If the input has no parents, returns `personId` unchanged.
+ *
+ * Used to auto-promote the family root when a new parent is added higher
+ * in the tree.
+ */
+export async function findTopmostAncestor(personId: string): Promise<string> {
+  const visited = new Set<string>();
+  let current = personId;
+  while (!visited.has(current)) {
+    visited.add(current);
+    const parentRel = await prisma.relationship.findFirst({
+      where: { type: 'PARENT_CHILD', childId: current, parentId: { not: null } },
+      select: { parentId: true },
+    });
+    if (!parentRel?.parentId) break;
+    current = parentRel.parentId;
+  }
+  return current;
+}
+
+/**
+ * Re-point a Family's rootPersonId to a new ancestor. Because
+ * FamilyMembership.familyId is a foreign key to Family.rootPersonId,
+ * Postgres won't let us update the unique key while memberships still
+ * reference it. We work around that inside a single transaction:
+ *   1. snapshot existing memberships
+ *   2. delete them (FK becomes free)
+ *   3. update Family.rootPersonId
+ *   4. recreate memberships under the new id
+ *
+ * Idempotent: if the family already points at `newRootPersonId`, this is
+ * a no-op.
+ *
+ * Returns true if the root was changed, false if it was already current.
+ */
+export async function reassignFamilyRoot(
+  oldRootPersonId: string,
+  newRootPersonId: string
+): Promise<boolean> {
+  if (oldRootPersonId === newRootPersonId) return false;
+
+  // Verify both persons exist before doing any destructive work.
+  const [newRootPerson, family] = await Promise.all([
+    prisma.person.findUnique({ where: { id: newRootPersonId }, select: { id: true } }),
+    prisma.family.findUnique({ where: { rootPersonId: oldRootPersonId } }),
+  ]);
+  if (!newRootPerson) throw new Error('New root person not found');
+  if (!family) throw new Error('Family not found for current root');
+
+  // Make sure the new id isn't already a Family root for some other tree —
+  // rootPersonId is @unique so a clash would error inside the transaction.
+  const clash = await prisma.family.findUnique({
+    where: { rootPersonId: newRootPersonId },
+    select: { id: true },
+  });
+  if (clash) {
+    throw new Error('That person is already the root of another family');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const memberships = await tx.familyMembership.findMany({
+      where: { familyId: oldRootPersonId },
+      select: { userId: true, role: true, joinedAt: true },
+    });
+
+    if (memberships.length > 0) {
+      await tx.familyMembership.deleteMany({ where: { familyId: oldRootPersonId } });
+    }
+
+    await tx.family.update({
+      where: { rootPersonId: oldRootPersonId },
+      data: { rootPersonId: newRootPersonId },
+    });
+
+    if (memberships.length > 0) {
+      await tx.familyMembership.createMany({
+        data: memberships.map((m) => ({
+          userId: m.userId,
+          familyId: newRootPersonId,
+          role: m.role,
+          joinedAt: m.joinedAt,
+        })),
+      });
+    }
+  });
+
+  return true;
+}
+
+/**
+ * Auto-promote the family root if `personId` (or anyone above them) is
+ * higher in the tree than the currently stored root. Safe to call after
+ * any PARENT_CHILD relationship is created. Returns the new (or
+ * unchanged) root id, or null if no Family record exists for this tree.
+ */
+export async function promoteFamilyRootIfHigher(
+  personId: string
+): Promise<string | null> {
+  const currentRoot = await findPersonFamilyRoot(personId);
+  if (!currentRoot) return null;
+
+  const topmost = await findTopmostAncestor(currentRoot);
+  if (topmost === currentRoot) return currentRoot;
+
+  // Topmost is strictly above the current root — promote.
+  await reassignFamilyRoot(currentRoot, topmost);
+  return topmost;
+}
+
+/**
  * Find the root person ID of the family tree a person belongs to
  */
 export async function findPersonFamilyRoot(personId: string): Promise<string | null> {

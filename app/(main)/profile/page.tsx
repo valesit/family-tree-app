@@ -7,18 +7,21 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Card, Button, Input, Avatar } from '@/components/ui';
 import { profileSchema, passwordChangeSchema, ProfileInput, PasswordChangeInput } from '@/lib/validators';
 import { SessionUser } from '@/types';
+import useSWR from 'swr';
 import {
   User,
   Mail,
   Phone,
   Lock,
   Bell,
-  Shield,
   LogOut,
   Camera,
   CheckCircle,
   AlertCircle,
+  MessageCircle,
 } from 'lucide-react';
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function ProfilePage() {
   const { data: session, update } = useSession();
@@ -28,14 +31,37 @@ export default function ProfilePage() {
 
   const user = session?.user as SessionUser | undefined;
 
+  // Load full profile (including whatsappOptIn which isn't on the JWT/session).
+  const { data: profileData, mutate: refetchProfile } = useSWR<{
+    success: boolean;
+    data: {
+      name: string | null;
+      email: string | null;
+      phone: string | null;
+      whatsappOptIn: boolean;
+    };
+  }>('/api/auth/profile', fetcher);
+
   const profileForm = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
       phone: user?.phone || '',
+      whatsappOptIn: false,
     },
+    values: profileData?.data
+      ? {
+          name: profileData.data.name || '',
+          email: profileData.data.email || '',
+          phone: profileData.data.phone || '',
+          whatsappOptIn: profileData.data.whatsappOptIn,
+        }
+      : undefined,
   });
+
+  const phoneValue = profileForm.watch('phone');
+  const whatsappOptInValue = profileForm.watch('whatsappOptIn');
 
   const passwordForm = useForm<PasswordChangeInput>({
     resolver: zodResolver(passwordChangeSchema),
@@ -59,9 +85,11 @@ export default function ProfilePage() {
 
       if (response.ok) {
         await update({ name: data.name });
+        await refetchProfile();
         setMessage({ type: 'success', text: 'Profile updated successfully!' });
       } else {
-        throw new Error('Failed to update profile');
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.error || 'Failed to update profile');
       }
     } catch {
       setMessage({ type: 'error', text: 'Failed to update profile. Please try again.' });
@@ -206,8 +234,42 @@ export default function ProfilePage() {
                     type="tel"
                     leftIcon={<Phone className="w-5 h-5" />}
                     error={profileForm.formState.errors.phone?.message}
+                    hint="Include country code (e.g. +263771234567). Required to receive WhatsApp messages."
                     {...profileForm.register('phone')}
                   />
+
+                  {/* WhatsApp opt-in. Only meaningful when a phone number exists. */}
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={!phoneValue}
+                        className="mt-0.5 w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+                        {...profileForm.register('whatsappOptIn')}
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-emerald-900 flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4" />
+                          Allow family members to contact me via WhatsApp
+                        </p>
+                        <p className="text-xs text-emerald-700 mt-1">
+                          When enabled, signed-in relatives will see a “WhatsApp” button on your
+                          profile and in messages that opens a chat to your phone number. Your phone
+                          number itself stays hidden — only the deep link is shared.
+                        </p>
+                        {!phoneValue && (
+                          <p className="text-xs text-amber-700 mt-2 font-medium">
+                            Add a phone number above to enable this option.
+                          </p>
+                        )}
+                        {phoneValue && whatsappOptInValue && (
+                          <p className="text-xs text-emerald-700 mt-2 italic">
+                            ✓ You can revoke this any time by un-checking this box.
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  </div>
 
                   <div className="pt-4">
                     <Button type="submit" isLoading={isLoading}>

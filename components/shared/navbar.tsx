@@ -20,6 +20,7 @@ import {
   Home,
   BookOpen,
   Images,
+  ShieldCheck,
 } from 'lucide-react';
 import { Avatar, Button } from '@/components/ui';
 import { SessionUser } from '@/types';
@@ -148,6 +149,16 @@ export function Navbar() {
                           <Settings className="w-4 h-4" />
                           <span>Settings</span>
                         </Link>
+                        {user?.role === 'ADMIN' && (
+                          <Link
+                            href="/admin/users"
+                            className="flex items-center space-x-2 px-4 py-2 text-sm text-maroon-700 hover:bg-maroon-50"
+                            onClick={() => setIsProfileOpen(false)}
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                            <span>Manage Users</span>
+                          </Link>
+                        )}
                         <button
                           onClick={() => signOut({ callbackUrl: '/' })}
                           className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 w-full text-left"

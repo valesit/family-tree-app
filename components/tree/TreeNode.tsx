@@ -6,6 +6,13 @@ import { clsx } from 'clsx';
 import { useTreeViewOptional } from './TreeViewContext';
 import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, AlertCircle } from 'lucide-react';
 
+export interface TreeNodeExportFields {
+  photo?: boolean;
+  dates?: boolean;
+  birthplace?: boolean;
+  occupation?: boolean;
+}
+
 interface TreeNodeProps {
   node: TreeNodeType;
   onNodeClick: (node: TreeNodeType) => void;
@@ -19,6 +26,16 @@ interface TreeNodeProps {
   level: number;
   isRoot?: boolean;
   readOnly?: boolean;
+  /**
+   * When true, render a clean, non-interactive version suitable for PNG/PDF
+   * export: hides Add buttons, expand/collapse chevrons, status dots, and
+   * forces all descendants visible (subject to maxLevels).
+   */
+  exportMode?: boolean;
+  /** Which fields to include in exportMode. Defaults to name + photo. */
+  exportFields?: TreeNodeExportFields;
+  /** Cap rendered depth in export mode. Undefined = render every descendant. */
+  maxLevels?: number;
 }
 
 export function TreeNode({
@@ -33,9 +50,17 @@ export function TreeNode({
   level,
   isRoot = false,
   readOnly = false,
+  exportMode = false,
+  exportFields,
+  maxLevels,
 }: TreeNodeProps) {
-  const hasChildren = node.children && node.children.length > 0;
-  const isExpanded = expandedNodes.has(node.id);
+  const exportLevelOk =
+    typeof maxLevels !== 'number' || level + 1 < maxLevels;
+  const hasChildren =
+    !!node.children && node.children.length > 0 && (!exportMode || exportLevelOk);
+  const isExpanded = exportMode ? true : expandedNodes.has(node.id);
+  // In export mode, suppress all editing affordances regardless of the readOnly prop.
+  const effectiveReadOnly = exportMode || readOnly;
 
   const getGenderColor = (gender?: string) => {
     switch (gender) {
@@ -77,6 +102,9 @@ export function TreeNode({
   };
 
   const treeView = useTreeViewOptional();
+  // In normal mode, show all card fields. In exportMode, gate by exportFields.
+  const showPhoto = exportMode ? exportFields?.photo !== false : true;
+  const showDates = exportMode ? exportFields?.dates === true : true;
 
   // Person Card Component
   const PersonCard = ({ person, isSpouse = false, marriageOrder, totalSpouses }: { 
@@ -140,31 +168,37 @@ export function TreeNode({
         </div>
       )}
 
-      <div className="relative mx-auto w-fit">
-        <Avatar
-          src={person.profileImage}
-          name={person.name}
-          size="lg"
-          className="ring-2 ring-white shadow-sm"
-        />
-        {getStatusIndicator(person.isLiving)}
-      </div>
+      {showPhoto && (
+        <div className="relative mx-auto w-fit">
+          <Avatar
+            src={person.profileImage}
+            name={person.name}
+            size="lg"
+            className="ring-2 ring-white shadow-sm"
+          />
+          {!exportMode && getStatusIndicator(person.isLiving)}
+        </div>
+      )}
 
-      <div className="mt-2 text-center">
+      <div className={clsx('text-center', showPhoto ? 'mt-2' : 'mt-0')}>
         <p className="font-semibold text-slate-800 text-sm leading-tight">
           {person.firstName}
         </p>
         <p className="text-slate-500 text-xs">{person.lastName}</p>
-        {person.attributes?.birthYear && (
+        {showDates && person.attributes?.birthYear && (
           <p className="text-slate-400 text-[10px] mt-0.5">
             {person.attributes.birthYear}
             {person.attributes.deathYear && ` - ${person.attributes.deathYear}`}
           </p>
         )}
-        {/* Marriage date for spouses */}
-        {isSpouse && 'marriageDate' in person && person.marriageDate && (
+        {showDates && isSpouse && 'marriageDate' in person && person.marriageDate && (
           <p className="text-slate-400 text-[9px] mt-0.5">
             m. {new Date(person.marriageDate).getFullYear()}
+          </p>
+        )}
+        {exportMode && exportFields?.occupation && person.attributes?.occupation && (
+          <p className="text-slate-400 text-[10px] mt-0.5 italic">
+            {person.attributes.occupation}
           </p>
         )}
       </div>
@@ -175,7 +209,7 @@ export function TreeNode({
   return (
     <div className="flex flex-col items-center">
       {/* Add Parent button - only shown at root level in edit mode */}
-      {isRoot && onAddParent && !readOnly && (
+      {isRoot && onAddParent && !effectiveReadOnly && (
         <div className="flex flex-col items-center mb-3">
           <button
             type="button"
@@ -200,7 +234,7 @@ export function TreeNode({
         <div className="relative">
           <PersonCard person={node} />
           {/* Add child button on hover - hidden in read-only mode */}
-          {!readOnly && onAddChild && (
+          {!effectiveReadOnly && onAddChild && (
             <button
               type="button"
               onClick={(e) => {
@@ -241,7 +275,7 @@ export function TreeNode({
                 This is how relatives grow the tree horizontally with the spouse's parents,
                 in the SAME tree. */}
             <div className="flex flex-col items-center">
-              {!readOnly && onAddParent && (
+              {!effectiveReadOnly && onAddParent && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -267,7 +301,7 @@ export function TreeNode({
         ))}
 
         {/* Add spouse button - hidden in read-only mode */}
-        {!readOnly && onAddSpouse && (
+        {!effectiveReadOnly && onAddSpouse && (
           <div className="flex items-center">
             <svg width="16" height="2" aria-hidden>
               <line x1="0" y1="1" x2="16" y2="1" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
@@ -304,27 +338,29 @@ export function TreeNode({
             <line x1="1" y1="0" x2="1" y2="20" stroke="#9f1239" strokeWidth="2" />
           </svg>
 
-          {/* Expand/collapse button — sized for touch */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleExpanded(node.id);
-            }}
-            className="z-10 flex h-8 min-w-[2rem] items-center justify-center rounded-full border-2 border-maroon-300 bg-white shadow transition-colors hover:bg-maroon-50 active:bg-maroon-100"
-            aria-expanded={isExpanded}
-            aria-label={
-              isExpanded
-                ? `Collapse ${node.firstName}'s descendants`
-                : `Expand ${node.firstName}'s descendants`
-            }
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-maroon-600" aria-hidden />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-maroon-600" aria-hidden />
-            )}
-          </button>
+          {/* Expand/collapse button — sized for touch (hidden in export mode) */}
+          {!exportMode && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleExpanded(node.id);
+              }}
+              className="z-10 flex h-8 min-w-[2rem] items-center justify-center rounded-full border-2 border-maroon-300 bg-white shadow transition-colors hover:bg-maroon-50 active:bg-maroon-100"
+              aria-expanded={isExpanded}
+              aria-label={
+                isExpanded
+                  ? `Collapse ${node.firstName}'s descendants`
+                  : `Expand ${node.firstName}'s descendants`
+              }
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-maroon-600" aria-hidden />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-maroon-600" aria-hidden />
+              )}
+            </button>
+          )}
 
           {isExpanded && (
             <>
@@ -365,6 +401,9 @@ export function TreeNode({
                         toggleExpanded={toggleExpanded}
                         level={level + 1}
                         readOnly={readOnly}
+                        exportMode={exportMode}
+                        exportFields={exportFields}
+                        maxLevels={maxLevels}
                       />
                     </div>
                   ))}
@@ -376,7 +415,7 @@ export function TreeNode({
       )}
 
       {/* Add child button when no children - hidden in read-only mode */}
-      {!hasChildren && level < 4 && !readOnly && onAddChild && (
+      {!hasChildren && level < 4 && !effectiveReadOnly && onAddChild && (
         <div className="flex flex-col items-center mt-2">
           <svg width="2" height="12" aria-hidden>
             <line x1="1" y1="0" x2="1" y2="12" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />

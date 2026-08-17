@@ -1,17 +1,19 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { MessageList, MessageInput, RelativeDiscovery } from '@/components/messages';
-import { Card, Avatar, Input } from '@/components/ui';
+import { Avatar, Input } from '@/components/ui';
 import { MessageWithUsers, SessionUser } from '@/types';
-import { 
-  MessageSquare, 
-  Search, 
+import {
+  MessageSquare,
+  Search,
   Loader2,
   Circle,
+  Users,
+  Phone,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -31,6 +33,34 @@ interface Contact {
   };
 }
 
+interface FamilyPersonItem {
+  id: string;
+  userId: string | null;
+  firstName: string;
+  lastName: string;
+  user?: {
+    id: string;
+    name: string | null;
+    image?: string | null;
+    phone?: string | null;
+    whatsappOptIn?: boolean;
+    role?: 'ADMIN' | 'MEMBER' | 'VIEWER';
+  } | null;
+}
+
+/**
+ * Display rule for the messages directory:
+ * - System ADMINs keep their account `name` (so platform admins stay
+ *   recognizable even if they're not in any family tree).
+ * - Everyone else is shown by the canonical first+last name from their
+ *   tree profile, which is the source of truth for how relatives know them.
+ */
+function displayNameFor(p: FamilyPersonItem): string {
+  if (p.user?.role === 'ADMIN' && p.user.name) return p.user.name;
+  const tree = `${p.firstName} ${p.lastName}`.trim();
+  return tree || p.user?.name || 'Family member';
+}
+
 function MessagesContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
@@ -38,10 +68,11 @@ function MessagesContent() {
 
   const [selectedContact, setSelectedContact] = useState<Contact['user'] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [directorySearch, setDirectorySearch] = useState('');
+  const [showDirectory, setShowDirectory] = useState(false);
 
   const user = session?.user as SessionUser | undefined;
 
-  // Fetch conversations list
   const { data: conversationsData, mutate: mutateConversations } = useSWR<{
     success: boolean;
     data: {
@@ -50,35 +81,42 @@ function MessagesContent() {
     };
   }>('/api/messages', fetcher);
 
-  // Fetch messages for selected contact
   const { data: messagesData, mutate: mutateMessages } = useSWR<{
     success: boolean;
     data: MessageWithUsers[];
   }>(
     selectedContact ? `/api/messages?userId=${selectedContact.id}` : null,
     fetcher,
-    { refreshInterval: 5000 } // Poll for new messages
+    { refreshInterval: 5000 }
   );
 
-  // Fetch users for new conversations
   const { data: usersData } = useSWR<{
     success: boolean;
-    data: { items: Array<{ id: string; userId: string; firstName: string; lastName: string; user?: { id: string; name: string; image?: string } }> };
-  }>('/api/persons?limit=100', fetcher);
+    data: { items: FamilyPersonItem[] };
+  }>('/api/persons?limit=500', fetcher);
 
-  // Handle preselected user
+  // Pull selected contact's WhatsApp info if available
+  const selectedContactPerson = useMemo(() => {
+    if (!selectedContact || !usersData?.data?.items) return null;
+    return usersData.data.items.find((p) => p.user?.id === selectedContact.id) ?? null;
+  }, [selectedContact, usersData]);
+
+  // Apply the `?userId=` URL preselection at most once per page load. We use a
+  // ref-guarded effect (instead of inlining the lookup) because this needs to
+  // wait until the persons list has loaded.
+  const preselectAppliedRef = useRef(false);
   useEffect(() => {
-    if (preselectedUserId && usersData?.data?.items) {
-      const person = usersData.data.items.find(p => p.userId === preselectedUserId);
-      if (person?.user) {
-        setSelectedContact({
-          id: person.user.id,
-          name: person.user.name,
-          email: null,
-          image: person.user.image || null,
-        });
-      }
-    }
+    if (preselectAppliedRef.current) return;
+    if (!preselectedUserId || !usersData?.data?.items) return;
+    const person = usersData.data.items.find((p) => p.userId === preselectedUserId);
+    if (!person?.user) return;
+    preselectAppliedRef.current = true;
+    setSelectedContact({
+      id: person.user.id,
+      name: displayNameFor(person),
+      email: null,
+      image: person.user.image || null,
+    });
   }, [preselectedUserId, usersData]);
 
   const handleSendMessage = async (content: string) => {
@@ -100,25 +138,58 @@ function MessagesContent() {
   const contacts = conversationsData?.data?.directMessages || [];
   const messages = messagesData?.data || [];
 
-  // Filter contacts by search query
   const filteredContacts = contacts.filter(contact =>
     contact.user.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Get available users for new conversations
-  const availableUsers = usersData?.data?.items
-    ?.filter(p => p.user && p.userId !== user?.id)
-    ?.map(p => ({
-      id: p.user!.id,
-      name: p.user!.name || `${p.firstName} ${p.lastName}`,
-      image: p.user!.image,
-    })) || [];
+  /** Every family member with a linked account (other than me) — the directory of who can be DM'd. */
+  const familyDirectory = useMemo(() => {
+    const items = usersData?.data?.items ?? [];
+    return items
+      .filter((p) => p.user && p.user.id !== user?.id)
+      .map((p) => ({
+        id: p.user!.id,
+        name: displayNameFor(p),
+        image: p.user!.image || null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [usersData, user?.id]);
+
+  const filteredDirectory = useMemo(() => {
+    const q = directorySearch.trim().toLowerCase();
+    if (!q) return familyDirectory;
+    return familyDirectory.filter((p) => p.name.toLowerCase().includes(q));
+  }, [directorySearch, familyDirectory]);
+
+  const selectContactFromDirectory = (entry: { id: string; name: string; image: string | null }) => {
+    setSelectedContact({
+      id: entry.id,
+      name: entry.name,
+      email: null,
+      image: entry.image,
+    });
+    setShowDirectory(false);
+    setDirectorySearch('');
+  };
+
+  // Build a WhatsApp click-to-chat URL if the contact has opted in.
+  const whatsappUrl = useMemo(() => {
+    const phone = selectedContactPerson?.user?.phone;
+    const optIn = selectedContactPerson?.user?.whatsappOptIn;
+    if (!phone || !optIn) return null;
+    // wa.me requires digits only (with country code, no '+').
+    const digits = phone.replace(/[^\d]/g, '');
+    if (!digits) return null;
+    const greeting = encodeURIComponent(
+      `Hi ${selectedContact?.name?.split(' ')[0] || ''}, reaching out via the family tree.`
+    );
+    return `https://wa.me/${digits}?text=${greeting}`;
+  }, [selectedContactPerson, selectedContact?.name]);
 
   return (
     <div className="h-[calc(100vh-4rem)] bg-slate-50 flex">
       {/* Sidebar - Contact List */}
       <div className="w-80 bg-white border-r border-slate-200 flex flex-col">
-        {/* Header */}
         <div className="p-4 border-b border-slate-200">
           <h1 className="text-xl font-bold text-slate-900 mb-4">Messages</h1>
           <div className="relative">
@@ -132,7 +203,6 @@ function MessagesContent() {
           </div>
         </div>
 
-        {/* Contacts list */}
         <div className="flex-1 overflow-y-auto">
           {filteredContacts.length === 0 ? (
             <div className="p-4 text-center text-slate-500">
@@ -179,51 +249,64 @@ function MessagesContent() {
             </div>
           )}
 
-          {/* Relative Discovery */}
           <div className="p-4 border-t border-slate-200">
             <RelativeDiscovery
-              onStartConversation={(userId) => {
-                // Find the user from the available users
-                const targetUser = availableUsers.find(u => u.id === userId);
-                if (targetUser) {
-                  setSelectedContact({
-                    id: targetUser.id,
-                    name: targetUser.name,
-                    email: null,
-                    image: targetUser.image || null,
-                  });
-                }
+              onStartConversation={(contact) => {
+                // Pass through the suggestion's contact info directly so the
+                // chat opens even when the relative isn't in the (possibly
+                // truncated) family directory list.
+                selectContactFromDirectory(contact);
               }}
             />
           </div>
 
-          {/* New conversation section */}
-          {availableUsers.length > 0 && (
+          {/* Family directory: every linked family member can be messaged. */}
+          {familyDirectory.length > 0 && (
             <div className="p-4 border-t border-slate-200">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                Start New Conversation
-              </p>
-              <div className="space-y-2">
-                {availableUsers.slice(0, 5).map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => setSelectedContact({
-                      id: u.id,
-                      name: u.name,
-                      email: null,
-                      image: u.image || null,
-                    })}
-                    className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
-                  >
-                    <Avatar
-                      src={u.image}
-                      name={u.name}
-                      size="sm"
+              <button
+                type="button"
+                onClick={() => setShowDirectory((s) => !s)}
+                className="w-full flex items-center justify-between mb-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5" />
+                  Message any family member ({familyDirectory.length})
+                </span>
+                <span className="text-slate-400">{showDirectory ? '−' : '+'}</span>
+              </button>
+
+              {showDirectory && (
+                <>
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={directorySearch}
+                      onChange={(e) => setDirectorySearch(e.target.value)}
+                      placeholder="Find a relative..."
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-maroon-400 focus:ring-1 focus:ring-maroon-400"
                     />
-                    <span className="text-sm text-slate-700">{u.name}</span>
-                  </button>
-                ))}
-              </div>
+                  </div>
+                  <div className="space-y-1 max-h-72 overflow-y-auto">
+                    {filteredDirectory.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4">
+                        No matching relatives
+                      </p>
+                    ) : (
+                      filteredDirectory.map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => selectContactFromDirectory(u)}
+                          className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
+                        >
+                          <Avatar src={u.image} name={u.name} size="sm" />
+                          <span className="text-sm text-slate-700 truncate">{u.name}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -233,28 +316,38 @@ function MessagesContent() {
       <div className="flex-1 flex flex-col">
         {selectedContact ? (
           <>
-            {/* Chat header */}
             <div className="h-16 bg-white border-b border-slate-200 px-6 flex items-center gap-4">
               <Avatar
                 src={selectedContact.image}
                 name={selectedContact.name || 'User'}
                 size="md"
               />
-              <div>
+              <div className="flex-1">
                 <h2 className="font-semibold text-slate-900">
                   {selectedContact.name}
                 </h2>
-                <p className="text-xs text-maroon-600">Online</p>
+                <p className="text-xs text-maroon-600">Family member</p>
               </div>
+
+              {whatsappUrl && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  title={`Open WhatsApp chat with ${selectedContact.name}`}
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  WhatsApp
+                </a>
+              )}
             </div>
 
-            {/* Messages */}
             <MessageList
               messages={messages}
               currentUserId={user?.id || ''}
             />
 
-            {/* Input */}
             <MessageInput onSend={handleSendMessage} />
           </>
         ) : (
@@ -267,7 +360,8 @@ function MessagesContent() {
                 Your Messages
               </h2>
               <p className="text-slate-500 max-w-sm">
-                Select a conversation from the sidebar or start a new one with a family member.
+                Select a conversation, or open the family directory in the sidebar to message any
+                relative who has joined the platform.
               </p>
             </div>
           </div>

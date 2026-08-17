@@ -41,6 +41,20 @@ export async function GET(request: NextRequest) {
           childRelations: true,
           spouseRelations1: true,
           spouseRelations2: true,
+          // Surface linked-account info so the messages page can render WhatsApp
+          // buttons only when the relative has opted in and provided a phone.
+          // `role` is included so the UI can keep account names for admins
+          // while showing the tree-profile name for everyone else.
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              phone: true,
+              whatsappOptIn: true,
+              role: true,
+            },
+          },
         },
         orderBy: { firstName: 'asc' },
         skip: (page - 1) * limit,
