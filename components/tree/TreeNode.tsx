@@ -1,10 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
 import { useTreeViewOptional } from './TreeViewContext';
-import { ChevronDown, ChevronRight, ChevronUp, Heart, Plus, UserPlus, Users, AlertCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Heart,
+  Plus,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 
 export interface TreeNodeExportFields {
   photo?: boolean;
@@ -19,22 +28,14 @@ interface TreeNodeProps {
   onAddChild?: (parentId: string) => void;
   onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
-  /** Kept on the prop type only for backwards-compat with existing callers. */
   onViewBirthFamily?: (personId: string, maidenName?: string) => void;
   expandedNodes: Set<string>;
   toggleExpanded: (nodeId: string) => void;
   level: number;
   isRoot?: boolean;
   readOnly?: boolean;
-  /**
-   * When true, render a clean, non-interactive version suitable for PNG/PDF
-   * export: hides Add buttons, expand/collapse chevrons, status dots, and
-   * forces all descendants visible (subject to maxLevels).
-   */
   exportMode?: boolean;
-  /** Which fields to include in exportMode. Defaults to name + photo. */
   exportFields?: TreeNodeExportFields;
-  /** Cap rendered depth in export mode. Undefined = render every descendant. */
   maxLevels?: number;
 }
 
@@ -54,342 +55,216 @@ export function TreeNode({
   exportFields,
   maxLevels,
 }: TreeNodeProps) {
-  const exportLevelOk =
-    typeof maxLevels !== 'number' || level + 1 < maxLevels;
-  const hasChildren =
-    !!node.children && node.children.length > 0 && (!exportMode || exportLevelOk);
-  const isExpanded = exportMode ? true : expandedNodes.has(node.id);
-  // In export mode, suppress all editing affordances regardless of the readOnly prop.
-  const effectiveReadOnly = exportMode || readOnly;
-
-  const getGenderColor = (gender?: string) => {
-    switch (gender) {
-      case 'MALE':
-        return 'border-slate-200 bg-white ring-1 ring-inset ring-sky-200/70';
-      case 'FEMALE':
-        return 'border-slate-200 bg-white ring-1 ring-inset ring-maroon-200/60';
-      default:
-        return 'border-slate-200 bg-white';
-    }
-  };
-
-  const getStatusIndicator = (isLiving?: boolean) => {
-    if (!isLiving) {
-      return (
-        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-slate-400 rounded-full border-2 border-white flex items-center justify-center">
-          <span className="text-white text-[8px]">†</span>
-        </div>
-      );
-    }
-    return (
-      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white" />
-    );
-  };
-
-  // Get all spouses (multiple wives/husbands support)
-  const allSpouses = node.spouses || (node.spouse ? [node.spouse] : []);
-  const hasMultipleSpouses = allSpouses.length > 1;
-
-  // Check if a spouse has birth family info
-  const checkBirthFamily = (spouse: TreeNodeType) => 
-    spouse.attributes?.maidenName && spouse.attributes.maidenName !== spouse.lastName;
-
-  // Get marriage order label
-  const getMarriageLabel = (order?: number, totalSpouses?: number) => {
-    if (!order || !totalSpouses || totalSpouses <= 1) return null;
-    const ordinalSuffixes = ['', '1st', '2nd', '3rd', '4th', '5th'];
-    return ordinalSuffixes[order] || `${order}th`;
-  };
-
   const treeView = useTreeViewOptional();
-  // In normal mode, show all card fields. In exportMode, gate by exportFields.
+  const [branchMenuFor, setBranchMenuFor] = useState<string | null>(null);
+
+  const exportLevelOk = typeof maxLevels !== 'number' || level + 1 < maxLevels;
+  const hasChildren = Boolean(node.children?.length) && (!exportMode || exportLevelOk);
+  const isExpanded = exportMode ? true : expandedNodes.has(node.id);
+  const effectiveReadOnly = exportMode || readOnly;
   const showPhoto = exportMode ? exportFields?.photo !== false : true;
   const showDates = exportMode ? exportFields?.dates === true : true;
 
-  // Person Card Component
-  const PersonCard = ({ person, isSpouse = false, marriageOrder, totalSpouses }: { 
-    person: TreeNodeType | SpouseNode; 
-    isSpouse?: boolean;
+  const allSpouses = node.spouses || (node.spouse ? [node.spouse] : []);
+  const hasMultipleSpouses = allSpouses.length > 1;
+
+  const runAction = (action: ((id: string) => void) | undefined, personId: string) => {
+    setBranchMenuFor(null);
+    action?.(personId);
+  };
+
+  const PersonCard = ({
+    person,
+    spouse = false,
+    marriageOrder,
+    totalSpouses,
+  }: {
+    person: TreeNodeType | SpouseNode;
+    spouse?: boolean;
     marriageOrder?: number;
     totalSpouses?: number;
   }) => {
-    const spouseHasBirthFamily = isSpouse && checkBirthFamily(person);
-    const marriageLabel = getMarriageLabel(marriageOrder, totalSpouses);
-    
+    const menuOpen = branchMenuFor === person.id;
+    const birthYear = person.attributes?.birthYear;
+    const deathYear = person.attributes?.deathYear;
+    const maidenName = spouse && person.attributes?.maidenName && person.attributes.maidenName !== person.lastName
+      ? person.attributes.maidenName
+      : null;
+    const marriageLabel = marriageOrder && totalSpouses && totalSpouses > 1
+      ? `${marriageOrder}${marriageOrder === 1 ? 'st' : marriageOrder === 2 ? 'nd' : marriageOrder === 3 ? 'rd' : 'th'}`
+      : null;
+
     return (
-    <button
-      type="button"
-      data-clickable="true"
-      onClick={(e) => {
-        e.stopPropagation();
-        if (treeView?.consumeIfSuppressClick()) return;
-        onNodeClick(person);
-      }}
-      className={clsx(
-        'relative bg-white rounded-xl p-3 shadow-md border-2 transition-all duration-200 min-w-[120px]',
-        'hover:shadow-lg hover:scale-[1.02] cursor-pointer',
-        isRoot && !isSpouse && 'ring-2 ring-maroon-300 ring-offset-2',
-        getGenderColor(person.gender)
-      )}
-    >
-      {/* Root badge */}
-      {isRoot && !isSpouse && (
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-maroon-500 text-white text-[9px] font-semibold rounded-full">
-          Root
-        </div>
-      )}
-
-      {/* Quiet unverified indicator — small outline dot in the corner instead of a banner */}
-      {person.isVerified === false && (
-        <div
-          className="absolute -top-1.5 -left-1.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-white text-amber-500 ring-1 ring-amber-300"
-          title="Recently added — pending review"
-          aria-label="Recently added"
+      <div className="relative">
+        <button
+          type="button"
+          data-clickable="true"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (treeView?.consumeIfSuppressClick()) return;
+            onNodeClick(person);
+          }}
+          className={clsx(
+            'relative flex min-h-[112px] min-w-[210px] items-center gap-3 rounded-xl border bg-gradient-to-br from-[#fffefa] to-[#fffaf5] px-4 py-3 text-left shadow-[0_8px_22px_-14px_rgba(67,43,31,0.32)] transition-all duration-200',
+            'hover:-translate-y-0.5 hover:border-[#caa995] hover:shadow-[0_12px_28px_-14px_rgba(67,43,31,0.38)]',
+            isRoot && !spouse ? 'border-maroon-500/70 ring-1 ring-maroon-500/10' : 'border-[#dfd2c6]'
+          )}
         >
-          <AlertCircle className="h-3 w-3" aria-hidden />
-        </div>
-      )}
+          {isRoot && !spouse && (
+            <span className="absolute -top-2.5 left-4 rounded-md bg-maroon-500 px-3 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-white shadow-sm">
+              Root
+            </span>
+          )}
 
-      {/* Marriage order badge for multiple spouses */}
-      {isSpouse && marriageLabel && (
-        <div className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[8px] font-bold rounded-full z-10">
-          {marriageLabel}
-        </div>
-      )}
+          {person.isVerified === false && !exportMode && (
+            <span
+              className="absolute -left-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#fffdf9] text-amber-600 ring-1 ring-amber-300"
+              title="Recently added — pending review"
+              aria-label="Recently added"
+            >
+              <AlertCircle className="h-3 w-3" />
+            </span>
+          )}
 
-      {/* Maiden name as a quiet "née ___" label — no longer a clickable link to a separate tree.
-          Spouse parents now grow the same tree horizontally via the standard Add Parent flow. */}
-      {spouseHasBirthFamily && (
-        <div
-          className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-purple-100 px-2 py-0.5 text-[8px] font-medium text-purple-700 ring-1 ring-purple-200"
-          title={`Maiden name: ${person.attributes?.maidenName}`}
-        >
-          née {person.attributes?.maidenName}
-        </div>
-      )}
+          {spouse && marriageLabel && (
+            <span className="absolute -right-2 -top-2 rounded-full bg-[#b68862] px-1.5 py-0.5 text-[8px] font-bold text-white">
+              {marriageLabel}
+            </span>
+          )}
 
-      {showPhoto && (
-        <div className="relative mx-auto w-fit">
-          <Avatar
-            src={person.profileImage}
-            name={person.name}
-            size="lg"
-            className="ring-2 ring-white shadow-sm"
-          />
-          {!exportMode && getStatusIndicator(person.isLiving)}
-        </div>
-      )}
+          {showPhoto && (
+            <div className="relative shrink-0">
+              <Avatar
+                src={person.profileImage}
+                name={person.name}
+                size="lg"
+                className="ring-4 ring-[#f3ebe4] shadow-sm"
+              />
+              {!exportMode && (
+                <span
+                  className={clsx(
+                    'absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#fffefa]',
+                    person.isLiving ? 'bg-emerald-500' : 'bg-[#9d958f]'
+                  )}
+                  title={person.isLiving ? 'Living' : 'Deceased'}
+                />
+              )}
+            </div>
+          )}
 
-      <div className={clsx('text-center', showPhoto ? 'mt-2' : 'mt-0')}>
-        <p className="font-semibold text-slate-800 text-sm leading-tight">
-          {person.firstName}
-        </p>
-        <p className="text-slate-500 text-xs">{person.lastName}</p>
-        {showDates && person.attributes?.birthYear && (
-          <p className="text-slate-400 text-[10px] mt-0.5">
-            {person.attributes.birthYear}
-            {person.attributes.deathYear && ` - ${person.attributes.deathYear}`}
-          </p>
-        )}
-        {showDates && isSpouse && 'marriageDate' in person && person.marriageDate && (
-          <p className="text-slate-400 text-[9px] mt-0.5">
-            m. {new Date(person.marriageDate).getFullYear()}
-          </p>
-        )}
-        {exportMode && exportFields?.occupation && person.attributes?.occupation && (
-          <p className="text-slate-400 text-[10px] mt-0.5 italic">
-            {person.attributes.occupation}
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="font-serif text-[15px] font-semibold leading-tight text-[#382a24]">{person.firstName}</p>
+            <p className="mt-0.5 font-serif text-[13px] text-[#66564d]">{person.lastName}</p>
+            {showDates && birthYear && (
+              <p className="mt-1.5 text-[10px] text-[#95877e]">
+                {birthYear}{deathYear ? ` – ${deathYear}` : ' –'}
+              </p>
+            )}
+            {spouse && 'marriageDate' in person && person.marriageDate && (
+              <p className="mt-0.5 text-[9px] text-[#aa9d94]">m. {new Date(person.marriageDate).getFullYear()}</p>
+            )}
+            {maidenName && (
+              <p className="mt-1 truncate text-[9px] italic text-[#9c7868]">née {maidenName}</p>
+            )}
+            {exportMode && exportFields?.occupation && person.attributes?.occupation && (
+              <p className="mt-1 text-[9px] italic text-[#95877e]">{person.attributes.occupation}</p>
+            )}
+          </div>
+        </button>
+
+        {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent) && (
+          <div className="absolute -bottom-3 -right-3 z-40" data-clickable="true">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setBranchMenuFor((current) => current === person.id ? null : person.id);
+              }}
+              className="grid h-8 w-8 place-items-center rounded-full border-2 border-[#fffdf9] bg-maroon-500 text-white shadow-md transition hover:bg-maroon-600"
+              aria-label={`Add a family branch from ${person.firstName}`}
+              title="Add family branch"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-10 z-50 w-40 overflow-hidden rounded-xl border border-[#dfd2c6] bg-[#fffdf9] p-1.5 shadow-xl">
+                {onAddChild && (
+                  <BranchAction icon={<UserPlus className="h-3.5 w-3.5" />} label="Add child" onClick={() => runAction(onAddChild, person.id)} />
+                )}
+                {onAddSpouse && (
+                  <BranchAction icon={<Heart className="h-3.5 w-3.5" />} label="Add spouse" onClick={() => runAction(onAddSpouse, person.id)} />
+                )}
+                {onAddParent && (
+                  <BranchAction icon={<Users className="h-3.5 w-3.5" />} label="Add parent" onClick={() => runAction(onAddParent, person.id)} />
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
-    </button>
-  );
+    );
   };
 
   return (
     <div className="flex flex-col items-center">
-      {/* Add Parent button - only shown at root level in edit mode */}
-      {isRoot && onAddParent && !effectiveReadOnly && (
-        <div className="flex flex-col items-center mb-3">
-          <button
-            type="button"
-            onClick={() => onAddParent(node.id)}
-            className="flex min-h-[40px] items-center gap-1.5 rounded-lg bg-maroon-500 px-3 py-2 text-xs font-medium text-white shadow transition-all hover:bg-maroon-600"
-            aria-label={`Add parent to ${node.firstName}`}
-          >
-            <ChevronUp className="h-3 w-3" aria-hidden />
-            <Users className="h-3 w-3" aria-hidden />
-            Add Parent
-          </button>
-          {/* SVG connector down */}
-          <svg width="2" height="16" className="mt-1" aria-hidden>
-            <line x1="1" y1="0" x2="1" y2="16" stroke="#9f1239" strokeWidth="2" />
-          </svg>
-        </div>
-      )}
+      <div className="flex items-center gap-3">
+        <PersonCard person={node} />
 
-      {/* Couple container - supports multiple spouses */}
-      <div className="flex items-center gap-2">
-        {/* Main person */}
-        <div className="relative">
-          <PersonCard person={node} />
-          {/* Add child button on hover - hidden in read-only mode */}
-          {!effectiveReadOnly && onAddChild && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddChild(node.id);
-              }}
-              className="absolute -right-1 top-1/2 flex min-h-[28px] min-w-[28px] -translate-y-1/2 items-center justify-center rounded-full bg-maroon-500 p-1.5 text-white shadow transition-opacity hover:bg-maroon-600"
-              title="Add child"
-              aria-label={`Add a child to ${node.firstName}`}
-            >
-              <UserPlus className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          )}
-        </div>
-
-        {/* Render all spouses with marriage connectors */}
         {allSpouses.map((spouse, index) => (
           <div key={spouse.id} className="flex items-center">
-            {/* Marriage connector */}
             <div className="flex items-center" aria-hidden>
-              <svg width="20" height="2" aria-hidden>
-                <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
-              </svg>
-              <div className="relative">
-                <Heart className="w-5 h-5 text-maroon-500 mx-0.5" fill="currentColor" />
-                {/* Show marriage number if multiple spouses */}
-                {hasMultipleSpouses && (
-                  <span className="absolute -top-1 -right-1 text-[8px] font-bold text-maroon-700">
-                    {index + 1}
-                  </span>
-                )}
-              </div>
-              <svg width="20" height="2" aria-hidden>
-                <line x1="0" y1="1" x2="20" y2="1" stroke="#94a3b8" strokeWidth="2" />
-              </svg>
+              <span className="h-px w-6 bg-[#cbb7a5]" />
+              <span className="mx-1 grid h-6 w-6 place-items-center rounded-full bg-[#fffdf9] text-maroon-500 ring-1 ring-[#ddcfc4]">
+                <Heart className="h-3.5 w-3.5" fill="currentColor" />
+                {hasMultipleSpouses && <span className="sr-only">Marriage {index + 1}</span>}
+              </span>
+              <span className="h-px w-6 bg-[#cbb7a5]" />
             </div>
-            {/* Spouse column: optional "Add parents" pill above the card, then the card itself.
-                This is how relatives grow the tree horizontally with the spouse's parents,
-                in the SAME tree. */}
-            <div className="flex flex-col items-center">
-              {!effectiveReadOnly && onAddParent && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddParent(spouse.id);
-                  }}
-                  className="mb-1.5 inline-flex min-h-[28px] items-center gap-1 rounded-full border border-maroon-200 bg-white px-2.5 py-1 text-[10px] font-medium text-maroon-700 shadow-sm transition-colors hover:bg-maroon-50 active:bg-maroon-100"
-                  aria-label={`Add ${spouse.firstName}'s parents to the tree`}
-                  title={`Add ${spouse.firstName}'s parents`}
-                >
-                  <ChevronUp className="h-3 w-3" aria-hidden />
-                  Add parents
-                </button>
-              )}
-              <PersonCard
-                person={spouse}
-                isSpouse
-                marriageOrder={'marriageOrder' in spouse ? (spouse.marriageOrder as number) : index + 1}
-                totalSpouses={allSpouses.length}
-              />
-            </div>
+            <PersonCard
+              person={spouse}
+              spouse
+              marriageOrder={
+                'marriageOrder' in spouse && typeof spouse.marriageOrder === 'number'
+                  ? spouse.marriageOrder
+                  : index + 1
+              }
+              totalSpouses={allSpouses.length}
+            />
           </div>
         ))}
-
-        {/* Add spouse button - hidden in read-only mode */}
-        {!effectiveReadOnly && onAddSpouse && (
-          <div className="flex items-center">
-            <svg width="16" height="2" aria-hidden>
-              <line x1="0" y1="1" x2="16" y2="1" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
-            </svg>
-            <button
-              type="button"
-              onClick={() => onAddSpouse(node.id)}
-              className={clsx(
-                'flex flex-col items-center justify-center rounded-xl border-2 border-dashed bg-slate-50/50 transition-colors',
-                'hover:border-maroon-400 hover:text-maroon-500 active:bg-slate-100',
-                allSpouses.length === 0
-                  ? 'h-[100px] w-[100px] border-slate-300 text-slate-400'
-                  : 'h-14 w-14 border-slate-200 text-slate-300'
-              )}
-              title={allSpouses.length > 0 ? 'Add another spouse' : 'Add spouse'}
-              aria-label={
-                allSpouses.length > 0
-                  ? `Add another spouse to ${node.firstName}`
-                  : `Add spouse to ${node.firstName}`
-              }
-            >
-              <Plus className={allSpouses.length === 0 ? 'h-4 w-4' : 'h-3 w-3'} aria-hidden />
-              {allSpouses.length === 0 && <span className="mt-1 text-[10px]">Spouse</span>}
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Children section */}
       {hasChildren && (
         <div className="flex flex-col items-center">
-          {/* Vertical line down from couple */}
-          <svg width="2" height="20" aria-hidden>
-            <line x1="1" y1="0" x2="1" y2="20" stroke="#9f1239" strokeWidth="2" />
-          </svg>
+          <span className="h-5 w-px bg-maroon-500/70" aria-hidden />
 
-          {/* Expand/collapse button — sized for touch (hidden in export mode) */}
           {!exportMode && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
                 toggleExpanded(node.id);
               }}
-              className="z-10 flex h-8 min-w-[2rem] items-center justify-center rounded-full border-2 border-maroon-300 bg-white shadow transition-colors hover:bg-maroon-50 active:bg-maroon-100"
+              className="z-10 grid h-8 w-8 place-items-center rounded-full border border-maroon-300/70 bg-[#fffdf9] text-maroon-600 shadow-sm transition hover:bg-[#fff6f0]"
               aria-expanded={isExpanded}
-              aria-label={
-                isExpanded
-                  ? `Collapse ${node.firstName}'s descendants`
-                  : `Expand ${node.firstName}'s descendants`
-              }
+              aria-label={isExpanded ? `Collapse ${node.firstName}'s descendants` : `Expand ${node.firstName}'s descendants`}
             >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4 text-maroon-600" aria-hidden />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-maroon-600" aria-hidden />
-              )}
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </button>
           )}
 
           {isExpanded && (
             <>
-              {/* Vertical line from button to horizontal bar */}
-              <svg width="2" height="16" aria-hidden>
-                <line x1="1" y1="0" x2="1" y2="16" stroke="#9f1239" strokeWidth="2" />
-              </svg>
-
-              {/* Children with connectors */}
+              <span className="h-4 w-px bg-maroon-500/70" aria-hidden />
               <div className="relative">
-                {/* Horizontal connector bar - spans all children */}
                 {node.children!.length > 1 && (
-                  <svg 
-                    className="absolute top-0 left-0 right-0" 
-                    height="2" 
-                    style={{ width: '100%' }}
-                   aria-hidden>
-                    <line x1="0" y1="1" x2="100%" y2="1" stroke="#9f1239" strokeWidth="2" />
-                  </svg>
+                  <div className="absolute left-0 right-0 top-0 h-px bg-maroon-500/65" aria-hidden />
                 )}
-
-                {/* Children nodes */}
-                <div className="flex items-start pt-0" style={{ gap: '32px' }}>
-                  {node.children!.map((child, index) => (
+                <div className="flex items-start gap-10">
+                  {node.children!.map((child) => (
                     <div key={child.id} className="flex flex-col items-center">
-                      {/* Vertical connector from horizontal bar to child */}
-                      <svg width="2" height="24" aria-hidden>
-                        <line x1="1" y1="0" x2="1" y2="24" stroke="#9f1239" strokeWidth="2" />
-                      </svg>
+                      <span className="h-6 w-px bg-maroon-500/65" aria-hidden />
                       <TreeNode
                         node={child}
                         onNodeClick={onNodeClick}
@@ -413,24 +288,22 @@ export function TreeNode({
           )}
         </div>
       )}
-
-      {/* Add child button when no children - hidden in read-only mode */}
-      {!hasChildren && level < 4 && !effectiveReadOnly && onAddChild && (
-        <div className="flex flex-col items-center mt-2">
-          <svg width="2" height="12" aria-hidden>
-            <line x1="1" y1="0" x2="1" y2="12" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 2" />
-          </svg>
-          <button
-            type="button"
-            onClick={() => onAddChild(node.id)}
-            className="flex h-14 w-14 flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/50 text-slate-400 transition-colors hover:border-maroon-400 hover:text-maroon-500 active:bg-slate-100"
-            aria-label={`Add a child to ${node.firstName}`}
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            <span className="text-[9px]">Child</span>
-          </button>
-        </div>
-      )}
     </div>
+  );
+}
+
+function BranchAction({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-[#604b40] transition hover:bg-[#f7efe8] hover:text-maroon-700"
+    >
+      <span className="text-[#9a6b56]">{icon}</span>
+      {label}
+    </button>
   );
 }

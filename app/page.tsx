@@ -1,43 +1,41 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
+import { clsx } from 'clsx';
+import {
+  ArrowRight,
+  BookOpen,
+  Contact,
+  Heart,
+  Images,
+  LayoutGrid,
+  List as ListIcon,
+  Loader2,
+  Maximize2,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Share2,
+  TreePine,
+  User,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react';
+
 import { FamilyTree } from '@/components/tree';
 import { CanonicalRootPrompt } from '@/components/tree/CanonicalRootPrompt';
 import { FamilyGallerySection } from '@/components/gallery';
 import { PageScrollNav } from '@/components/shared';
-import { PeopleListView, PeopleDirectoryView, type PersonExtras } from '@/components/people';
-import { TreeNode, PersonWithRelations, PersonWithImage } from '@/types';
+import { PeopleDirectoryView, PeopleListView, type PersonExtras } from '@/components/people';
 import { flattenTree } from '@/lib/tree-utils';
-import {
-  TreePine,
-  Users,
-  Heart,
-  ArrowRight,
-  LogIn,
-  UserPlus,
-  Loader2,
-  AlertCircle,
-  Crown,
-  Calendar,
-  MapPin,
-  Maximize2,
-  X,
-  User,
-  Briefcase,
-  BookOpen,
-  BookMarked,
-  Images,
-  LayoutGrid,
-  List as ListIcon,
-  Contact,
-} from 'lucide-react';
-import { clsx } from 'clsx';
+import type { PersonWithImage, PersonWithRelations, TreeNode } from '@/types';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 interface FamilyTreePreview {
   id: string;
@@ -66,17 +64,61 @@ interface TreeStats {
   youngestLiving: { name: string; birthYear: number } | null;
 }
 
+type RelationshipRow = {
+  id: string;
+  name: string;
+  label: string;
+  image?: string | null;
+};
+
+function personYears(person: PersonWithRelations) {
+  const birth = person.birthDate ? new Date(person.birthDate).getFullYear() : null;
+  const death = person.deathDate ? new Date(person.deathDate).getFullYear() : null;
+  if (!birth && !death) return null;
+  return `${birth ?? '?'}${death ? ` – ${death}` : ' –'}`;
+}
+
+function relationshipsFor(person: PersonWithRelations): RelationshipRow[] {
+  const rows: RelationshipRow[] = [];
+  const push = (candidate: PersonWithImage | null | undefined, label: string) => {
+    if (!candidate) return;
+    rows.push({
+      id: candidate.id,
+      name: `${candidate.firstName} ${candidate.lastName}`,
+      label,
+      image: candidate.profileImage?.url,
+    });
+  };
+
+  for (const relation of person.spouseRelations1 ?? []) {
+    push(relation.spouse1Id === person.id ? relation.spouse2 : relation.spouse1, 'Spouse');
+  }
+  for (const relation of person.spouseRelations2 ?? []) {
+    push(relation.spouse2Id === person.id ? relation.spouse1 : relation.spouse2, 'Spouse');
+  }
+  for (const relation of person.parentRelations ?? []) push(relation.parent, 'Parent');
+  for (const relation of person.childRelations ?? []) push(relation.child, 'Child');
+
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = `${row.label}:${row.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export default function HomePage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const isAuthenticated = status === 'authenticated';
 
-  const [selectedPerson, setSelectedPerson] = useState<PersonWithRelations | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  /** Home page main view. Tabs only render when signed in. */
   const [activeView, setActiveView] = useState<'tree' | 'list' | 'directory'>('tree');
+  const [selectedPerson, setSelectedPerson] = useState<PersonWithRelations | null>(null);
+  const [selectedPersonLoading, setSelectedPersonLoading] = useState(false);
+  const [profileOpenMobile, setProfileOpenMobile] = useState(false);
+  const [shareComplete, setShareComplete] = useState(false);
 
-  // 1. Fetch families to get primaryFamilyId
   const { data: familiesData, isLoading: familiesLoading } = useSWR<{
     success: boolean;
     data: {
@@ -87,12 +129,11 @@ export default function HomePage() {
   }>('/api/families', fetcher, { revalidateOnFocus: false });
 
   const primaryFamily = familiesData?.data?.families.find(
-    (f) => f.id === familiesData?.data?.primaryFamilyId
+    (family) => family.id === familiesData?.data?.primaryFamilyId
   );
   const stats = familiesData?.data?.stats;
-
-  // 2. Fetch tree data for the primary family
   const primaryId = familiesData?.data?.primaryFamilyId;
+
   const { data: treeData, isLoading: treeLoading } = useSWR<{
     success: boolean;
     data: {
@@ -111,14 +152,11 @@ export default function HomePage() {
     };
   }>(primaryId ? `/api/tree?rootId=${primaryId}` : null, fetcher, { revalidateOnFocus: false });
 
-  const tree = treeData?.data?.tree || null;
-  const familyName = primaryFamily?.familyName || treeData?.data?.familyName || 'Family Tree';
-  const ancestor = treeData?.data?.foundingAncestor || primaryFamily?.foundingAncestor;
+  const tree = treeData?.data?.tree ?? null;
+  const familyName = primaryFamily?.familyName || treeData?.data?.familyName || 'Family';
+  const ancestor = treeData?.data?.foundingAncestor || primaryFamily?.foundingAncestor || null;
+  const treeExploreHref = primaryId ? `/tree?rootId=${primaryId}` : '/tree';
 
-  /**
-   * Pull every person record (incl. birthPlace/occupation) only when a signed-in
-   * visitor switches to List or Directory. Keeps anonymous loads light.
-   */
   const shouldLoadExtras = isAuthenticated && (activeView === 'list' || activeView === 'directory');
   const { data: personsData } = useSWR<{
     success: boolean;
@@ -127,579 +165,281 @@ export default function HomePage() {
 
   const flatPeople = useMemo(() => flattenTree(tree), [tree]);
   const extrasMap = useMemo(() => {
-    const m = new Map<string, PersonExtras>();
-    for (const p of personsData?.data?.items ?? []) {
-      m.set(p.id, { birthPlace: p.birthPlace, occupation: p.occupation });
+    const map = new Map<string, PersonExtras>();
+    for (const person of personsData?.data?.items ?? []) {
+      map.set(person.id, { birthPlace: person.birthPlace, occupation: person.occupation });
     }
-    return m;
+    return map;
   }, [personsData]);
 
-  const handlePersonClick = async (personId: string) => {
+  const openPerson = useCallback(async (personId: string, openMobile = false) => {
+    setSelectedPersonLoading(true);
     try {
       const response = await fetch(`/api/persons/${personId}`);
       const result = await response.json();
       if (result.success) {
         setSelectedPerson(result.data);
-        setIsModalOpen(true);
+        if (openMobile) setProfileOpenMobile(true);
       }
-    } catch (e) {
-      console.error('Error fetching person:', e);
+    } catch (error) {
+      console.error('Error fetching person:', error);
+    } finally {
+      setSelectedPersonLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    setSelectedPerson(null);
+    setProfileOpenMobile(false);
+  }, [primaryId]);
+
+  useEffect(() => {
+    if (!selectedPerson && ancestor?.id) void openPerson(ancestor.id);
+  }, [ancestor?.id, openPerson, selectedPerson]);
+
+  const handleNodeClick = (node: TreeNode) => void openPerson(node.id, true);
+  const handlePersonClick = (personId: string) => void openPerson(personId, true);
+
+  const routeToContribution = (url: string) => {
+    if (isAuthenticated) {
+      router.push(url);
+      return;
+    }
+    router.push(`/login?callbackUrl=${encodeURIComponent(url)}`);
   };
 
-  const handleNodeClick = async (node: TreeNode) => {
+  const handleAddChild = (parentId: string) => routeToContribution(`/add-person?parentId=${parentId}`);
+  const handleAddSpouse = (personId: string) => routeToContribution(`/add-person?spouseId=${personId}`);
+  const handleAddParent = (childId: string) => routeToContribution(`/add-person?childId=${childId}`);
+
+  const handleShare = async () => {
+    if (typeof window === 'undefined') return;
     try {
-      const response = await fetch(`/api/persons/${node.id}`);
-      const result = await response.json();
-      if (result.success) {
-        setSelectedPerson(result.data);
-        setIsModalOpen(true);
+      if (navigator.share) {
+        await navigator.share({ title: `${familyName} Family Tree`, url: window.location.href });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(window.location.href);
       }
-    } catch (err) {
-      console.error('Error fetching person:', err);
+      setShareComplete(true);
+      window.setTimeout(() => setShareComplete(false), 1800);
+    } catch {
+      // User cancelled the native share sheet.
     }
   };
 
-  const isLoading = familiesLoading || (primaryId && treeLoading);
-  const hasNoData = !familiesLoading && (!familiesData?.data?.families?.length);
-
-  const treeExploreHref = primaryId ? `/tree?rootId=${primaryId}` : '/tree';
+  const isLoading = familiesLoading || Boolean(primaryId && treeLoading);
+  const hasNoData = !familiesLoading && !familiesData?.data?.families?.length;
+  const relationships = selectedPerson ? relationshipsFor(selectedPerson) : [];
 
   return (
-    <div className="min-h-screen bg-[#faf9f7] text-slate-900">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-maroon-900/10 bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_-12px_rgba(101,26,26,0.12)]">
-        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3 h-14 sm:h-16">
-            <Link href="/" className="flex items-center gap-2 min-w-0 shrink">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-maroon-600 to-maroon-800 rounded-lg flex items-center justify-center shadow-md shadow-maroon-900/20 ring-1 ring-white/20">
-                <TreePine className="w-[18px] h-[18px] sm:w-5 sm:h-5 text-white" />
-              </div>
-              <span className="font-semibold text-sm sm:text-base tracking-tight text-slate-900 truncate max-w-[10rem] sm:max-w-[14rem]">
-                {familyName}
-              </span>
-            </Link>
+    <div className="min-h-screen bg-[#fbf9f5] text-[#2a211d]">
+      <nav className="fixed inset-x-0 top-0 z-50 border-b border-[#e8dfd6] bg-[#fffdf9]/95 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px_10px_14px_14px] bg-maroon-500 text-white shadow-sm">
+              <TreePine className="h-5 w-5" />
+            </span>
+            <span className="hidden truncate font-serif text-sm font-bold tracking-[0.16em] text-[#3a2722] sm:block">
+              {familyName.toUpperCase()}
+            </span>
+          </Link>
 
-            {/* Center — discover links */}
-            <div className="hidden md:flex items-center justify-center flex-1 gap-0.5 lg:gap-1 px-2 min-w-0">
-              <Link
-                href="/wiki"
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
-              >
-                <BookOpen className="w-3.5 h-3.5 opacity-70" />
-                Wiki
-              </Link>
-              <Link
-                href="/wiki"
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
-              >
-                <BookMarked className="w-3.5 h-3.5 opacity-70" />
-                Stories
-              </Link>
-              <Link
-                href="/gallery"
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
-              >
-                <Images className="w-3.5 h-3.5 opacity-70" />
-                Gallery
-              </Link>
-              <Link
-                href={treeExploreHref}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs lg:text-sm font-medium text-slate-600 hover:text-maroon-800 hover:bg-maroon-50/80 transition-colors"
-              >
-                <TreePine className="w-3.5 h-3.5 opacity-70" />
-                Full tree
-              </Link>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              {isAuthenticated ? (
-                <>
-                  <Link
-                    href="/add-person"
-                    className="text-xs sm:text-sm bg-maroon-500 text-white px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
-                  >
-                    Add Person
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/login"
-                    className="text-xs sm:text-sm text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1.5 transition-colors"
-                  >
-                    <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Sign In</span>
-                  </Link>
-                  <Link
-                    href="/register"
-                    className="text-xs sm:text-sm bg-maroon-500 text-white px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm flex items-center gap-1.5"
-                  >
-                    <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    Join
-                  </Link>
-                </>
-              )}
-            </div>
+          <div className="hidden h-full items-stretch md:flex">
+            <TopNavLink href="#family-tree" active icon={<TreePine className="h-4 w-4" />}>Tree</TopNavLink>
+            <TopNavLink href="/wiki" icon={<BookOpen className="h-4 w-4" />}>Stories</TopNavLink>
+            <TopNavLink href="/gallery" icon={<Images className="h-4 w-4" />}>Gallery</TopNavLink>
+            <TopNavLink href="/wiki" icon={<BookOpen className="h-4 w-4" />}>Family History</TopNavLink>
           </div>
 
-          {/* Mobile discover row */}
-          <div className="md:hidden flex items-center justify-center gap-1 pb-2 -mt-0.5 overflow-x-auto">
-            <Link href="/wiki" className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-              Wiki
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href={treeExploreHref}
+              className="hidden h-9 items-center gap-2 rounded-lg border border-[#e5d9ce] bg-white px-3 text-xs text-[#7a6a61] shadow-sm lg:flex"
+            >
+              <Search className="h-4 w-4" />
+              Search people...
             </Link>
-            <Link href="/wiki" className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-              Stories
-            </Link>
-            <Link href="/gallery" className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-              Gallery
-            </Link>
-            <Link href={treeExploreHref} className="shrink-0 rounded-full bg-white/80 border border-slate-200/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-              Full tree
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/add-person"
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-maroon-600 sm:text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add Person
+              </Link>
+            ) : (
+              <Link
+                href="/register"
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-maroon-600 sm:text-sm"
+              >
+                <UserPlus className="h-4 w-4" />
+                Join
+              </Link>
+            )}
           </div>
         </div>
       </nav>
 
-      {/* Main Content */}
-      <main className="pt-28 md:pt-20">
-        {/* Hero — elegant title + subtle warmth */}
-        <section className="relative overflow-hidden border-b border-maroon-900/[0.07]">
-          <div
-            className="absolute inset-0 bg-gradient-to-br from-[#faf7f4] via-white to-[#f3ebe6]/90"
-            aria-hidden
-          />
-          <div
-            className="absolute -right-20 -top-24 h-[14rem] w-[14rem] sm:h-[18rem] sm:w-[18rem] rounded-full bg-maroon-500/[0.08] blur-3xl"
-            aria-hidden
-          />
-          <div
-            className="absolute -left-12 top-1/2 h-32 w-32 -translate-y-1/2 rounded-full bg-amber-200/[0.1] blur-2xl"
-            aria-hidden
-          />
-          <div
-            className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-maroon-800/15 to-transparent"
-            aria-hidden
-          />
+      <main className="pt-16">
+        <section className="relative overflow-hidden border-b border-[#eadfd6] bg-gradient-to-r from-[#fffdf9] via-[#fcf8f3] to-[#f7f0e9]">
+          <div className="pointer-events-none absolute right-[7%] top-1/2 hidden -translate-y-1/2 opacity-[0.075] lg:block" aria-hidden>
+            <TreePine className="h-56 w-56 text-maroon-800" strokeWidth={0.7} />
+          </div>
+          <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+            <div className="relative z-10 max-w-4xl">
+              <p className="mb-2 flex items-center gap-2 font-serif text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8b4b3e] sm:text-xs">
+                <span className="h-px w-5 bg-[#9b5b4b]" />
+                Family Heritage
+              </p>
+              <h1 className="font-serif text-3xl font-medium tracking-[-0.035em] text-[#2d231f] sm:text-4xl lg:text-5xl">
+                The <span className="font-semibold text-maroon-600">{familyName}</span> Family Tree
+              </h1>
+              <p className="mt-2 max-w-xl font-serif text-sm text-[#796c64] sm:text-base">
+                Preserving our family story across generations.
+              </p>
 
-          <div className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
-              <div className="min-w-0 max-w-3xl">
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-maroon-700/80 mb-2 flex items-center gap-2">
-                  <span className="inline-block h-px w-5 bg-gradient-to-r from-maroon-400/60 to-transparent" aria-hidden />
-                  <Heart className="w-3 h-3 text-maroon-500" strokeWidth={2} />
-                  Family Heritage
-                </p>
-                <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-semibold text-slate-900 tracking-tight leading-tight">
-                  The{' '}
-                  <span className="bg-gradient-to-br from-maroon-600 to-maroon-900 bg-clip-text text-transparent">
-                    {familyName}
-                  </span>{' '}
-                  <span className="text-slate-800">Family Tree</span>
-                </h1>
-                {ancestor && (
-                  <p className="text-xs sm:text-sm text-slate-600 mt-2 font-medium">
-                    Est. {ancestor.firstName} {ancestor.lastName}
-                    {(ancestor as FamilyTreePreview['foundingAncestor']).birthYear &&
-                      ` (${(ancestor as FamilyTreePreview['foundingAncestor']).birthYear})`}
-                    {(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace &&
-                      ` · ${(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace}`}
-                  </p>
-                )}
-                {treeData?.data?.foundingAncestor?.biography && (
-                  <p className="text-slate-500 text-xs sm:text-sm max-w-2xl line-clamp-2 mt-2 leading-relaxed">
-                    {treeData.data.foundingAncestor.biography}
-                  </p>
-                )}
+              <div className="mt-6 flex flex-wrap items-center gap-y-4">
+                <HeroStat icon={<Users className="h-5 w-5" />} value={String(primaryFamily?.memberCount ?? stats?.totalMembers ?? 0)} label="Family Members" />
+                <HeroStat icon={<TreePine className="h-5 w-5" />} value={String(primaryFamily?.generationCount ?? 0)} label="Generations" />
+                <HeroStat
+                  icon={<Heart className="h-5 w-5" />}
+                  value={ancestor?.birthYear ? `Est. ${ancestor.birthYear}` : 'Family record'}
+                  label="Earliest Record"
+                  last
+                />
               </div>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {primaryId && (
-                  <Link
-                    href={`/tree?rootId=${primaryId}`}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-maroon-500 to-maroon-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-maroon-900/20 ring-1 ring-white/10 transition hover:brightness-105"
-                  >
-                    <Maximize2 className="w-4 h-4 opacity-90" />
-                    View Full Tree
-                  </Link>
-                )}
-                {!isAuthenticated && (
-                  <Link
-                    href="/register"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300/90 bg-white/90 px-4 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:border-maroon-200"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Sign Up to Edit
-                  </Link>
-                )}
-                <Link
-                  href="/wiki"
-                  className="inline-flex items-center gap-2 rounded-xl border border-maroon-200/80 bg-maroon-50/50 px-4 py-2 text-sm font-medium text-maroon-900 hover:bg-maroon-50 transition-colors"
-                >
-                  <BookOpen className="w-4 h-4" />
-                  Read stories
-                </Link>
-              </div>
+            </div>
+
+            <div className="relative z-10 mt-6 flex flex-wrap items-center gap-2 lg:absolute lg:bottom-8 lg:right-8 lg:mt-0">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-white/90 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm transition hover:bg-white"
+              >
+                <Share2 className="h-4 w-4" />
+                {shareComplete ? 'Link copied' : 'Share Tree'}
+              </button>
+              <Link
+                href={treeExploreHref}
+                aria-label="Open full family tree"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfd1c5] bg-white/90 text-[#6f5d54] shadow-sm transition hover:bg-white"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         </section>
 
-        {/* One-time admin prompt to pick the canonical family root. Rendered
-            here (above the tree) so it's visible on first paint but does not
-            block scrolling to the tree itself. */}
-        <CanonicalRootPrompt />
+        <div className="mx-auto max-w-[1600px] px-4 pt-4 sm:px-6 lg:px-8">
+          <CanonicalRootPrompt />
+        </div>
 
-        {/* Tree + sidebar stats — tree is primary, stats alongside on lg+, below on mobile */}
-        <section className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:gap-8 lg:items-stretch min-h-0">
-            {/* Tree canvas — explicit height (h-*, not min-h-*) so the canvas's h-full resolves on mobile */}
-            <div className="order-1 flex min-w-0 flex-1 flex-col">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-0.5 sm:mb-3">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <TreePine className="h-4 w-4 text-maroon-600" />
-                  Family tree
-                </h2>
+        <section id="family-tree" className="mx-auto max-w-[1600px] px-3 py-5 sm:px-6 lg:px-8 lg:py-7">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1 rounded-full border border-[#e8ded4] bg-[#f3eee8] p-1 shadow-sm">
+              <ViewTab active={activeView === 'tree'} onClick={() => setActiveView('tree')} icon={<TreePine className="h-3.5 w-3.5" />} label="Tree" />
+              <ViewTab active={activeView === 'list'} onClick={() => setActiveView('list')} icon={<ListIcon className="h-3.5 w-3.5" />} label="List" disabled={!isAuthenticated} />
+              <ViewTab active={activeView === 'directory'} onClick={() => setActiveView('directory')} icon={<Contact className="h-3.5 w-3.5" />} label="Directory" disabled={!isAuthenticated} />
+            </div>
+            <div className="flex items-center gap-3">
+              {activeView === 'tree' && (
+                <span className="hidden text-xs text-[#8b7d73] sm:inline">Drag to move · Scroll or pinch to zoom</span>
+              )}
+              <Link href={treeExploreHref} className="inline-flex items-center gap-1.5 rounded-lg border border-[#e3d8cf] bg-white px-3 py-1.5 text-xs font-medium text-maroon-700 shadow-sm hover:bg-[#fffaf6]">
+                <Maximize2 className="h-3.5 w-3.5" />
+                Full tree
+              </Link>
+            </div>
+          </div>
 
-                {/* View tabs — signed-in only. */}
-                {isAuthenticated && (
-                  <div className="order-3 flex items-center gap-1 rounded-full border border-slate-200 bg-white p-0.5 shadow-sm w-full sm:order-2 sm:w-auto">
-                    <HomeViewTab
-                      active={activeView === 'tree'}
-                      onClick={() => setActiveView('tree')}
-                      icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />}
-                      label="Tree"
-                    />
-                    <HomeViewTab
-                      active={activeView === 'list'}
-                      onClick={() => setActiveView('list')}
-                      icon={<ListIcon className="h-3.5 w-3.5" aria-hidden />}
-                      label="List"
-                    />
-                    <HomeViewTab
-                      active={activeView === 'directory'}
-                      onClick={() => setActiveView('directory')}
-                      icon={<Contact className="h-3.5 w-3.5" aria-hidden />}
-                      label="Directory"
-                    />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="relative h-[min(68dvh,680px)] min-h-[500px] overflow-hidden rounded-2xl border border-[#e6dcd3] bg-[#fffdf9] shadow-[0_18px_45px_-28px_rgba(74,46,32,0.28)]">
+              {isLoading ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="text-center text-[#7e7169]">
+                    <Loader2 className="mx-auto mb-3 h-9 w-9 animate-spin text-maroon-500" />
+                    Loading family tree...
                   </div>
-                )}
-
-                <div className="order-2 ml-auto flex items-center gap-3 sm:order-3">
-                  <Link
-                    href={treeExploreHref}
-                    className="inline-flex items-center gap-1 rounded-full border border-maroon-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-maroon-800 shadow-sm hover:bg-maroon-50 sm:hidden"
-                  >
-                    <Maximize2 className="h-3 w-3" />
-                    Open full
-                  </Link>
-                  {activeView === 'tree' && (
-                    <span className="hidden text-xs text-slate-500 sm:inline">
-                      Drag to move · Scroll to zoom
-                    </span>
-                  )}
                 </div>
-              </div>
-              <div className="relative h-[min(62dvh,560px)] overflow-hidden rounded-2xl border border-maroon-900/10 bg-white shadow-[0_20px_50px_-24px_rgba(101,26,26,0.15)] ring-1 ring-maroon-900/[0.04] sm:h-[min(70dvh,720px)] lg:h-[min(82vh,960px)]">
-                {isLoading ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="text-center">
-                      <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-slate-400" />
-                      <p className="text-slate-600">Loading family tree...</p>
-                    </div>
-                  </div>
-                ) : hasNoData ? (
-                  <EmptyState isAuthenticated={isAuthenticated} />
-                ) : activeView === 'list' ? (
-                  <PeopleListView
-                    people={flatPeople}
-                    extras={extrasMap}
-                    onPersonClick={handlePersonClick}
-                  />
-                ) : activeView === 'directory' ? (
-                  <PeopleDirectoryView
-                    people={flatPeople}
-                    extras={extrasMap}
-                    onPersonClick={handlePersonClick}
-                  />
-                ) : (
-                  <FamilyTree data={tree} onNodeClick={handleNodeClick} readOnly />
-                )}
-              </div>
+              ) : hasNoData ? (
+                <EmptyState isAuthenticated={isAuthenticated} />
+              ) : activeView === 'list' ? (
+                <PeopleListView people={flatPeople} extras={extrasMap} onPersonClick={handlePersonClick} />
+              ) : activeView === 'directory' ? (
+                <PeopleDirectoryView people={flatPeople} extras={extrasMap} onPersonClick={handlePersonClick} />
+              ) : (
+                <FamilyTree
+                  data={tree}
+                  onNodeClick={handleNodeClick}
+                  onAddChild={handleAddChild}
+                  onAddSpouse={handleAddSpouse}
+                  onAddParent={handleAddParent}
+                  readOnly={!isAuthenticated}
+                />
+              )}
             </div>
 
-            {/* Stats — beside tree on lg+, below on small screens */}
-            <aside className="order-2 w-full shrink-0 lg:w-[min(100%,20rem)] lg:pt-9 xl:w-80">
-              {stats && primaryFamily ? (
-                <div className="rounded-2xl border border-maroon-900/10 bg-gradient-to-b from-white to-maroon-50/30 p-5 shadow-md lg:sticky lg:top-28 space-y-4 ring-1 ring-maroon-900/[0.05]">
-                  <h3 className="font-serif font-semibold text-slate-900 text-lg flex items-center gap-2">
-                    <TreePine className="w-5 h-5 text-maroon-600" />
-                    Family at a glance
-                  </h3>
-                  <p className="text-xs text-slate-500 -mt-1">Key numbers for this family</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <FactCard icon={Users} label="Members" value={String(primaryFamily.memberCount)} />
-                    <FactCard icon={TreePine} label="Generations" value={String(primaryFamily.generationCount)} />
-                    <FactCard icon={Heart} label="Marriages" value={String(stats.marriageCount)} />
-                    {primaryFamily.notableCount > 0 && (
-                      <FactCard icon={Crown} label="Notable" value={String(primaryFamily.notableCount)} />
-                    )}
-                  </div>
-                  {stats.oldestMember && (
-                    <div className="pt-3 border-t border-maroon-900/10">
-                      <p className="text-xs text-slate-400 mb-1">Oldest ancestor</p>
-                      <p className="text-sm font-medium text-slate-700">
-                        {stats.oldestMember.name}{' '}
-                        <span className="text-slate-400">({stats.oldestMember.birthYear})</span>
-                      </p>
-                    </div>
-                  )}
-                  {ancestor && (ancestor as FamilyTreePreview['foundingAncestor']).birthPlace && (
-                    <div className="flex items-start gap-2 text-sm text-slate-600">
-                      <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-maroon-400/80" />
-                      {(ancestor as FamilyTreePreview['foundingAncestor']).birthPlace}
-                    </div>
-                  )}
-                  <Link
-                    href="/wiki"
-                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl border border-maroon-200/90 bg-gradient-to-b from-white to-maroon-50/60 px-4 py-3 text-sm font-semibold text-maroon-900 shadow-sm transition hover:border-maroon-300 hover:shadow-md"
-                  >
-                    Learn more about this family
-                    <ArrowRight className="w-4 h-4 shrink-0 opacity-80" />
-                  </Link>
-                </div>
-              ) : (
-                !isLoading &&
-                !hasNoData && (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-6 text-sm text-slate-500">
-                    Statistics will appear when family data is loaded.
-                  </div>
-                )
-              )}
+            <aside className="hidden xl:block">
+              <ProfilePanel
+                person={selectedPerson}
+                loading={selectedPersonLoading}
+                rootPersonId={primaryId ?? null}
+                relationships={relationships}
+                isAuthenticated={isAuthenticated}
+                onSelectRelative={(id) => void openPerson(id)}
+              />
             </aside>
           </div>
         </section>
 
-        {/* Family gallery — stock + uploads, with category filters (now under the tree) */}
-        <section className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 pb-4 sm:pb-6">
+        <section className="mx-auto max-w-[1600px] px-3 pb-8 sm:px-6 lg:px-8">
           <FamilyGallerySection rootPersonId={primaryId ?? null} compact />
         </section>
 
-        {/* CTA for unauthenticated */}
-        {!isAuthenticated && (
-          <section className="py-14 px-4 border-t border-slate-100 bg-slate-50/50">
-            <div className="max-w-4xl mx-auto">
-              <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-                <h2 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-3 tracking-tight">
-                  Are You Part of This Family?
-                </h2>
-                <p className="text-base text-slate-600 mb-8 max-w-xl mx-auto leading-relaxed">
-                  Create an account to add yourself, claim your profile, and help grow the family tree.
-                </p>
-                <div className="flex flex-wrap gap-3 justify-center">
-                  <Link
-                    href="/register"
-                    className="inline-flex items-center bg-maroon-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
-                  >
-                    Join the Family
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Link>
-                  <Link
-                    href="/login"
-                    className="inline-flex items-center bg-white text-slate-800 border border-slate-300 px-6 py-3 rounded-lg font-medium hover:bg-slate-50 transition-colors"
-                  >
-                    Already Have an Account?
-                  </Link>
-                </div>
-              </div>
+        {!isAuthenticated && !hasNoData && (
+          <section className="border-t border-[#ebe2da] bg-[#f7f2ed] px-4 py-12">
+            <div className="mx-auto max-w-3xl text-center">
+              <h2 className="font-serif text-2xl font-semibold text-[#31251f] sm:text-3xl">Help preserve the next chapter</h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-[#796b63]">
+                Join the family space to add relatives, connect new branches, contribute stories and upload family photographs.
+              </p>
+              <Link href="/register" className="mt-6 inline-flex items-center gap-2 rounded-lg bg-maroon-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-maroon-600">
+                Join the Family
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </section>
         )}
 
-        {/* Footer */}
-        <footer className="py-8 px-4 border-t border-slate-100 bg-white">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center space-x-2 mb-4 md:mb-0">
-              <div className="w-8 h-8 bg-maroon-500 rounded-md flex items-center justify-center shadow-sm">
-                <TreePine className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-bold text-slate-900">{familyName}</span>
+        <footer className="border-t border-[#ebe2da] bg-[#fffdf9] px-4 py-7">
+          <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
+            <div className="flex items-center gap-2 font-serif font-semibold text-[#3b2923]">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-maroon-500 text-white"><TreePine className="h-4 w-4" /></span>
+              {familyName}
             </div>
-            <p className="text-sm text-slate-500">
-              &copy; {new Date().getFullYear()} FamilyTree. Preserving family histories.
-            </p>
+            <p className="text-xs text-[#91857d]">Preserving family history across generations.</p>
           </div>
         </footer>
       </main>
 
-      {/* Floating page-scroll bubble — mobile only, helps users get past the tree canvas to the gallery */}
       <PageScrollNav />
 
-      {/* Person Detail Modal */}
-      {isModalOpen && selectedPerson && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto z-10">
-            {/* Modal header */}
-            <div className="sticky top-0 border-b border-slate-100 bg-white p-6 rounded-t-2xl">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <div className="flex items-center gap-4 pr-10">
-                {selectedPerson.profileImage ? (
-                  <img src={selectedPerson.profileImage.url} alt={selectedPerson.firstName} className="w-16 h-16 rounded-xl object-cover border border-slate-200" />
-                ) : (
-                  <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center text-xl font-semibold text-slate-600">
-                    {selectedPerson.firstName[0]}{selectedPerson.lastName[0]}
-                  </div>
-                )}
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900">
-                    {selectedPerson.firstName} {selectedPerson.middleName ? `${selectedPerson.middleName} ` : ''}{selectedPerson.lastName}
-                  </h3>
-                  {selectedPerson.maidenName && (
-                    <p className="text-slate-500 text-sm">n&eacute;e {selectedPerson.maidenName}</p>
-                  )}
-                  {selectedPerson.nickname && (
-                    <p className="text-slate-500 text-sm">&ldquo;{selectedPerson.nickname}&rdquo;</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal body */}
-            <div className="p-6 space-y-4">
-              {/* Vital info */}
-              <div className="grid grid-cols-2 gap-3">
-                {selectedPerson.birthDate && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                    <div>
-                      <p className="text-slate-400 text-xs">Born</p>
-                      <p className="text-slate-700">{new Date(selectedPerson.birthDate).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                )}
-                {selectedPerson.birthPlace && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="w-4 h-4 text-slate-400" />
-                    <div>
-                      <p className="text-slate-400 text-xs">Birthplace</p>
-                      <p className="text-slate-700">{selectedPerson.birthPlace}</p>
-                    </div>
-                  </div>
-                )}
-                {selectedPerson.deathDate && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                    <div>
-                      <p className="text-slate-400 text-xs">Died</p>
-                      <p className="text-slate-700">{new Date(selectedPerson.deathDate).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                )}
-                {selectedPerson.occupation && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase className="w-4 h-4 text-slate-400" />
-                    <div>
-                      <p className="text-slate-400 text-xs">Occupation</p>
-                      <p className="text-slate-700">{selectedPerson.occupation}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Biography */}
-              {selectedPerson.biography && (
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1">
-                    <BookOpen className="w-4 h-4 text-slate-400" /> Biography
-                  </h4>
-                  <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
-                    {selectedPerson.biography}
-                  </p>
-                </div>
-              )}
-
-              {/* Spouse context */}
-              {(selectedPerson.spouseRelations1?.length ?? 0) > 0 || (selectedPerson.spouseRelations2?.length ?? 0) > 0 ? (
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-2">
-                    <Heart className="w-4 h-4 text-slate-400" /> Spouse(s)
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {[...(selectedPerson.spouseRelations1 || []), ...(selectedPerson.spouseRelations2 || [])].map((rel: any) => {
-                      const spouse = rel.spouse1?.id === selectedPerson.id ? rel.spouse2 : rel.spouse1;
-                      if (!spouse) return null;
-                      return (
-                        <span key={spouse.id} className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-700 text-sm rounded-md border border-slate-200/80">
-                          <User className="w-3 h-3" />
-                          {spouse.firstName} {spouse.lastName}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Children context */}
-              {(selectedPerson.childRelations?.length ?? 0) > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-2">
-                    <Users className="w-4 h-4 text-slate-400" /> Children
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {(selectedPerson.childRelations ?? []).map((rel: any) => {
-                      if (!rel.child) return null;
-                      return (
-                        <span key={rel.child.id} className="inline-flex items-center gap-1 px-3 py-1 bg-white text-slate-700 text-sm rounded-md border border-slate-200">
-                          <User className="w-3 h-3" />
-                          {rel.child.firstName} {rel.child.lastName}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-3">
-                {primaryId && (
-                  <button
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      router.push(`/tree?rootId=${primaryId}`);
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-maroon-500 text-white rounded-xl text-sm font-medium hover:bg-maroon-600 transition-colors"
-                  >
-                    <Maximize2 className="w-4 h-4" />
-                    Open Full Tree
-                  </button>
-                )}
-                {!isAuthenticated ? (
-                  <Link
-                    href="/login"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
-                    onClick={() => setIsModalOpen(false)}
-                  >
-                    <LogIn className="w-4 h-4" />
-                    Sign In to Edit / Claim
-                  </Link>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      router.push(`/tree?rootId=${primaryId}`);
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
-                  >
-                    Edit in Full Tree
-                  </button>
-                )}
-              </div>
-            </div>
+      {profileOpenMobile && selectedPerson && (
+        <div className="fixed inset-0 z-[100] xl:hidden">
+          <button type="button" className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" aria-label="Close person details" onClick={() => setProfileOpenMobile(false)} />
+          <div className="absolute inset-x-3 bottom-3 max-h-[82dvh] overflow-y-auto rounded-2xl bg-[#fffdf9] shadow-2xl sm:left-auto sm:right-4 sm:w-[390px]">
+            <button type="button" onClick={() => setProfileOpenMobile(false)} className="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-full border border-[#e4d8ce] bg-white text-[#6f5f56]" aria-label="Close">
+              <X className="h-4 w-4" />
+            </button>
+            <ProfilePanel
+              person={selectedPerson}
+              loading={selectedPersonLoading}
+              rootPersonId={primaryId ?? null}
+              relationships={relationships}
+              isAuthenticated={isAuthenticated}
+              onSelectRelative={(id) => void openPerson(id)}
+              embedded
+            />
           </div>
         </div>
       )}
@@ -707,72 +447,177 @@ export default function HomePage() {
   );
 }
 
-function FactCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+function TopNavLink({ href, active, icon, children }: { href: string; active?: boolean; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-maroon-900/[0.06] bg-white/90 p-3 text-center shadow-[0_2px_12px_-4px_rgba(101,26,26,0.12)] backdrop-blur-[2px]">
-      <Icon className="w-5 h-5 text-maroon-600/70 mx-auto mb-1" />
-      <p className="text-xl font-bold tabular-nums text-slate-900">{value}</p>
-      <p className="text-[11px] text-slate-500 font-medium">{label}</p>
+    <Link
+      href={href}
+      className={clsx(
+        'relative flex h-full items-center gap-2 px-4 font-serif text-sm transition',
+        active ? 'font-semibold text-maroon-700' : 'text-[#6e6058] hover:text-[#332720]'
+      )}
+    >
+      {icon}
+      {children}
+      {active && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-maroon-500" />}
+    </Link>
+  );
+}
+
+function HeroStat({ icon, value, label, last }: { icon: React.ReactNode; value: string; label: string; last?: boolean }) {
+  return (
+    <div className={clsx('flex min-w-[145px] items-center gap-3 pr-7', !last && 'mr-7 border-r border-[#e4d9cf]')}>
+      <span className="text-[#985a47]">{icon}</span>
+      <span>
+        <strong className="block font-serif text-base font-semibold text-[#3b2b24]">{value}</strong>
+        <span className="mt-0.5 block text-[10px] text-[#8e8178]">{label}</span>
+      </span>
+    </div>
+  );
+}
+
+function ViewTab({ active, onClick, icon, label, disabled }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? 'Sign in to use this view' : undefined}
+      className={clsx(
+        'inline-flex h-8 items-center gap-1.5 rounded-full px-4 font-serif text-xs transition',
+        active ? 'bg-white font-semibold text-maroon-700 shadow-sm' : 'text-[#71635a] hover:text-[#3e3029]',
+        disabled && 'cursor-not-allowed opacity-45'
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function ProfilePanel({
+  person,
+  loading,
+  rootPersonId,
+  relationships,
+  isAuthenticated,
+  onSelectRelative,
+  embedded = false,
+}: {
+  person: PersonWithRelations | null;
+  loading: boolean;
+  rootPersonId: string | null;
+  relationships: RelationshipRow[];
+  isAuthenticated: boolean;
+  onSelectRelative: (id: string) => void;
+  embedded?: boolean;
+}) {
+  if (loading && !person) {
+    return (
+      <div className={clsx('flex h-[520px] items-center justify-center rounded-2xl border border-[#e6dcd3] bg-[#fffdf9]', !embedded && 'shadow-sm')}>
+        <Loader2 className="h-7 w-7 animate-spin text-maroon-500" />
+      </div>
+    );
+  }
+
+  if (!person) {
+    return (
+      <div className={clsx('rounded-2xl border border-[#e6dcd3] bg-[#fffdf9] p-7 text-center text-sm text-[#857870]', !embedded && 'shadow-sm')}>
+        Select a person in the tree to see their story and relationships.
+      </div>
+    );
+  }
+
+  const years = personYears(person);
+  const isRoot = person.id === rootPersonId;
+
+  return (
+    <div className={clsx('overflow-hidden rounded-2xl border border-[#e6dcd3] bg-[#fffdf9]', !embedded && 'h-[min(68dvh,680px)] min-h-[500px] shadow-[0_18px_45px_-28px_rgba(74,46,32,0.22)]')}>
+      <div className="flex h-full flex-col">
+        <div className="px-6 pb-4 pt-6">
+          <div className="flex items-center gap-4">
+            {person.profileImage?.url ? (
+              <img src={person.profileImage.url} alt={`${person.firstName} ${person.lastName}`} className="h-20 w-20 shrink-0 rounded-full object-cover ring-4 ring-[#f3ebe4]" />
+            ) : (
+              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-[#f0e9e2] font-serif text-xl font-semibold text-[#785d50] ring-4 ring-[#f8f2ec]">
+                {person.firstName[0]}{person.lastName[0]}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h2 className="truncate font-serif text-xl font-semibold text-[#33251f]">{person.firstName} {person.lastName}</h2>
+              {years && <p className="mt-1 text-xs text-[#8b7d74]">{years}</p>}
+              {isRoot && <span className="mt-2 inline-flex rounded-md bg-maroon-500 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-white">Root Person</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-b border-[#ebe1d8] px-6">
+          <div className="flex gap-7">
+            <span className="border-b-2 border-maroon-500 pb-3 font-serif text-xs font-semibold text-maroon-700">Overview</span>
+            <Link href={`/person/${person.id}`} className="pb-3 font-serif text-xs text-[#7c6e65] hover:text-maroon-700">Life events</Link>
+            <Link href="/wiki" className="pb-3 font-serif text-xs text-[#7c6e65] hover:text-maroon-700">Stories</Link>
+            <Link href="/gallery" className="pb-3 font-serif text-xs text-[#7c6e65] hover:text-maroon-700">Photos</Link>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <section>
+            <h3 className="font-serif text-base font-semibold text-[#3a2b24]">About</h3>
+            <p className="mt-2 text-sm leading-6 text-[#756961]">
+              {person.biography || `${person.firstName}'s biography has not been added yet. Family members can help preserve their story by adding memories, places and important life events.`}
+            </p>
+            <Link href={`/person/${person.id}`} className="mt-2 inline-flex text-xs font-semibold text-maroon-600 hover:text-maroon-700">Read more →</Link>
+          </section>
+
+          <section className="mt-6 border-t border-[#eee5dd] pt-5">
+            <h3 className="font-serif text-base font-semibold text-[#3a2b24]">Relationships</h3>
+            {relationships.length > 0 ? (
+              <div className="mt-2 divide-y divide-[#eee5dd]">
+                {relationships.slice(0, 6).map((relationship) => (
+                  <button key={`${relationship.label}-${relationship.id}`} type="button" onClick={() => onSelectRelative(relationship.id)} className="flex w-full items-center gap-3 py-3 text-left transition hover:bg-[#fff9f4]">
+                    {relationship.image ? (
+                      <img src={relationship.image} alt="" className="h-9 w-9 rounded-full object-cover" />
+                    ) : (
+                      <span className="grid h-9 w-9 place-items-center rounded-full bg-[#f0e9e2] text-[#846a5d]"><User className="h-4 w-4" /></span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <strong className="block truncate font-serif text-sm font-medium text-[#49362e]">{relationship.name}</strong>
+                      <span className="text-[11px] text-[#92857d]">{relationship.label}</span>
+                    </span>
+                    {relationship.label === 'Spouse' ? <Heart className="h-4 w-4 text-maroon-500" /> : <Users className="h-4 w-4 text-[#9e8b80]" />}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs leading-5 text-[#92857d]">No relationships are recorded yet. Use the + branch menu on the tree to add one.</p>
+            )}
+          </section>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 border-t border-[#ebe1d8] bg-[#fcf8f4] p-4">
+          <Link href={`/person/${person.id}`} className="inline-flex items-center justify-center rounded-lg border border-[#ddcfc3] bg-white px-3 py-2 text-xs font-semibold text-[#5f493d] hover:bg-[#fffaf6]">View Full Profile</Link>
+          {isAuthenticated ? (
+            <Link href={`/person/${person.id}/edit`} className="inline-flex items-center justify-center rounded-lg bg-maroon-500 px-3 py-2 text-xs font-semibold text-white hover:bg-maroon-600">Edit Person</Link>
+          ) : (
+            <Link href="/login" className="inline-flex items-center justify-center rounded-lg bg-maroon-500 px-3 py-2 text-xs font-semibold text-white hover:bg-maroon-600">Sign in</Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 function EmptyState({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full py-16">
-      <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 border border-slate-200">
-        <TreePine className="w-12 h-12 text-slate-500" />
+    <div className="flex h-full items-center justify-center px-6 text-center">
+      <div>
+        <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#f1eae3] text-[#a07866]"><TreePine className="h-9 w-9" /></span>
+        <h2 className="mt-4 font-serif text-xl font-semibold text-[#3b2c25]">Start your family tree</h2>
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#7e7068]">Add the first family member, then grow the tree by connecting parents, spouses and children.</p>
+        <Link href={isAuthenticated ? '/add-person' : '/register'} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-maroon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-maroon-600">
+          <Plus className="h-4 w-4" />
+          {isAuthenticated ? 'Add first person' : 'Join to contribute'}
+        </Link>
       </div>
-      <h3 className="text-2xl font-semibold text-slate-900 mb-4 tracking-tight">No Family Tree Yet</h3>
-      <p className="text-slate-600 max-w-md mx-auto mb-8 text-center leading-relaxed">
-        Be the first to create a family tree and start documenting your family&apos;s history.
-      </p>
-      {isAuthenticated ? (
-        <Link
-          href="/add-person"
-          className="inline-flex items-center bg-maroon-500 text-white px-8 py-3.5 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
-        >
-          Start Your Family Tree
-          <ArrowRight className="w-5 h-5 ml-2" />
-        </Link>
-      ) : (
-        <Link
-          href="/register"
-          className="inline-flex items-center bg-maroon-500 text-white px-8 py-3.5 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
-        >
-          Create Your Account
-          <ArrowRight className="w-5 h-5 ml-2" />
-        </Link>
-      )}
     </div>
-  );
-}
-
-function HomeViewTab({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={clsx(
-        'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors sm:flex-none',
-        active
-          ? 'bg-maroon-600 text-white shadow-sm'
-          : 'text-slate-600 hover:bg-slate-100'
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
