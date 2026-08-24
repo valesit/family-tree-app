@@ -25,7 +25,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={selectId}
-            className="block text-sm font-medium text-slate-700 mb-1.5"
+            className="mb-1.5 block text-sm font-medium text-[#5e4f47]"
           >
             {label}
           </label>
@@ -35,13 +35,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={selectId}
             className={clsx(
-              'block w-full rounded-xl border-2 bg-white px-4 py-2.5 pr-10 text-slate-900',
-              'appearance-none cursor-pointer',
-              'transition-all duration-200',
-              'focus:outline-none focus:ring-0',
+              'block w-full cursor-pointer appearance-none rounded-xl border bg-[#fffdf9] px-4 py-2.5 pr-10 text-[#2f2521] shadow-sm',
+              'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-maroon-500/10',
               error
-                ? 'border-rose-300 focus:border-rose-500'
-                : 'border-slate-200 focus:border-maroon-500 hover:border-slate-300',
+                ? 'border-[#cf8b83] focus:border-[#a94f47]'
+                : 'border-[#ded2c8] hover:border-[#cdbdb1] focus:border-maroon-500',
               className
             )}
             {...props}
@@ -57,15 +55,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             ))}
           </select>
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-            <ChevronDown className="w-5 h-5" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-[#9b8d84]">
+            <ChevronDown className="h-5 w-5" />
           </div>
         </div>
-        {error && <p className="mt-1.5 text-sm text-rose-600">{error}</p>}
+        {error && <p className="mt-1.5 text-sm text-[#9b4943]">{error}</p>}
       </div>
     );
   }
 );
 
 Select.displayName = 'Select';
-
