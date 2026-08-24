@@ -12,11 +12,11 @@ interface BadgeProps {
 
 export function Badge({ children, variant = 'default', size = 'sm', className }: BadgeProps) {
   const variants = {
-    default: 'bg-slate-100 text-slate-700',
-    success: 'bg-maroon-100 text-maroon-700',
-    warning: 'bg-amber-100 text-amber-700',
-    danger: 'bg-rose-100 text-rose-700',
-    info: 'bg-sky-100 text-sky-700',
+    default: 'bg-[#f1ebe5] text-[#66574f] ring-1 ring-[#e3d8cf]',
+    success: 'bg-[#e9f3ec] text-[#4e725a] ring-1 ring-[#d4e5d9]',
+    warning: 'bg-[#f6efe1] text-[#8a653d] ring-1 ring-[#eadbc1]',
+    danger: 'bg-[#f5e8e5] text-[#8a4e48] ring-1 ring-[#e8d3cf]',
+    info: 'bg-[#eaf0f1] text-[#526c72] ring-1 ring-[#d6e1e3]',
   };
 
   const sizes = {
@@ -27,7 +27,7 @@ export function Badge({ children, variant = 'default', size = 'sm', className }:
   return (
     <span
       className={clsx(
-        'inline-flex items-center font-medium rounded-full',
+        'inline-flex items-center rounded-full font-medium',
         variants[variant],
         sizes[size],
         className
@@ -37,4 +37,3 @@ export function Badge({ children, variant = 'default', size = 'sm', className }:
     </span>
   );
 }
-

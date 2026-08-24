@@ -14,7 +14,6 @@ import {
   Edit,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import Link from 'next/link';
 
 interface PersonCardProps {
   person: PersonWithRelations;
@@ -42,60 +41,52 @@ export function PersonCard({
   })();
 
   return (
-    <Card className="overflow-hidden" padding="none">
-      {/* Header with gradient */}
-      <div className="relative h-32 bg-gradient-to-br from-maroon-500 to-maroon-600">
-        <div className="absolute inset-0 bg-black/10" />
-        {showActions && (
-          <div className="absolute top-4 right-4 flex space-x-2">
-            {onEdit && (
-              <button
-                onClick={onEdit}
-                className="p-2 bg-white/20 backdrop-blur-sm rounded-lg text-white hover:bg-white/30 transition-colors"
-              >
-                <Edit className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+    <Card className="overflow-hidden border-[#e4d7cc] bg-[#fffdf9]" padding="none">
+      <div className="relative h-28 bg-gradient-to-r from-maroon-700 via-maroon-600 to-[#8a4c3b]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_20%,rgba(255,255,255,0.12),transparent_34%)]" />
+        {showActions && onEdit && (
+          <button
+            onClick={onEdit}
+            className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-lg border border-white/20 bg-white/10 text-white backdrop-blur-sm transition hover:bg-white/20"
+            aria-label="Edit person"
+          >
+            <Edit className="h-4 w-4" />
+          </button>
         )}
       </div>
 
-      {/* Avatar */}
-      <div className="relative px-6 -mt-16">
+      <div className="relative -mt-12 px-6">
         <Avatar
           src={person.profileImage?.url}
           name={formatPersonName(person)}
           size="2xl"
-          className="ring-4 ring-white shadow-lg"
+          className="ring-4 ring-[#fffdf9] shadow-lg"
         />
-        {person.isLiving ? (
-          <div className="absolute bottom-2 left-24 w-5 h-5 bg-maroon-500 rounded-full border-3 border-white" />
-        ) : (
-          <div className="absolute bottom-2 left-24 w-5 h-5 bg-slate-400 rounded-full border-3 border-white flex items-center justify-center">
-            <span className="text-white text-[10px]">†</span>
-          </div>
-        )}
+        <span
+          className={`absolute bottom-2 left-24 grid h-5 w-5 place-items-center rounded-full border-[3px] border-[#fffdf9] ${
+            person.isLiving ? 'bg-emerald-500' : 'bg-[#9d958f]'
+          }`}
+          title={person.isLiving ? 'Living' : 'Deceased'}
+        >
+          {!person.isLiving && <span className="text-[9px] text-white">†</span>}
+        </span>
       </div>
 
-      {/* Content */}
       <div className="p-6 pt-4">
-        {/* Name and status */}
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="font-serif text-2xl font-semibold tracking-[-0.02em] text-[#30231e]">
               {formatPersonName(person)}
             </h2>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               {person.gender && (
                 <Badge variant={person.gender === 'MALE' ? 'info' : person.gender === 'FEMALE' ? 'danger' : 'default'}>
                   {person.gender.toLowerCase()}
                 </Badge>
               )}
-              {!person.isLiving && (
-                <Badge variant="default">Deceased</Badge>
-              )}
+              {!person.isLiving && <Badge variant="default">Deceased</Badge>}
               {age !== null && (
-                <span className="text-sm text-slate-500">
+                <span className="text-xs text-[#887970]">
                   {person.isLiving ? `${age} years old` : `Lived ${age} years`}
                 </span>
               )}
@@ -103,110 +94,85 @@ export function PersonCard({
           </div>
         </div>
 
-        {/* Details */}
-        <div className="space-y-3">
+        <div className="space-y-3 border-t border-[#eee4dc] pt-5">
           {person.birthDate && (
-            <div className="flex items-center text-sm text-slate-600">
-              <Calendar className="w-4 h-4 mr-3 text-slate-400" />
-              <span>
-                Born {format(new Date(person.birthDate), 'MMMM d, yyyy')}
-                {person.birthPlace && ` in ${person.birthPlace}`}
-              </span>
-            </div>
+            <DetailRow icon={<Calendar className="h-4 w-4" />}>
+              Born {format(new Date(person.birthDate), 'MMMM d, yyyy')}
+              {person.birthPlace && ` in ${person.birthPlace}`}
+            </DetailRow>
           )}
 
           {person.deathDate && (
-            <div className="flex items-center text-sm text-slate-600">
-              <Calendar className="w-4 h-4 mr-3 text-slate-400" />
-              <span>
-                Passed {format(new Date(person.deathDate), 'MMMM d, yyyy')}
-                {person.deathPlace && ` in ${person.deathPlace}`}
-              </span>
-            </div>
+            <DetailRow icon={<Calendar className="h-4 w-4" />}>
+              Passed {format(new Date(person.deathDate), 'MMMM d, yyyy')}
+              {person.deathPlace && ` in ${person.deathPlace}`}
+            </DetailRow>
           )}
 
           {person.occupation && (
-            <div className="flex items-center text-sm text-slate-600">
-              <Briefcase className="w-4 h-4 mr-3 text-slate-400" />
-              <span>{person.occupation}</span>
-            </div>
+            <DetailRow icon={<Briefcase className="h-4 w-4" />}>{person.occupation}</DetailRow>
           )}
 
           {person.address && (
-            <div className="flex items-center text-sm text-slate-600">
-              <MapPin className="w-4 h-4 mr-3 text-slate-400" />
-              <span>{person.address}</span>
-            </div>
+            <DetailRow icon={<MapPin className="h-4 w-4" />}>{person.address}</DetailRow>
           )}
 
-          {/* Contact info (if not private) */}
           {!person.isPrivate && (
             <>
               {person.email && (
-                <div className="flex items-center text-sm text-slate-600">
-                  <Mail className="w-4 h-4 mr-3 text-slate-400" />
-                  <a href={`mailto:${person.email}`} className="text-maroon-600 hover:underline">
+                <DetailRow icon={<Mail className="h-4 w-4" />}>
+                  <a href={`mailto:${person.email}`} className="text-maroon-700 hover:underline">
                     {person.email}
                   </a>
-                </div>
+                </DetailRow>
               )}
 
               {person.phone && (
-                <div className="flex items-center text-sm text-slate-600">
-                  <Phone className="w-4 h-4 mr-3 text-slate-400" />
-                  <a href={`tel:${person.phone}`} className="text-maroon-600 hover:underline">
+                <DetailRow icon={<Phone className="h-4 w-4" />}>
+                  <a href={`tel:${person.phone}`} className="text-maroon-700 hover:underline">
                     {person.phone}
                   </a>
-                </div>
+                </DetailRow>
               )}
             </>
           )}
         </div>
 
-        {/* Biography */}
         {person.biography && (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">About</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              {person.biography}
-            </p>
-          </div>
+          <section className="mt-6 border-t border-[#eee4dc] pt-5">
+            <h3 className="font-serif text-base font-semibold text-[#3b2b24]">About</h3>
+            <p className="mt-2 text-sm leading-6 text-[#6f6058]">{person.biography}</p>
+          </section>
         )}
 
-        {/* Interesting Facts */}
         {facts.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">Interesting Facts</h3>
-            <ul className="space-y-2">
+          <section className="mt-6 border-t border-[#eee4dc] pt-5">
+            <h3 className="font-serif text-base font-semibold text-[#3b2b24]">Interesting Facts</h3>
+            <ul className="mt-3 space-y-2.5">
               {facts.map((fact: string, index: number) => (
-                <li key={index} className="flex items-start text-sm text-slate-600">
-                  <span className="w-5 h-5 bg-maroon-100 text-maroon-600 rounded-full flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
+                <li key={index} className="flex items-start text-sm leading-5 text-[#6f6058]">
+                  <span className="mr-2.5 mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#f2e8e2] text-[10px] font-semibold text-maroon-700">
                     {index + 1}
                   </span>
                   {fact}
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
 
-        {/* Relationships summary */}
-        <div className="mt-6 pt-6 border-t border-slate-100">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center p-3 bg-slate-50 rounded-lg">
-              <Users className="w-5 h-5 mx-auto text-slate-400 mb-1" />
-              <p className="text-lg font-semibold text-slate-900">
-                {(person.childRelations?.length || 0) + (person.parentRelations?.length || 0)}
-              </p>
-              <p className="text-xs text-slate-500">Family Members</p>
-            </div>
-            <div className="text-center p-3 bg-slate-50 rounded-lg">
-              <Heart className="w-5 h-5 mx-auto text-rose-400 mb-1" />
-              <p className="text-lg font-semibold text-slate-900">
-                {(person.spouseRelations1?.length || 0) + (person.spouseRelations2?.length || 0)}
-              </p>
-              <p className="text-xs text-slate-500">Marriages</p>
-            </div>
+        <div className="mt-6 border-t border-[#eee4dc] pt-5">
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              icon={<Users className="h-5 w-5" />}
+              value={(person.childRelations?.length || 0) + (person.parentRelations?.length || 0)}
+              label="Family Members"
+            />
+            <StatCard
+              icon={<Heart className="h-5 w-5" />}
+              value={(person.spouseRelations1?.length || 0) + (person.spouseRelations2?.length || 0)}
+              label="Marriages"
+            />
           </div>
         </div>
       </div>
@@ -214,3 +180,21 @@ export function PersonCard({
   );
 }
 
+function DetailRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start text-sm text-[#66574f]">
+      <span className="mr-3 mt-0.5 text-[#9a7867]">{icon}</span>
+      <span className="leading-5">{children}</span>
+    </div>
+  );
+}
+
+function StatCard({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
+  return (
+    <div className="rounded-xl border border-[#e8ded5] bg-[#faf6f2] p-4 text-center">
+      <span className="mx-auto mb-1.5 block w-fit text-[#9a7867]">{icon}</span>
+      <p className="font-serif text-xl font-semibold text-[#3b2b24]">{value}</p>
+      <p className="mt-0.5 text-[11px] text-[#887970]">{label}</p>
+    </div>
+  );
+}

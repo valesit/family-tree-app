@@ -4,25 +4,187 @@
   /* Use system fonts to avoid build-time font fetching issues (serverless/CI safe). */
   --font-inter: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
   --font-playfair: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+  /* Shared heritage design tokens */
+  --heritage-bg: #fbf9f5;
+  --heritage-surface: #fffdf9;
+  --heritage-surface-strong: #ffffff;
+  --heritage-soft: #f5efe9;
+  --heritage-text: #2f2521;
+  --heritage-muted: #7d6e66;
+  --heritage-border: #e6dcd3;
+  --heritage-border-strong: #d8c8bc;
+  --heritage-brand: #651a1a;
+  --heritage-brand-dark: #4a1313;
+  --heritage-brand-soft: #f4ece7;
+  --heritage-accent: #9a6b56;
+  --heritage-shadow: 0 18px 45px -28px rgba(74, 46, 32, 0.24);
+  --heritage-shadow-soft: 0 8px 24px rgba(74, 46, 32, 0.08);
 }
 
 @theme inline {
-  --color-background: #ffffff;
-  --color-foreground: #0f172a;
+  --color-background: #fbf9f5;
+  --color-foreground: #2f2521;
   --font-sans: var(--font-inter);
   --font-serif: var(--font-playfair);
-  
+
   /* Custom maroon theme based on #651A1A — neutrals lean warm gray, not pink */
   --color-maroon-50: #f8f6f6;
   --color-maroon-100: #efe8e8;
   --color-maroon-200: #e0d4d4;
-  --color-maroon-300: #f5a3a3;
-  --color-maroon-400: #eb6b6b;
+  --color-maroon-300: #cda8a1;
+  --color-maroon-400: #9a5a50;
   --color-maroon-500: #651A1A;
   --color-maroon-600: #5a1717;
   --color-maroon-700: #4a1313;
   --color-maroon-800: #3d1010;
   --color-maroon-900: #330d0d;
+}
+
+html,
+body {
+  background: var(--heritage-bg);
+  color: var(--heritage-text);
+}
+
+/* Main authenticated/public sub-pages inherit the same editorial heritage palette. */
+.heritage-app {
+  min-height: 100vh;
+  background: var(--heritage-bg);
+  color: var(--heritage-text);
+}
+
+.heritage-app .bg-white {
+  background-color: var(--heritage-surface) !important;
+}
+
+.heritage-app .bg-slate-50,
+.heritage-app .bg-slate-100 {
+  background-color: var(--heritage-soft) !important;
+}
+
+.heritage-app .bg-slate-200 {
+  background-color: #ebe3dc !important;
+}
+
+.heritage-app .bg-slate-700 {
+  background-color: #4b3d36 !important;
+}
+
+.heritage-app .bg-slate-800 {
+  background-color: #3b302b !important;
+}
+
+.heritage-app .border-slate-100,
+.heritage-app .border-slate-200,
+.heritage-app .border-slate-300 {
+  border-color: var(--heritage-border) !important;
+}
+
+.heritage-app .text-slate-900,
+.heritage-app .text-slate-800 {
+  color: var(--heritage-text) !important;
+}
+
+.heritage-app .text-slate-700,
+.heritage-app .text-slate-600 {
+  color: #66574f !important;
+}
+
+.heritage-app .text-slate-500,
+.heritage-app .text-slate-400 {
+  color: var(--heritage-muted) !important;
+}
+
+/* Retire the old bright purple/blue product surfaces in favor of warm archival cards. */
+.heritage-app .bg-purple-50,
+.heritage-app .bg-indigo-50,
+.heritage-app .bg-blue-50,
+.heritage-app .bg-sky-50 {
+  background-color: var(--heritage-brand-soft) !important;
+}
+
+.heritage-app .border-purple-200,
+.heritage-app .border-indigo-200,
+.heritage-app .border-blue-200,
+.heritage-app .border-sky-200 {
+  border-color: var(--heritage-border-strong) !important;
+}
+
+.heritage-app .text-purple-500,
+.heritage-app .text-purple-600,
+.heritage-app .text-purple-700,
+.heritage-app .text-blue-500,
+.heritage-app .text-blue-600,
+.heritage-app .text-blue-700,
+.heritage-app .text-indigo-500,
+.heritage-app .text-indigo-600,
+.heritage-app .text-indigo-700 {
+  color: var(--heritage-brand) !important;
+}
+
+.heritage-app .bg-purple-500,
+.heritage-app .bg-purple-600,
+.heritage-app .bg-blue-500,
+.heritage-app .bg-blue-600 {
+  background-color: var(--heritage-brand) !important;
+}
+
+/* Keep status colors distinguishable, but use muted editorial versions. */
+.heritage-app .bg-rose-50,
+.heritage-app .bg-rose-100 {
+  background-color: #f5e9e6 !important;
+}
+
+.heritage-app .bg-rose-500 {
+  background-color: #9a5a50 !important;
+}
+
+.heritage-app .bg-rose-600 {
+  background-color: #81483f !important;
+}
+
+.heritage-app .border-rose-200,
+.heritage-app .border-rose-300 {
+  border-color: #e3ccc6 !important;
+}
+
+.heritage-app .text-rose-500,
+.heritage-app .text-rose-600,
+.heritage-app .text-rose-700 {
+  color: #8a4e48 !important;
+}
+
+.heritage-app [class~="hover:bg-rose-600"]:hover {
+  background-color: #81483f !important;
+}
+
+.heritage-app [class~="hover:bg-slate-800"]:hover {
+  background-color: #342a26 !important;
+}
+
+/* The old gender-tinted quick-profile hero is intentionally neutralized site-wide. */
+.heritage-app [class*="from-pink-400"][class*="to-rose-500"],
+.heritage-app [class*="from-sky-400"][class*="to-blue-500"],
+.heritage-app [class*="from-slate-400"][class*="to-slate-500"] {
+  background-image: linear-gradient(to right, #651a1a, #8d4f3c) !important;
+}
+
+.heritage-app [class*="from-purple-50"][class*="to-indigo-50"],
+.heritage-app [class*="from-blue-50"][class*="to-indigo-50"] {
+  background-image: linear-gradient(to bottom right, #fffdf9, #f5efe9) !important;
+}
+
+.heritage-card {
+  background: var(--heritage-surface);
+  border: 1px solid var(--heritage-border);
+  border-radius: 1rem;
+  box-shadow: var(--heritage-shadow-soft);
+}
+
+.heritage-section-title {
+  font-family: var(--font-playfair);
+  color: var(--heritage-text);
 }
 
 /* Custom scrollbar */
@@ -32,27 +194,23 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f3eee8;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #cdbfb4;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #a99080;
 }
 
 /* Animation utilities */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slide-up {
@@ -83,29 +241,19 @@
   animation-fill-mode: forwards;
 }
 
-.fade-in {
-  animation-name: fade-in;
-}
+.fade-in { animation-name: fade-in; }
+.slide-in-from-bottom-4 { animation-name: slide-up; }
+.zoom-in-95 { animation-name: zoom-in; }
 
-.slide-in-from-bottom-4 {
-  animation-name: slide-up;
-}
-
-.zoom-in-95 {
-  animation-name: zoom-in;
-}
-
-/* Focus ring utility */
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-maroon-500 focus:ring-offset-2;
 }
 
-/* Card hover effect */
 .card-hover {
-  @apply transition-all duration-200 hover:shadow-lg hover:border-slate-300;
+  @apply transition-all duration-200 hover:shadow-lg;
+  border-color: var(--heritage-border);
 }
 
-/* Tree node animation */
 .tree-node-enter {
   opacity: 0;
   transform: scale(0.8);
@@ -117,30 +265,18 @@
   transition: opacity 200ms ease-out, transform 200ms ease-out;
 }
 
-/* Gradient text utility */
 .gradient-text {
   @apply bg-gradient-to-r from-maroon-500 to-maroon-700 bg-clip-text text-transparent;
 }
 
-/* Loading pulse animation */
 @keyframes pulse-soft {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .animate-pulse-soft {
   animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Animation delay utilities */
-.animation-delay-2000 {
-  animation-delay: 2000ms;
-}
-
-.animation-delay-4000 {
-  animation-delay: 4000ms;
-}
+.animation-delay-2000 { animation-delay: 2000ms; }
+.animation-delay-4000 { animation-delay: 4000ms; }

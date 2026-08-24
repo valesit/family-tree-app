@@ -42,6 +42,12 @@ interface TreeNodeProps {
   maxLevels?: number;
 }
 
+type VisualPartner = {
+  person: TreeNodeType | SpouseNode;
+  spouseCard: boolean;
+  marriageOrder?: number;
+};
+
 export function TreeNode({
   node,
   onNodeClick,
@@ -73,7 +79,9 @@ export function TreeNode({
 
   const defaultSetRoot = !effectiveReadOnly
     ? async (personId: string) => {
-        const candidateName = personId === node.id ? node.name : 'this person';
+        const people = [node, ...(node.spouses || (node.spouse ? [node.spouse] : []))];
+        const candidate = people.find((person) => person.id === personId);
+        const candidateName = candidate ? `${candidate.firstName} ${candidate.lastName}` : 'this person';
         if (!window.confirm(`Set ${candidateName} as the root person for this family tree?`)) return;
 
         try {
@@ -107,6 +115,50 @@ export function TreeNode({
   const allSpouses = node.spouses || (node.spouse ? [node.spouse] : []);
   const hasMultipleSpouses = allSpouses.length > 1;
 
+  /*
+   * Genealogy convention for this product: the husband/father is the visual
+   * anchor on the left and spouse(s) extend to the right. The stored tree node
+   * is still the canonical data node; this only changes presentation order.
+   * If gender is unknown or there is no male partner, keep the stored node as
+   * the left anchor so we never invent relationship semantics.
+   */
+  const maleSpouseIndex = node.gender === 'MALE'
+    ? -1
+    : allSpouses.findIndex((spouse) => spouse.gender === 'MALE');
+
+  const visualAnchor: TreeNodeType | SpouseNode =
+    maleSpouseIndex >= 0 ? allSpouses[maleSpouseIndex] : node;
+
+  const visualPartners: VisualPartner[] = visualAnchor.id === node.id
+    ? allSpouses.map((spouse, index) => ({
+        person: spouse,
+        spouseCard: true,
+        marriageOrder:
+          'marriageOrder' in spouse && typeof spouse.marriageOrder === 'number'
+            ? spouse.marriageOrder
+            : index + 1,
+      }))
+    : [
+        {
+          person: node,
+          spouseCard: true,
+          marriageOrder:
+            'marriageOrder' in visualAnchor && typeof visualAnchor.marriageOrder === 'number'
+              ? visualAnchor.marriageOrder
+              : 1,
+        },
+        ...allSpouses
+          .filter((spouse) => spouse.id !== visualAnchor.id)
+          .map((spouse, index) => ({
+            person: spouse,
+            spouseCard: true,
+            marriageOrder:
+              'marriageOrder' in spouse && typeof spouse.marriageOrder === 'number'
+                ? spouse.marriageOrder
+                : index + 2,
+          })),
+      ];
+
   const runAction = (action: ((id: string) => void) | undefined, personId: string) => {
     setBranchMenuFor(null);
     action?.(personId);
@@ -124,6 +176,7 @@ export function TreeNode({
     totalSpouses?: number;
   }) => {
     const menuOpen = branchMenuFor === person.id;
+    const personIsRoot = effectiveRootPersonId === person.id;
     const birthYear = person.attributes?.birthYear;
     const deathYear = person.attributes?.deathYear;
     const maidenName = spouse && person.attributes?.maidenName && person.attributes.maidenName !== person.lastName
@@ -146,10 +199,10 @@ export function TreeNode({
           className={clsx(
             'relative flex min-h-[112px] min-w-[210px] items-center gap-3 rounded-xl border bg-gradient-to-br from-[#fffefa] to-[#fffaf5] px-4 py-3 text-left shadow-[0_8px_22px_-14px_rgba(67,43,31,0.32)] transition-all duration-200',
             'hover:-translate-y-0.5 hover:border-[#caa995] hover:shadow-[0_12px_28px_-14px_rgba(67,43,31,0.38)]',
-            isRoot && !spouse ? 'border-maroon-500/70 ring-1 ring-maroon-500/10' : 'border-[#dfd2c6]'
+            personIsRoot ? 'border-maroon-500/70 ring-1 ring-maroon-500/10' : 'border-[#dfd2c6]'
           )}
         >
-          {isRoot && !spouse && (
+          {personIsRoot && (
             <span className="absolute -top-2.5 left-4 rounded-md bg-maroon-500 px-3 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-white shadow-sm">
               Root
             </span>
@@ -211,7 +264,7 @@ export function TreeNode({
           </div>
         </button>
 
-        {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent || (!spouse && effectiveSetRoot)) && (
+        {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent || effectiveSetRoot) && (
           <div className="absolute -bottom-3 -right-3 z-40" data-clickable="true">
             <button
               type="button"
@@ -237,7 +290,7 @@ export function TreeNode({
                 {onAddParent && (
                   <BranchAction icon={<Users className="h-3.5 w-3.5" />} label="Add parent" onClick={() => runAction(onAddParent, person.id)} />
                 )}
-                {!spouse && effectiveSetRoot && effectiveRootPersonId !== person.id && (
+                {effectiveSetRoot && effectiveRootPersonId !== person.id && (
                   <>
                     <div className="my-1 h-px bg-[#eee4dc]" />
                     <BranchAction icon={<Crown className="h-3.5 w-3.5" />} label="Set as family root" onClick={() => runAction(effectiveSetRoot, person.id)} />
@@ -253,13 +306,12 @@ export function TreeNode({
 
   return (
     <div className="group/tree flex flex-col items-center">
-      {/* Couple row. Equal card widths keep the heart at the visual midpoint,
-          which gives us a clean origin for the descendant trunk below. */}
+      {/* Husband/father anchors the couple on the left; spouse(s) extend right. */}
       <div className="flex items-center gap-3">
-        <PersonCard person={node} />
+        <PersonCard person={visualAnchor} />
 
-        {allSpouses.map((spouse, index) => (
-          <div key={spouse.id} className="flex items-center">
+        {visualPartners.map(({ person, spouseCard, marriageOrder }, index) => (
+          <div key={person.id} className="flex items-center">
             <div className="flex items-center" aria-hidden>
               <span className="h-px w-8 bg-[#c8ae98]" />
               <span className="mx-1.5 grid h-7 w-7 place-items-center rounded-full bg-[#fffdf9] text-maroon-500 ring-1 ring-[#ddcfc4] shadow-[0_2px_8px_rgba(89,53,36,0.08)]">
@@ -269,13 +321,9 @@ export function TreeNode({
               <span className="h-px w-8 bg-[#c8ae98]" />
             </div>
             <PersonCard
-              person={spouse}
-              spouse
-              marriageOrder={
-                'marriageOrder' in spouse && typeof spouse.marriageOrder === 'number'
-                  ? spouse.marriageOrder
-                  : index + 1
-              }
+              person={person}
+              spouse={spouseCard}
+              marriageOrder={marriageOrder}
               totalSpouses={allSpouses.length}
             />
           </div>
@@ -312,10 +360,6 @@ export function TreeNode({
                 const childCount = node.children!.length;
                 return (
                   <div key={child.id} className="relative flex flex-col items-center px-5">
-                    {/* Each child contributes half of the sibling rail to each
-                        side. Adjacent halves meet exactly, so the rail starts
-                        and ends at the first/last child center instead of
-                        overshooting the cards. */}
                     {childCount > 1 && index > 0 && (
                       <span className="absolute left-0 top-0 h-px w-1/2 bg-[#b58b6a]" aria-hidden />
                     )}

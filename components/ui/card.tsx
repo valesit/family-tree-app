@@ -21,8 +21,8 @@ export function Card({ children, className, hover = false, padding = 'md' }: Car
   return (
     <div
       className={clsx(
-        'bg-white rounded-2xl border border-slate-200 shadow-sm',
-        hover && 'transition-all duration-200 hover:shadow-md hover:border-slate-300',
+        'rounded-2xl border border-[#e6dcd3] bg-[#fffdf9] shadow-[0_10px_28px_-20px_rgba(74,46,32,0.32)]',
+        hover && 'transition-all duration-200 hover:-translate-y-0.5 hover:border-[#d8c8bc] hover:shadow-[0_16px_34px_-20px_rgba(74,46,32,0.34)]',
         paddings[padding],
         className
       )}
@@ -43,8 +43,8 @@ export function CardHeader({ title, subtitle, action, className }: CardHeaderPro
   return (
     <div className={clsx('flex items-start justify-between', className)}>
       <div>
-        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+        <h3 className="font-serif text-lg font-semibold text-[#2f2521]">{title}</h3>
+        {subtitle && <p className="mt-1 text-sm text-[#7d6e66]">{subtitle}</p>}
       </div>
       {action && <div>{action}</div>}
     </div>
@@ -59,4 +59,3 @@ interface CardContentProps {
 export function CardContent({ children, className }: CardContentProps) {
   return <div className={clsx('mt-4', className)}>{children}</div>;
 }
-

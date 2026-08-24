@@ -20,14 +20,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-slate-700 mb-1.5"
+            className="mb-1.5 block text-sm font-medium text-[#5e4f47]"
           >
             {label}
           </label>
         )}
         <div className="relative">
           {leftIcon && (
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[#9b8d84]">
               {leftIcon}
             </div>
           )}
@@ -35,30 +35,28 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={clsx(
-              'block w-full rounded-xl border-2 bg-white px-4 py-2.5 text-slate-900 placeholder-slate-400',
-              'transition-all duration-200',
-              'focus:outline-none focus:ring-0',
+              'block w-full rounded-xl border bg-[#fffdf9] px-4 py-2.5 text-[#2f2521] placeholder-[#a99a90] shadow-sm',
+              'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-maroon-500/10',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
               error
-                ? 'border-rose-300 focus:border-rose-500'
-                : 'border-slate-200 focus:border-maroon-500 hover:border-slate-300',
+                ? 'border-[#cf8b83] focus:border-[#a94f47]'
+                : 'border-[#ded2c8] hover:border-[#cdbdb1] focus:border-maroon-500',
               className
             )}
             {...props}
           />
           {rightIcon && (
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400">
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#9b8d84]">
               {rightIcon}
             </div>
           )}
         </div>
-        {error && <p className="mt-1.5 text-sm text-rose-600">{error}</p>}
-        {hint && !error && <p className="mt-1.5 text-sm text-slate-500">{hint}</p>}
+        {error && <p className="mt-1.5 text-sm text-[#9b4943]">{error}</p>}
+        {hint && !error && <p className="mt-1.5 text-sm text-[#85766d]">{hint}</p>}
       </div>
     );
   }
 );
 
 Input.displayName = 'Input';
-

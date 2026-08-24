@@ -24,7 +24,6 @@ export default async function MainLayout({ children }: MainLayoutProps) {
   const headersList = await headers();
   const pathname = headersList.get('x-pathname') || '';
 
-  // Check if current path requires authentication
   const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path));
 
   if (isProtectedPath && !session) {
@@ -32,7 +31,7 @@ export default async function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="heritage-app min-h-screen bg-[#fbf9f5] text-[#2f2521]">
       <Navbar />
       <main className="pt-16">{children}</main>
     </div>

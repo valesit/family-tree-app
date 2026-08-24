@@ -31,13 +31,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       primary:
         'bg-maroon-500 text-white hover:bg-maroon-600 focus:ring-maroon-500 shadow-sm',
       secondary:
-        'bg-slate-800 text-white hover:bg-slate-700 focus:ring-slate-500',
+        'border border-[#d8c8bc] bg-[#f5efe9] text-[#49372f] hover:bg-[#eee4dc] focus:ring-maroon-500',
       outline:
-        'border-2 border-maroon-500 text-maroon-500 hover:bg-maroon-50 focus:ring-maroon-500',
+        'border border-[#d8c8bc] bg-[#fffdf9] text-maroon-700 hover:bg-[#f7f1eb] hover:border-[#cbb7a8] focus:ring-maroon-500',
       ghost:
-        'text-slate-600 hover:bg-slate-100 focus:ring-slate-500',
+        'text-[#66574f] hover:bg-[#f5efe9] hover:text-[#2f2521] focus:ring-maroon-500',
       danger:
-        'bg-gradient-to-r from-rose-600 to-red-600 text-white hover:from-rose-700 hover:to-red-700 focus:ring-rose-500 shadow-lg shadow-rose-500/25',
+        'bg-[#8b2f2a] text-white hover:bg-[#71231f] focus:ring-[#8b2f2a] shadow-sm',
     };
 
     const sizes = {
@@ -62,7 +62,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {isLoading ? (
           <>
             <svg
-              className="animate-spin -ml-1 mr-2 h-4 w-4"
+              className="-ml-1 mr-2 h-4 w-4 animate-spin"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -92,4 +92,3 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 );
 
 Button.displayName = 'Button';
-
