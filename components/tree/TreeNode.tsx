@@ -9,6 +9,7 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  Crown,
   Heart,
   Plus,
   UserPlus,
@@ -28,6 +29,8 @@ interface TreeNodeProps {
   onAddChild?: (parentId: string) => void;
   onAddSpouse?: (personId: string) => void;
   onAddParent?: (childId: string) => void;
+  onSetRoot?: (personId: string) => void;
+  rootPersonId?: string;
   onViewBirthFamily?: (personId: string, maidenName?: string) => void;
   expandedNodes: Set<string>;
   toggleExpanded: (nodeId: string) => void;
@@ -45,6 +48,8 @@ export function TreeNode({
   onAddChild,
   onAddSpouse,
   onAddParent,
+  onSetRoot,
+  rootPersonId,
   onViewBirthFamily,
   expandedNodes,
   toggleExpanded,
@@ -172,7 +177,7 @@ export function TreeNode({
           </div>
         </button>
 
-        {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent) && (
+        {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent || (!spouse && onSetRoot)) && (
           <div className="absolute -bottom-3 -right-3 z-40" data-clickable="true">
             <button
               type="button"
@@ -181,14 +186,14 @@ export function TreeNode({
                 setBranchMenuFor((current) => current === person.id ? null : person.id);
               }}
               className="grid h-8 w-8 place-items-center rounded-full border-2 border-[#fffdf9] bg-maroon-500 text-white shadow-md transition hover:bg-maroon-600"
-              aria-label={`Add a family branch from ${person.firstName}`}
-              title="Add family branch"
+              aria-label={`Add or manage a family branch from ${person.firstName}`}
+              title="Family branch actions"
             >
               <Plus className="h-4 w-4" />
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-10 z-50 w-40 overflow-hidden rounded-xl border border-[#dfd2c6] bg-[#fffdf9] p-1.5 shadow-xl">
+              <div className="absolute right-0 top-10 z-50 w-44 overflow-hidden rounded-xl border border-[#dfd2c6] bg-[#fffdf9] p-1.5 shadow-xl">
                 {onAddChild && (
                   <BranchAction icon={<UserPlus className="h-3.5 w-3.5" />} label="Add child" onClick={() => runAction(onAddChild, person.id)} />
                 )}
@@ -197,6 +202,12 @@ export function TreeNode({
                 )}
                 {onAddParent && (
                   <BranchAction icon={<Users className="h-3.5 w-3.5" />} label="Add parent" onClick={() => runAction(onAddParent, person.id)} />
+                )}
+                {!spouse && onSetRoot && rootPersonId !== person.id && (
+                  <>
+                    <div className="my-1 h-px bg-[#eee4dc]" />
+                    <BranchAction icon={<Crown className="h-3.5 w-3.5" />} label="Set as family root" onClick={() => runAction(onSetRoot, person.id)} />
+                  </>
                 )}
               </div>
             )}
@@ -207,19 +218,21 @@ export function TreeNode({
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="group/tree flex flex-col items-center">
+      {/* Couple row. Equal card widths keep the heart at the visual midpoint,
+          which gives us a clean origin for the descendant trunk below. */}
       <div className="flex items-center gap-3">
         <PersonCard person={node} />
 
         {allSpouses.map((spouse, index) => (
           <div key={spouse.id} className="flex items-center">
             <div className="flex items-center" aria-hidden>
-              <span className="h-px w-6 bg-[#cbb7a5]" />
-              <span className="mx-1 grid h-6 w-6 place-items-center rounded-full bg-[#fffdf9] text-maroon-500 ring-1 ring-[#ddcfc4]">
+              <span className="h-px w-8 bg-[#c8ae98]" />
+              <span className="mx-1.5 grid h-7 w-7 place-items-center rounded-full bg-[#fffdf9] text-maroon-500 ring-1 ring-[#ddcfc4] shadow-[0_2px_8px_rgba(89,53,36,0.08)]">
                 <Heart className="h-3.5 w-3.5" fill="currentColor" />
                 {hasMultipleSpouses && <span className="sr-only">Marriage {index + 1}</span>}
               </span>
-              <span className="h-px w-6 bg-[#cbb7a5]" />
+              <span className="h-px w-8 bg-[#c8ae98]" />
             </div>
             <PersonCard
               person={spouse}
@@ -237,54 +250,66 @@ export function TreeNode({
 
       {hasChildren && (
         <div className="flex flex-col items-center">
-          <span className="h-5 w-px bg-maroon-500/70" aria-hidden />
-
-          {!exportMode && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                toggleExpanded(node.id);
-              }}
-              className="z-10 grid h-8 w-8 place-items-center rounded-full border border-maroon-300/70 bg-[#fffdf9] text-maroon-600 shadow-sm transition hover:bg-[#fff6f0]"
-              aria-expanded={isExpanded}
-              aria-label={isExpanded ? `Collapse ${node.firstName}'s descendants` : `Expand ${node.firstName}'s descendants`}
-            >
-              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            </button>
-          )}
+          {/* Keep the lineage trunk uninterrupted. The expand/collapse control
+              sits just off the line so the tree reads like a traditional
+              genealogy chart instead of an org-chart arrow. */}
+          <div className="relative h-10 w-10">
+            <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[#b58b6a]" aria-hidden />
+            {!exportMode && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggleExpanded(node.id);
+                }}
+                className="absolute left-1/2 top-1/2 ml-2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-[#ddcfc4] bg-[#fffdf9]/95 text-[#8b5f4c] shadow-sm opacity-60 transition hover:bg-white hover:opacity-100 md:opacity-0 md:group-hover/tree:opacity-100 focus:opacity-100"
+                aria-expanded={isExpanded}
+                aria-label={isExpanded ? `Collapse ${node.firstName}'s descendants` : `Expand ${node.firstName}'s descendants`}
+                title={isExpanded ? 'Collapse branch' : 'Expand branch'}
+              >
+                {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              </button>
+            )}
+          </div>
 
           {isExpanded && (
-            <>
-              <span className="h-4 w-px bg-maroon-500/70" aria-hidden />
-              <div className="relative">
-                {node.children!.length > 1 && (
-                  <div className="absolute left-0 right-0 top-0 h-px bg-maroon-500/65" aria-hidden />
-                )}
-                <div className="flex items-start gap-10">
-                  {node.children!.map((child) => (
-                    <div key={child.id} className="flex flex-col items-center">
-                      <span className="h-6 w-px bg-maroon-500/65" aria-hidden />
-                      <TreeNode
-                        node={child}
-                        onNodeClick={onNodeClick}
-                        onAddChild={onAddChild}
-                        onAddSpouse={onAddSpouse}
-                        onAddParent={onAddParent}
-                        onViewBirthFamily={onViewBirthFamily}
-                        expandedNodes={expandedNodes}
-                        toggleExpanded={toggleExpanded}
-                        level={level + 1}
-                        readOnly={readOnly}
-                        exportMode={exportMode}
-                        exportFields={exportFields}
-                        maxLevels={maxLevels}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
+            <div className="flex items-start">
+              {node.children!.map((child, index) => {
+                const childCount = node.children!.length;
+                return (
+                  <div key={child.id} className="relative flex flex-col items-center px-5">
+                    {/* Each child contributes half of the sibling rail to each
+                        side. Adjacent halves meet exactly, so the rail starts
+                        and ends at the first/last child center instead of
+                        overshooting the cards. */}
+                    {childCount > 1 && index > 0 && (
+                      <span className="absolute left-0 top-0 h-px w-1/2 bg-[#b58b6a]" aria-hidden />
+                    )}
+                    {childCount > 1 && index < childCount - 1 && (
+                      <span className="absolute right-0 top-0 h-px w-1/2 bg-[#b58b6a]" aria-hidden />
+                    )}
+                    <span className="h-7 w-px bg-[#b58b6a]" aria-hidden />
+                    <TreeNode
+                      node={child}
+                      onNodeClick={onNodeClick}
+                      onAddChild={onAddChild}
+                      onAddSpouse={onAddSpouse}
+                      onAddParent={onAddParent}
+                      onSetRoot={onSetRoot}
+                      rootPersonId={rootPersonId}
+                      onViewBirthFamily={onViewBirthFamily}
+                      expandedNodes={expandedNodes}
+                      toggleExpanded={toggleExpanded}
+                      level={level + 1}
+                      readOnly={readOnly}
+                      exportMode={exportMode}
+                      exportFields={exportFields}
+                      maxLevels={maxLevels}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
