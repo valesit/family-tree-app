@@ -69,6 +69,40 @@ export function TreeNode({
   const effectiveReadOnly = exportMode || readOnly;
   const showPhoto = exportMode ? exportFields?.photo !== false : true;
   const showDates = exportMode ? exportFields?.dates === true : true;
+  const effectiveRootPersonId = rootPersonId ?? (isRoot ? node.id : undefined);
+
+  const defaultSetRoot = !effectiveReadOnly
+    ? async (personId: string) => {
+        const candidateName = personId === node.id ? node.name : 'this person';
+        if (!window.confirm(`Set ${candidateName} as the root person for this family tree?`)) return;
+
+        try {
+          const response = await fetch('/api/family/root', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personId }),
+          });
+          const result = await response.json();
+          if (!result.success) {
+            window.alert(result.error || 'Failed to set the family root.');
+            return;
+          }
+
+          const url = new URL(window.location.href);
+          if (url.pathname.startsWith('/tree')) {
+            url.searchParams.set('rootId', personId);
+            window.location.assign(url.toString());
+          } else {
+            window.location.reload();
+          }
+        } catch (error) {
+          console.error('Failed to set family root', error);
+          window.alert('Failed to set the family root. Please try again.');
+        }
+      }
+    : undefined;
+
+  const effectiveSetRoot = onSetRoot ?? defaultSetRoot;
 
   const allSpouses = node.spouses || (node.spouse ? [node.spouse] : []);
   const hasMultipleSpouses = allSpouses.length > 1;
@@ -177,7 +211,7 @@ export function TreeNode({
           </div>
         </button>
 
-        {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent || (!spouse && onSetRoot)) && (
+        {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent || (!spouse && effectiveSetRoot)) && (
           <div className="absolute -bottom-3 -right-3 z-40" data-clickable="true">
             <button
               type="button"
@@ -203,10 +237,10 @@ export function TreeNode({
                 {onAddParent && (
                   <BranchAction icon={<Users className="h-3.5 w-3.5" />} label="Add parent" onClick={() => runAction(onAddParent, person.id)} />
                 )}
-                {!spouse && onSetRoot && rootPersonId !== person.id && (
+                {!spouse && effectiveSetRoot && effectiveRootPersonId !== person.id && (
                   <>
                     <div className="my-1 h-px bg-[#eee4dc]" />
-                    <BranchAction icon={<Crown className="h-3.5 w-3.5" />} label="Set as family root" onClick={() => runAction(onSetRoot, person.id)} />
+                    <BranchAction icon={<Crown className="h-3.5 w-3.5" />} label="Set as family root" onClick={() => runAction(effectiveSetRoot, person.id)} />
                   </>
                 )}
               </div>
@@ -295,8 +329,8 @@ export function TreeNode({
                       onAddChild={onAddChild}
                       onAddSpouse={onAddSpouse}
                       onAddParent={onAddParent}
-                      onSetRoot={onSetRoot}
-                      rootPersonId={rootPersonId}
+                      onSetRoot={effectiveSetRoot}
+                      rootPersonId={effectiveRootPersonId}
                       onViewBirthFamily={onViewBirthFamily}
                       expandedNodes={expandedNodes}
                       toggleExpanded={toggleExpanded}
