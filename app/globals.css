@@ -27,7 +27,7 @@
   --color-foreground: #2f2521;
   --font-sans: var(--font-inter);
   --font-serif: var(--font-playfair);
-  
+
   /* Custom maroon theme based on #651A1A — neutrals lean warm gray, not pink */
   --color-maroon-50: #f8f6f6;
   --color-maroon-100: #efe8e8;
@@ -65,6 +65,14 @@ body {
 
 .heritage-app .bg-slate-200 {
   background-color: #ebe3dc !important;
+}
+
+.heritage-app .bg-slate-700 {
+  background-color: #4b3d36 !important;
+}
+
+.heritage-app .bg-slate-800 {
+  background-color: #3b302b !important;
 }
 
 .heritage-app .border-slate-100,
@@ -120,6 +128,39 @@ body {
 .heritage-app .bg-blue-500,
 .heritage-app .bg-blue-600 {
   background-color: var(--heritage-brand) !important;
+}
+
+/* Keep status colors distinguishable, but use muted editorial versions. */
+.heritage-app .bg-rose-50,
+.heritage-app .bg-rose-100 {
+  background-color: #f5e9e6 !important;
+}
+
+.heritage-app .bg-rose-500 {
+  background-color: #9a5a50 !important;
+}
+
+.heritage-app .bg-rose-600 {
+  background-color: #81483f !important;
+}
+
+.heritage-app .border-rose-200,
+.heritage-app .border-rose-300 {
+  border-color: #e3ccc6 !important;
+}
+
+.heritage-app .text-rose-500,
+.heritage-app .text-rose-600,
+.heritage-app .text-rose-700 {
+  color: #8a4e48 !important;
+}
+
+.heritage-app [class~="hover:bg-rose-600"]:hover {
+  background-color: #81483f !important;
+}
+
+.heritage-app [class~="hover:bg-slate-800"]:hover {
+  background-color: #342a26 !important;
 }
 
 /* The old gender-tinted quick-profile hero is intentionally neutralized site-wide. */
