@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
+import useSWR from 'swr';
 import { clsx } from 'clsx';
 import {
   TreePine,
@@ -22,8 +23,15 @@ import {
   Images,
   ShieldCheck,
 } from 'lucide-react';
-import { Avatar, Button } from '@/components/ui';
+import { Avatar } from '@/components/ui';
 import { SessionUser } from '@/types';
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+type FamilyNavPreview = {
+  id: string;
+  familyName: string;
+};
 
 export function Navbar() {
   const { data: session, status } = useSession();
@@ -35,40 +43,53 @@ export function Navbar() {
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
 
-  // Navigation items for authenticated users — kept short and focused on
-  // viewing & contributing (one tree, no approval queue surfaced here).
+  const { data: familiesData } = useSWR<{
+    success: boolean;
+    data: {
+      families: FamilyNavPreview[];
+      primaryFamilyId: string | null;
+    };
+  }>('/api/families', fetcher, { revalidateOnFocus: false });
+
+  const primaryFamily = familiesData?.data?.families.find(
+    (family) => family.id === familiesData?.data?.primaryFamilyId
+  );
+  const brandName = primaryFamily?.familyName || 'Family';
+
   const authNavItems = [
-    { href: '/tree', label: 'Family Tree', icon: TreePine },
-    { href: '/wiki', label: 'Wiki', icon: BookOpen },
+    { href: '/tree', label: 'Tree', icon: TreePine },
+    { href: '/wiki', label: 'Stories', icon: BookOpen },
     { href: '/gallery', label: 'Gallery', icon: Images },
     { href: '/messages', label: 'Messages', icon: MessageSquare },
   ];
 
-  // Navigation items for guests
   const guestNavItems = [
     { href: '/', label: 'Home', icon: Home },
-    { href: '/wiki', label: 'Wiki', icon: BookOpen },
+    { href: '/wiki', label: 'Stories', icon: BookOpen },
     { href: '/gallery', label: 'Gallery', icon: Images },
   ];
 
   const navItems = isAuthenticated ? authNavItems : guestNavItems;
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_1px_0_0_rgba(15,23,42,0.04)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-maroon-500 rounded-lg flex items-center justify-center shadow-sm">
-              <TreePine className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-semibold text-lg tracking-tight text-slate-900 hidden sm:block">
-              FamilyTree
+    <nav className="fixed inset-x-0 top-0 z-50 border-b border-[#e8dfd6] bg-[#fffdf9]/95 shadow-[0_1px_0_rgba(84,57,43,0.03)] backdrop-blur-xl">
+      <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between gap-4">
+          <Link href="/" className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px_10px_14px_14px] bg-maroon-500 text-white shadow-sm">
+              <TreePine className="h-5 w-5" />
+            </span>
+            <span className="hidden min-w-0 sm:block">
+              <span className="block truncate font-serif text-sm font-bold uppercase tracking-[0.16em] text-[#3a2722]">
+                {brandName}
+              </span>
+              <span className="block text-[9px] uppercase tracking-[0.18em] text-[#9a897f]">
+                Family Archive
+              </span>
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden h-full items-stretch md:flex">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -77,93 +98,97 @@ export function Navbar() {
                   key={item.href}
                   href={item.href}
                   className={clsx(
-                    'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                    'relative flex h-full items-center gap-2 px-4 font-serif text-sm transition-colors',
                     isActive
-                      ? 'bg-slate-100 text-maroon-700'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      ? 'font-semibold text-maroon-700'
+                      : 'text-[#6e6058] hover:text-[#332720]'
                   )}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="h-4 w-4" />
                   <span>{item.label}</span>
+                  {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-maroon-500" />}
                 </Link>
               );
             })}
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center space-x-3">
+          <div className="flex shrink-0 items-center gap-2">
             {isLoading ? (
-              <div className="w-8 h-8 rounded-full bg-slate-200 animate-pulse" />
+              <div className="h-8 w-8 animate-pulse rounded-full bg-[#eee6df]" />
             ) : isAuthenticated ? (
               <>
-                {/* Search */}
-                <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                  <Search className="w-5 h-5" />
-                </button>
-
-                {/* Add Person */}
-                <Link href="/add-person">
-                  <Button size="sm" className="hidden sm:flex">
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add Person
-                  </Button>
+                <Link
+                  href="/tree"
+                  aria-label="Search family tree"
+                  className="hidden h-9 items-center gap-2 rounded-lg border border-[#e5d9ce] bg-white px-3 text-xs text-[#7a6a61] shadow-sm transition hover:bg-[#fffaf6] lg:flex"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Search people...</span>
                 </Link>
 
-                {/* Notifications */}
-                <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-maroon-500 rounded-full" />
+                <Link
+                  href="/add-person"
+                  className="hidden h-9 items-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-maroon-600 sm:inline-flex"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Person
+                </Link>
+
+                <button
+                  className="relative grid h-9 w-9 place-items-center rounded-lg text-[#76675f] transition hover:bg-[#f5efe9] hover:text-[#3e3029]"
+                  aria-label="Notifications"
+                >
+                  <Bell className="h-5 w-5" />
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-maroon-500 ring-2 ring-[#fffdf9]" />
                 </button>
 
-                {/* Profile dropdown */}
                 <div className="relative">
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="flex items-center space-x-2 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                    className="flex items-center rounded-lg p-1 transition hover:bg-[#f5efe9]"
+                    aria-label="Open profile menu"
                   >
-                    <Avatar
-                      src={user?.image}
-                      name={user?.name || 'User'}
-                      size="sm"
-                    />
+                    <Avatar src={user?.image} name={user?.name || 'User'} size="sm" />
                   </button>
 
                   {isProfileOpen && (
                     <>
-                      <div
-                        className="fixed inset-0 z-40"
+                      <button
+                        type="button"
+                        className="fixed inset-0 z-40 cursor-default"
                         onClick={() => setIsProfileOpen(false)}
+                        aria-label="Close profile menu"
                       />
-                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50">
-                        <div className="px-4 py-2 border-b border-slate-100">
-                          <p className="font-medium text-slate-900">{user?.name}</p>
-                          <p className="text-sm text-slate-500">
+                      <div className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-xl border border-[#e4d9d0] bg-[#fffdf9] py-2 shadow-[0_18px_50px_-24px_rgba(61,38,28,0.35)]">
+                        <div className="border-b border-[#ece3dc] px-4 py-3">
+                          <p className="font-serif font-semibold text-[#332720]">{user?.name}</p>
+                          <p className="mt-0.5 truncate text-xs text-[#8a7b72]">
                             {user?.email || user?.phone}
                           </p>
                         </div>
                         <Link
                           href="/profile"
-                          className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#66574f] hover:bg-[#f7f1eb]"
                           onClick={() => setIsProfileOpen(false)}
                         >
-                          <Settings className="w-4 h-4" />
+                          <Settings className="h-4 w-4" />
                           <span>Settings</span>
                         </Link>
                         {user?.role === 'ADMIN' && (
                           <Link
                             href="/admin/users"
-                            className="flex items-center space-x-2 px-4 py-2 text-sm text-maroon-700 hover:bg-maroon-50"
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-maroon-700 hover:bg-[#f7f1eb]"
                             onClick={() => setIsProfileOpen(false)}
                           >
-                            <ShieldCheck className="w-4 h-4" />
+                            <ShieldCheck className="h-4 w-4" />
                             <span>Manage Users</span>
                           </Link>
                         )}
                         <button
                           onClick={() => signOut({ callbackUrl: '/' })}
-                          className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 w-full text-left"
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#66574f] hover:bg-[#f7f1eb]"
                         >
-                          <LogOut className="w-4 h-4" />
+                          <LogOut className="h-4 w-4" />
                           <span>Sign Out</span>
                         </button>
                       </div>
@@ -173,42 +198,36 @@ export function Navbar() {
               </>
             ) : (
               <>
-                {/* Guest options */}
                 <Link
                   href="/login"
-                  className="flex items-center space-x-2 px-4 py-2 text-slate-600 hover:text-slate-900 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-[#66574f] transition hover:bg-[#f5efe9] hover:text-[#332720]"
                 >
-                  <LogIn className="w-4 h-4" />
+                  <LogIn className="h-4 w-4" />
                   <span className="hidden sm:inline">Sign In</span>
                 </Link>
                 <Link
                   href="/register"
-                  className="flex items-center space-x-2 bg-maroon-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-maroon-600 transition-colors shadow-sm"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-maroon-600"
                 >
-                  <UserPlus className="w-4 h-4" />
+                  <UserPlus className="h-4 w-4" />
                   <span className="hidden sm:inline">Join</span>
                 </Link>
               </>
             )}
 
-            {/* Mobile menu button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+              className="grid h-9 w-9 place-items-center rounded-lg text-[#76675f] transition hover:bg-[#f5efe9] md:hidden"
+              aria-label="Toggle navigation"
             >
-              {isMobileMenuOpen ? (
-                <X className="w-6 h-6" />
-              ) : (
-                <Menu className="w-6 h-6" />
-              )}
+              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-slate-200 py-3 px-4">
+        <div className="border-t border-[#e8dfd6] bg-[#fffdf9] px-4 py-3 md:hidden">
           <div className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -219,13 +238,13 @@ export function Navbar() {
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={clsx(
-                    'flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium',
+                    'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium',
                     isActive
-                      ? 'bg-slate-100 text-maroon-700'
-                      : 'text-slate-600 hover:bg-slate-50'
+                      ? 'bg-[#f5efe9] text-maroon-700'
+                      : 'text-[#66574f] hover:bg-[#f7f1eb]'
                   )}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="h-5 w-5" />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -234,9 +253,9 @@ export function Navbar() {
               <Link
                 href="/add-person"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-maroon-600 hover:bg-slate-100"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-maroon-700 hover:bg-[#f7f1eb]"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="h-5 w-5" />
                 <span>Add Person</span>
               </Link>
             )}
