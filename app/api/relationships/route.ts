@@ -11,6 +11,11 @@ import {
   isSystemAdmin,
   reconcileConnectedFamilies,
 } from '@/lib/family-membership';
+import {
+  ensureFamilyPersonAssociation,
+  ensureFamilyRelationshipAssociation,
+  ensureMembershipStableReference,
+} from '@/lib/stable-family';
 
 const PARENT_TYPES = ['PARENT_CHILD', 'ADOPTED', 'STEP_PARENT', 'STEP_CHILD', 'FOSTER'] as const;
 
@@ -130,6 +135,14 @@ export async function POST(request: NextRequest) {
         (await findPersonFamilyRoot(person1Id)) ||
         familyBefore;
 
+      if (canonicalRoot) {
+        await Promise.all([
+          ensureFamilyPersonAssociation(canonicalRoot, person1Id),
+          ensureFamilyPersonAssociation(canonicalRoot, person2Id),
+          ensureFamilyRelationshipAssociation(canonicalRoot, existing.id),
+        ]);
+      }
+
       return NextResponse.json({
         success: true,
         data: existing,
@@ -186,14 +199,26 @@ export async function POST(request: NextRequest) {
     // Root changes are deliberately manual. Adding an older parent expands the
     // existing family but does not silently replace the root selected in the UI.
 
-    // If either person has a linked account, make sure that account belongs to
-    // the newly canonical family after a branch/spouse merge.
     if (canonicalRoot) {
+      // Phase-1 migration bridge: every new relationship is explicitly attached
+      // to the stable Family.id, and both endpoints are registered as FamilyPerson
+      // members. Before Phase 1 these helpers intentionally no-op.
+      await Promise.all([
+        ensureFamilyPersonAssociation(canonicalRoot, person1Id),
+        ensureFamilyPersonAssociation(canonicalRoot, person2Id),
+        ensureFamilyRelationshipAssociation(canonicalRoot, relationship.id),
+      ]);
+
+      // If either person has a linked account, make sure that account belongs to
+      // the newly canonical family after a branch/spouse merge and dual-write the
+      // stable Family.id alongside the legacy root id.
       if (person1.userId) {
         await addUserToFamily(person1.userId, canonicalRoot, 'MEMBER');
+        await ensureMembershipStableReference(person1.userId, canonicalRoot);
       }
       if (person2.userId) {
         await addUserToFamily(person2.userId, canonicalRoot, 'MEMBER');
+        await ensureMembershipStableReference(person2.userId, canonicalRoot);
       }
     }
 
