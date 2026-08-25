@@ -4,19 +4,17 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
-import { 
-  isSystemAdmin, 
-  isFamilyAdmin, 
+import {
+  isSystemAdmin,
+  isFamilyAdmin,
   findPersonFamilyRoot,
   notifyVerifiedMembers,
-  addUserToFamily
+  addUserToFamily,
 } from '@/lib/family-membership';
 
 // GET /api/persons - Get all persons or search (public - no auth required)
 export async function GET(request: NextRequest) {
   try {
-    // Viewing persons is public - no authentication required
-
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('query');
     const page = parseInt(searchParams.get('page') || '1');
@@ -37,14 +35,26 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           profileImage: true,
-          parentRelations: true,
-          childRelations: true,
-          spouseRelations1: true,
-          spouseRelations2: true,
-          // Surface linked-account info so the messages page can render WhatsApp
-          // buttons only when the relative has opted in and provided a phone.
-          // `role` is included so the UI can keep account names for admins
-          // while showing the tree-profile name for everyone else.
+          parentRelations: {
+            include: { parent: { include: { profileImage: true } } },
+          },
+          childRelations: {
+            include: { child: { include: { profileImage: true } } },
+          },
+          // The add-person flow needs the actual spouse objects, not just the
+          // relationship ids, so it can reliably offer/link the second parent.
+          spouseRelations1: {
+            include: {
+              spouse1: { include: { profileImage: true } },
+              spouse2: { include: { profileImage: true } },
+            },
+          },
+          spouseRelations2: {
+            include: {
+              spouse1: { include: { profileImage: true } },
+              spouse2: { include: { profileImage: true } },
+            },
+          },
           user: {
             select: {
               id: true,
@@ -92,9 +102,9 @@ export async function POST(request: NextRequest) {
 
     const user = session.user as SessionUser;
     const body = await request.json();
-    const { approverIds, familyId, relatedPersonId, ...personData } = body;
+    const { approverIds: _unusedApprovers, familyId, relatedPersonId, ...personData } = body;
+    void _unusedApprovers;
 
-    // Validate person data
     const validationResult = personSchema.safeParse(personData);
     if (!validationResult.success) {
       return NextResponse.json(
@@ -103,22 +113,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine which family tree this person belongs to
-    let targetFamilyId = familyId;
-    if (!targetFamilyId && relatedPersonId) {
-      // Find the family root from the related person
+    let targetFamilyId: string | null = null;
+    if (familyId) {
+      targetFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
+    } else if (relatedPersonId) {
       targetFamilyId = await findPersonFamilyRoot(relatedPersonId);
     }
 
-    // Check if user is System Admin or Family Admin
     const isSysAdmin = await isSystemAdmin(user.id);
     const isFamAdmin = targetFamilyId ? await isFamilyAdmin(user.id, targetFamilyId) : false;
-    
-    // Person is auto-verified if added by System Admin or Family Admin
     const shouldAutoVerify = isSysAdmin || isFamAdmin;
 
-    // Create the person directly (no more pending approval for new persons)
-    // New persons appear immediately with "Unverified" badge unless added by admin
     const person = await prisma.person.create({
       data: {
         ...validationResult.data,
@@ -131,12 +136,9 @@ export async function POST(request: NextRequest) {
         verifiedAt: shouldAutoVerify ? new Date() : null,
         verifiedById: shouldAutoVerify ? user.id : null,
       },
-      include: {
-        profileImage: true,
-      },
+      include: { profileImage: true },
     });
 
-    // Log activity
     await prisma.activity.create({
       data: {
         type: 'PERSON_ADDED',
@@ -146,7 +148,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // If not auto-verified and we have a family ID, notify verified members for approval
     if (!shouldAutoVerify && targetFamilyId) {
       await notifyVerifiedMembers(
         targetFamilyId,
@@ -156,26 +157,20 @@ export async function POST(request: NextRequest) {
           message: `${person.firstName} ${person.lastName} was added to the family tree and needs verification.`,
           data: { personId: person.id, familyId: targetFamilyId },
         },
-        user.id // Exclude the person who added them
+        user.id
       );
     }
 
-    // If the user adding the person is not yet a member of this family, add them
     if (targetFamilyId) {
-      const existingMembership = await prisma.familyMembership.findUnique({
-        where: { userId_familyId: { userId: user.id, familyId: targetFamilyId } },
-      });
-      
-      if (!existingMembership) {
-        await addUserToFamily(user.id, targetFamilyId, 'MEMBER');
-      }
+      await addUserToFamily(user.id, targetFamilyId, 'MEMBER');
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       data: person,
-      message: shouldAutoVerify 
-        ? 'Person added successfully.' 
+      familyRootId: targetFamilyId,
+      message: shouldAutoVerify
+        ? 'Person added successfully.'
         : 'Person added with unverified status. Family members can verify this addition.',
     });
   } catch (error) {
@@ -186,4 +181,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
