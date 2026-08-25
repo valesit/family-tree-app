@@ -18,29 +18,29 @@ export async function GET(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(
-        { success: false, error: 'Not authenticated' },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
     const user = session.user as SessionUser;
 
-    // Repair legacy duplicate family roots before deciding which tree this user
-    // should see. This moves memberships from stale spouse-rooted Family rows
-    // onto the single canonical Family record.
-    const membershipRoots = await prisma.familyMembership.findMany({
-      where: { userId: user.id },
-      select: { familyId: true },
-    });
-    for (const membership of membershipRoots) {
+    // Read membership scope through the transition bridge. After Phase 1 this
+    // is keyed by permanent Family.id; before Phase 1 it falls back to the old
+    // root-person reference so this branch remains deploy-safe.
+    const membershipsBeforeReconcile = await listTransitionalMembershipsForUser(user.id);
+    for (const membership of membershipsBeforeReconcile) {
       try {
-        const canonicalRoot = await reconcileConnectedFamilies(membership.familyId);
+        const canonicalRoot = await reconcileConnectedFamilies(
+          membership.family.rootPersonId
+        );
         if (canonicalRoot) {
           await ensureMembershipStableReference(user.id, canonicalRoot);
         }
       } catch (error) {
-        console.error('Failed to reconcile family membership', membership.familyId, error);
+        console.error(
+          'Failed to reconcile family membership',
+          membership.family.rootPersonId,
+          error
+        );
       }
     }
 
@@ -55,10 +55,8 @@ export async function GET(_request: NextRequest) {
       }
     }
 
-    // Once Phase 1 exists, this reads through FamilyMembership.familyRecordId ->
-    // Family.id. Before Phase 1 it automatically falls back to the legacy root-id
-    // relation, so this application version can be deployed safely on either side
-    // of the additive migration.
+    // Refetch because duplicate-family reconciliation may have moved membership
+    // rows to a different permanent Family record.
     const memberships = await listTransitionalMembershipsForUser(user.id);
 
     let linkedPersonFamily: string | null = null;
@@ -106,9 +104,8 @@ export async function GET(_request: NextRequest) {
         });
 
         return {
-          // Keep id as the root person for current tree URLs. The permanent
-          // Family.id is also exposed so new callers can migrate without
-          // changing the tree's root navigation contract yet.
+          // `id` remains the root person for existing /tree?rootId URLs.
+          // `familyRecordId` is the permanent family identity new code should use.
           id: rootId,
           familyRecordId: membership.family.id,
           name: membership.family.name,
@@ -129,11 +126,7 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        data: {
-          families,
-          defaultFamilyId,
-          linkedPersonFamily,
-        },
+        data: { families, defaultFamilyId, linkedPersonFamily },
       },
       { headers: { 'Cache-Control': 'no-store, max-age=0' } }
     );
