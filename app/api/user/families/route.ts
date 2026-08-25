@@ -8,6 +8,10 @@ import {
   getUserDefaultFamily,
   reconcileConnectedFamilies,
 } from '@/lib/family-membership';
+import {
+  ensureMembershipStableReference,
+  listTransitionalMembershipsForUser,
+} from '@/lib/stable-family';
 
 // GET /api/user/families - Get the current user's families
 export async function GET(_request: NextRequest) {
@@ -31,7 +35,10 @@ export async function GET(_request: NextRequest) {
     });
     for (const membership of membershipRoots) {
       try {
-        await reconcileConnectedFamilies(membership.familyId);
+        const canonicalRoot = await reconcileConnectedFamilies(membership.familyId);
+        if (canonicalRoot) {
+          await ensureMembershipStableReference(user.id, canonicalRoot);
+        }
       } catch (error) {
         console.error('Failed to reconcile family membership', membership.familyId, error);
       }
@@ -39,18 +46,20 @@ export async function GET(_request: NextRequest) {
 
     if (user.linkedPersonId) {
       try {
-        await reconcileConnectedFamilies(user.linkedPersonId);
+        const canonicalRoot = await reconcileConnectedFamilies(user.linkedPersonId);
+        if (canonicalRoot) {
+          await ensureMembershipStableReference(user.id, canonicalRoot);
+        }
       } catch (error) {
         console.error('Failed to reconcile linked-person family', error);
       }
     }
 
-    // Refetch after reconciliation because family ids may have changed.
-    const memberships = await prisma.familyMembership.findMany({
-      where: { userId: user.id },
-      include: { family: true },
-      orderBy: { joinedAt: 'asc' },
-    });
+    // Once Phase 1 exists, this reads through FamilyMembership.familyRecordId ->
+    // Family.id. Before Phase 1 it automatically falls back to the legacy root-id
+    // relation, so this application version can be deployed safely on either side
+    // of the additive migration.
+    const memberships = await listTransitionalMembershipsForUser(user.id);
 
     let linkedPersonFamily: string | null = null;
     if (user.linkedPersonId) {
@@ -58,6 +67,10 @@ export async function GET(_request: NextRequest) {
     }
 
     let defaultFamilyId = await getUserDefaultFamily(user.id);
+    if (!defaultFamilyId && memberships.length > 0) {
+      defaultFamilyId = memberships[0].family.rootPersonId;
+    }
+
     if (!defaultFamilyId) {
       const allRels = await prisma.relationship.findMany({
         where: { type: 'PARENT_CHILD' },
@@ -93,7 +106,11 @@ export async function GET(_request: NextRequest) {
         });
 
         return {
+          // Keep id as the root person for current tree URLs. The permanent
+          // Family.id is also exposed so new callers can migrate without
+          // changing the tree's root navigation contract yet.
           id: rootId,
+          familyRecordId: membership.family.id,
           name: membership.family.name,
           role: membership.role,
           joinedAt: membership.joinedAt,
