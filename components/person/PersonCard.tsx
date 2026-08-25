@@ -1,6 +1,8 @@
 'use client';
 
-import { PersonWithRelations } from '@/types';
+import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { PersonWithRelations, SessionUser } from '@/types';
 import { Avatar, Badge, Card } from '@/components/ui';
 import { calculateAge, formatPersonName } from '@/lib/tree-utils';
 import {
@@ -12,6 +14,7 @@ import {
   Heart,
   Users,
   Edit,
+  Info,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -26,6 +29,10 @@ export function PersonCard({
   onEdit,
   showActions = true,
 }: PersonCardProps) {
+  const { data: session } = useSession();
+  const user = session?.user as SessionUser | undefined;
+  const isAdmin = user?.role === 'ADMIN';
+
   const age = person.birthDate
     ? calculateAge(new Date(person.birthDate), person.deathDate ? new Date(person.deathDate) : null)
     : null;
@@ -93,6 +100,28 @@ export function PersonCard({
             </div>
           </div>
         </div>
+
+        {isAdmin && person.isVerified === false && (
+          <div className="mb-5 flex flex-col gap-3 rounded-xl border border-[#dfd2c6] bg-[#f7f1eb] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#eee3da] text-[#806657]">
+                <Info className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[#4e3b32]">Needs verification</p>
+                <p className="mt-0.5 text-xs leading-5 text-[#817168]">
+                  This person was recently added. Review the details when convenient.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/person/${person.id}/edit`}
+              className="shrink-0 self-start rounded-lg border border-[#d3c2b6] bg-[#fffdf9] px-3 py-1.5 text-xs font-semibold text-maroon-700 transition hover:bg-[#f3ebe4] sm:self-center"
+            >
+              Review person
+            </Link>
+          </div>
+        )}
 
         <div className="space-y-3 border-t border-[#eee4dc] pt-5">
           {person.birthDate && (
