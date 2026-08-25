@@ -338,10 +338,21 @@ export async function addUserToFamily(
   role: FamilyRole = 'MEMBER'
 ): Promise<FamilyMembership> {
   const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
-  return prisma.familyMembership.upsert({
+  const existing = await prisma.familyMembership.findUnique({
     where: { userId_familyId: { userId, familyId: canonicalFamilyId } },
-    create: { userId, familyId: canonicalFamilyId, role },
-    update: { role },
+  });
+
+  if (existing) {
+    // Joining/contributing as a MEMBER must never demote an existing Family Admin.
+    if (existing.role === 'ADMIN' || existing.role === role) return existing;
+    return prisma.familyMembership.update({
+      where: { id: existing.id },
+      data: { role },
+    });
+  }
+
+  return prisma.familyMembership.create({
+    data: { userId, familyId: canonicalFamilyId, role },
   });
 }
 
