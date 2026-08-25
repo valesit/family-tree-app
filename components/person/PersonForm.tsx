@@ -13,7 +13,6 @@ import {
   Briefcase,
   Mail,
   Phone,
-  FileText,
   Plus,
   X,
   Camera,
@@ -21,6 +20,7 @@ import {
 
 interface PersonFormProps {
   initialData?: Partial<PersonInput>;
+  initialImageUrl?: string | null;
   onSubmit: (data: PersonInput, profileImage?: File) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
@@ -30,6 +30,7 @@ interface PersonFormProps {
 
 export function PersonForm({
   initialData,
+  initialImageUrl,
   onSubmit,
   onCancel,
   isLoading = false,
@@ -37,7 +38,8 @@ export function PersonForm({
   submitLabel = 'Save',
 }: PersonFormProps) {
   const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(initialImageUrl || null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -83,14 +85,32 @@ export function PersonForm({
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setProfileImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024;
+
+    if (!validTypes.includes(file.type)) {
+      setProfileImage(null);
+      setImageError('Please choose a JPEG, PNG, GIF, or WebP image.');
+      e.target.value = '';
+      return;
     }
+
+    if (file.size > maxSize) {
+      setProfileImage(null);
+      setImageError('Profile photos must be smaller than 5MB.');
+      e.target.value = '';
+      return;
+    }
+
+    setImageError(null);
+    setProfileImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleFormSubmit = async (data: PersonInput) => {
@@ -114,6 +134,7 @@ export function PersonForm({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="absolute bottom-0 right-0 p-2 bg-maroon-500 text-white rounded-full shadow-lg hover:bg-maroon-600 transition-colors"
+              aria-label={initialImageUrl || imagePreview ? 'Change profile photo' : 'Upload profile photo'}
             >
               <Camera className="w-4 h-4" />
             </button>
@@ -121,11 +142,18 @@ export function PersonForm({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/gif,image/webp"
             onChange={handleImageChange}
             className="hidden"
           />
-          <p className="text-sm text-slate-500 mt-2">Click to upload photo</p>
+          <p className="text-sm text-slate-500 mt-2">
+            {initialImageUrl || imagePreview ? 'Click to change photo' : 'Click to upload photo'}
+          </p>
+          {imageError && (
+            <p className="mt-2 text-center text-sm text-rose-600" role="alert">
+              {imageError}
+            </p>
+          )}
         </div>
 
         {/* Basic Info */}
@@ -341,4 +369,3 @@ export function PersonForm({
     </Card>
   );
 }
-

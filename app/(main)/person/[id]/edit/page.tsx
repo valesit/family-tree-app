@@ -101,12 +101,13 @@ export default function EditPersonPage({ params }: PageProps) {
 
   const handleSubmit = async (formData: PersonInput, profileImage?: File) => {
     try {
-      // Prepare the data
-      const updateData = {
+      // Keep the payload in the same shape expected by personSchema. The API
+      // owns date conversion and facts JSON serialization before writing to Prisma.
+      const updateData: PersonInput = {
         ...formData,
-        birthDate: formData.birthDate ? new Date(formData.birthDate).toISOString() : null,
-        deathDate: formData.deathDate ? new Date(formData.deathDate).toISOString() : null,
-        facts: formData.facts?.length ? JSON.stringify(formData.facts) : null,
+        birthDate: formData.birthDate || '',
+        deathDate: formData.deathDate || '',
+        facts: (formData.facts || []).filter((fact) => fact.trim().length > 0),
       };
 
       // Update person
@@ -116,21 +117,32 @@ export default function EditPersonPage({ params }: PageProps) {
         body: JSON.stringify(updateData),
       });
 
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || 'Failed to update person');
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to update person');
       }
 
-      // Handle profile image upload if provided
+      // Handle profile image upload if provided. /api/upload expects the field
+      // name `image`, and `isProfile=true` is required to set profileImageId.
       if (profileImage) {
-        const formData = new FormData();
-        formData.append('file', profileImage);
-        formData.append('personId', id);
-        
-        await fetch('/api/upload', {
+        const imageFormData = new FormData();
+        imageFormData.append('image', profileImage);
+        imageFormData.append('personId', id);
+        imageFormData.append('isProfile', 'true');
+
+        const uploadResponse = await fetch('/api/upload', {
           method: 'POST',
-          body: formData,
+          body: imageFormData,
         });
+        const uploadResult = await uploadResponse.json().catch(() => null);
+
+        if (!uploadResponse.ok || !uploadResult?.success) {
+          throw new Error(
+            `Profile details were saved, but the photo could not be uploaded: ${
+              uploadResult?.error || 'Upload failed'
+            }`
+          );
+        }
       }
 
       // Redirect back to person page
@@ -169,6 +181,7 @@ export default function EditPersonPage({ params }: PageProps) {
         {/* Form */}
         <PersonForm
           initialData={initialData}
+          initialImageUrl={person.profileImage?.url}
           onSubmit={handleSubmit}
           onCancel={handleCancel}
           title={`Edit ${person.firstName} ${person.lastName}`}
@@ -178,4 +191,3 @@ export default function EditPersonPage({ params }: PageProps) {
     </div>
   );
 }
-
