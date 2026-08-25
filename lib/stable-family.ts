@@ -8,16 +8,17 @@ export type TransitionalMembership = {
   role: FamilyRole;
   joinedAt: Date;
   updatedAt: Date;
-  legacyRootPersonId: string;
+  legacyRootPersonId: string | null;
   stableFamilyId: string | null;
 };
 
 let phaseOneReadyPromise: Promise<boolean> | null = null;
+let legacyColumnPromise: Promise<boolean> | null = null;
 
 /**
- * Phase 1 is additive. Until it has been applied we keep all current behavior
- * working and simply skip stable-family dual writes. Once the new column/table
- * objects exist, this module starts using them automatically.
+ * Phase 1 is additive. Until it has been applied, callers can continue using
+ * the legacy membership path. Once the stable column/join tables exist this
+ * module automatically treats Family.id as the source of truth.
  */
 export function isStableFamilySchemaReady(): Promise<boolean> {
   if (!phaseOneReadyPromise) {
@@ -41,11 +42,28 @@ export function isStableFamilySchemaReady(): Promise<boolean> {
   return phaseOneReadyPromise;
 }
 
+/** The old root-person column may remain during Phase 2 as a compatibility shim. */
+export function hasLegacyMembershipRootColumn(): Promise<boolean> {
+  if (!legacyColumnPromise) {
+    legacyColumnPromise = prisma
+      .$queryRaw<Array<{ present: boolean }>>(Prisma.sql`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'FamilyMembership'
+            AND column_name = 'familyId'
+        ) AS present
+      `)
+      .then((rows) => Boolean(rows[0]?.present))
+      .catch(() => false);
+  }
+  return legacyColumnPromise;
+}
+
 export async function resolveFamilyRecord(familyRef: string) {
   return prisma.family.findFirst({
-    where: {
-      OR: [{ id: familyRef }, { rootPersonId: familyRef }],
-    },
+    where: { OR: [{ id: familyRef }, { rootPersonId: familyRef }] },
   });
 }
 
@@ -87,17 +105,27 @@ export async function ensureMembershipStableReference(
   const family = await resolveFamilyRecord(familyRef);
   if (!family) return;
 
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "FamilyMembership"
-    SET "familyRecordId" = ${family.id},
-        "familyId" = ${family.rootPersonId},
-        "updatedAt" = CURRENT_TIMESTAMP
-    WHERE "userId" = ${userId}
-      AND (
-        "familyRecordId" = ${family.id}
-        OR "familyId" = ${family.rootPersonId}
-      )
-  `);
+  if (await hasLegacyMembershipRootColumn()) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "FamilyMembership"
+      SET "familyRecordId" = ${family.id},
+          "familyId" = ${family.rootPersonId},
+          "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "userId" = ${userId}
+        AND (
+          "familyRecordId" = ${family.id}
+          OR "familyId" = ${family.rootPersonId}
+        )
+    `);
+  } else {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "FamilyMembership"
+      SET "familyRecordId" = ${family.id},
+          "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "userId" = ${userId}
+        AND "familyRecordId" = ${family.id}
+    `);
+  }
 }
 
 export async function getTransitionalMembership(
@@ -109,12 +137,7 @@ export async function getTransitionalMembership(
 
   if (!(await isStableFamilySchemaReady())) {
     const legacy = await prisma.familyMembership.findUnique({
-      where: {
-        userId_familyId: {
-          userId,
-          familyId: family.rootPersonId,
-        },
-      },
+      where: { userId_familyId: { userId, familyId: family.rootPersonId } },
     });
     return legacy
       ? {
@@ -129,33 +152,39 @@ export async function getTransitionalMembership(
       : null;
   }
 
+  if (await hasLegacyMembershipRootColumn()) {
+    const rows = await prisma.$queryRaw<TransitionalMembership[]>(Prisma.sql`
+      SELECT
+        fm."id", fm."userId", fm."role", fm."joinedAt", fm."updatedAt",
+        fm."familyId" AS "legacyRootPersonId",
+        fm."familyRecordId" AS "stableFamilyId"
+      FROM "FamilyMembership" fm
+      WHERE fm."userId" = ${userId}
+        AND (fm."familyRecordId" = ${family.id} OR fm."familyId" = ${family.rootPersonId})
+      ORDER BY CASE WHEN fm."familyRecordId" = ${family.id} THEN 0 ELSE 1 END,
+               fm."joinedAt" ASC
+      LIMIT 1
+    `);
+    const membership = rows[0] ?? null;
+    if (membership && membership.stableFamilyId !== family.id) {
+      await ensureMembershipStableReference(userId, family.id);
+      membership.stableFamilyId = family.id;
+    }
+    return membership;
+  }
+
   const rows = await prisma.$queryRaw<TransitionalMembership[]>(Prisma.sql`
     SELECT
-      fm."id",
-      fm."userId",
-      fm."role",
-      fm."joinedAt",
-      fm."updatedAt",
-      fm."familyId" AS "legacyRootPersonId",
+      fm."id", fm."userId", fm."role", fm."joinedAt", fm."updatedAt",
+      NULL::text AS "legacyRootPersonId",
       fm."familyRecordId" AS "stableFamilyId"
     FROM "FamilyMembership" fm
     WHERE fm."userId" = ${userId}
-      AND (
-        fm."familyRecordId" = ${family.id}
-        OR fm."familyId" = ${family.rootPersonId}
-      )
-    ORDER BY
-      CASE WHEN fm."familyRecordId" = ${family.id} THEN 0 ELSE 1 END,
-      fm."joinedAt" ASC
+      AND fm."familyRecordId" = ${family.id}
+    ORDER BY fm."joinedAt" ASC
     LIMIT 1
   `);
-
-  const membership = rows[0] ?? null;
-  if (membership && membership.stableFamilyId !== family.id) {
-    await ensureMembershipStableReference(userId, family.id);
-    membership.stableFamilyId = family.id;
-  }
-  return membership;
+  return rows[0] ?? null;
 }
 
 export async function upsertTransitionalMembership(
@@ -170,37 +199,53 @@ export async function upsertTransitionalMembership(
   if (existing) {
     const nextRole: FamilyRole = existing.role === 'ADMIN' ? 'ADMIN' : role;
     if (nextRole !== existing.role) {
-      await prisma.familyMembership.update({
-        where: { id: existing.id },
-        data: { role: nextRole },
-      });
+      await setTransitionalMembershipRole(existing.id, nextRole);
       existing = { ...existing, role: nextRole };
     }
     await ensureMembershipStableReference(userId, family.id);
-    return { ...existing, stableFamilyId: (await isStableFamilySchemaReady()) ? family.id : null };
+    return {
+      ...existing,
+      stableFamilyId: (await isStableFamilySchemaReady()) ? family.id : null,
+    };
   }
 
-  // Keep writing the legacy root column during the transition so the currently
-  // deployed Prisma model and the old FK remain valid until Phase 2 is complete.
-  const created = await prisma.familyMembership.create({
-    data: {
-      id: randomUUID(),
-      userId,
-      familyId: family.rootPersonId,
-      role,
-    },
-  });
+  if (!(await isStableFamilySchemaReady())) {
+    const created = await prisma.familyMembership.create({
+      data: { id: randomUUID(), userId, familyId: family.rootPersonId, role },
+    });
+    return {
+      id: created.id,
+      userId: created.userId,
+      role: created.role,
+      joinedAt: created.joinedAt,
+      updatedAt: created.updatedAt,
+      legacyRootPersonId: created.familyId,
+      stableFamilyId: null,
+    };
+  }
 
-  await ensureMembershipStableReference(userId, family.id);
-  return {
-    id: created.id,
-    userId: created.userId,
-    role: created.role,
-    joinedAt: created.joinedAt,
-    updatedAt: created.updatedAt,
-    legacyRootPersonId: created.familyId,
-    stableFamilyId: (await isStableFamilySchemaReady()) ? family.id : null,
-  };
+  const id = randomUUID();
+  if (await hasLegacyMembershipRootColumn()) {
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "FamilyMembership"
+        ("id", "userId", "familyId", "familyRecordId", "role", "joinedAt", "updatedAt")
+      VALUES
+        (${id}, ${userId}, ${family.rootPersonId}, ${family.id},
+         CAST(${role} AS "FamilyRole"), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+  } else {
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "FamilyMembership"
+        ("id", "userId", "familyRecordId", "role", "joinedAt", "updatedAt")
+      VALUES
+        (${id}, ${userId}, ${family.id}, CAST(${role} AS "FamilyRole"),
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+  }
+
+  const created = await getTransitionalMembership(userId, family.id);
+  if (!created) throw new Error('Failed to create family membership');
+  return created;
 }
 
 export async function listTransitionalMembershipsForUser(
@@ -228,20 +273,16 @@ export async function listTransitionalMembershipsForUser(
     }));
   }
 
+  const legacySelect = (await hasLegacyMembershipRootColumn())
+    ? Prisma.sql`fm."familyId" AS "legacyRootPersonId"`
+    : Prisma.sql`NULL::text AS "legacyRootPersonId"`;
+
   return prisma.$queryRaw(Prisma.sql`
     SELECT
-      fm."id",
-      fm."userId",
-      fm."role",
-      fm."joinedAt",
-      fm."updatedAt",
-      fm."familyId" AS "legacyRootPersonId",
+      fm."id", fm."userId", fm."role", fm."joinedAt", fm."updatedAt",
+      ${legacySelect},
       fm."familyRecordId" AS "stableFamilyId",
-      json_build_object(
-        'id', f."id",
-        'rootPersonId', f."rootPersonId",
-        'name', f."name"
-      ) AS "family"
+      json_build_object('id', f."id", 'rootPersonId', f."rootPersonId", 'name', f."name") AS "family"
     FROM "FamilyMembership" fm
     JOIN "Family" f ON f."id" = fm."familyRecordId"
     WHERE fm."userId" = ${userId}
@@ -258,10 +299,7 @@ export async function listTransitionalMembershipsForFamily(
 
   if (!(await isStableFamilySchemaReady())) {
     const legacy = await prisma.familyMembership.findMany({
-      where: {
-        familyId: family.rootPersonId,
-        ...(role ? { role } : {}),
-      },
+      where: { familyId: family.rootPersonId, ...(role ? { role } : {}) },
       orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
     });
     return legacy.map((membership) => ({
@@ -275,16 +313,15 @@ export async function listTransitionalMembershipsForFamily(
     }));
   }
 
+  const legacySelect = (await hasLegacyMembershipRootColumn())
+    ? Prisma.sql`fm."familyId" AS "legacyRootPersonId"`
+    : Prisma.sql`NULL::text AS "legacyRootPersonId"`;
+
   if (role) {
     return prisma.$queryRaw(Prisma.sql`
       SELECT
-        fm."id",
-        fm."userId",
-        fm."role",
-        fm."joinedAt",
-        fm."updatedAt",
-        fm."familyId" AS "legacyRootPersonId",
-        fm."familyRecordId" AS "stableFamilyId"
+        fm."id", fm."userId", fm."role", fm."joinedAt", fm."updatedAt",
+        ${legacySelect}, fm."familyRecordId" AS "stableFamilyId"
       FROM "FamilyMembership" fm
       WHERE fm."familyRecordId" = ${family.id}
         AND fm."role" = CAST(${role} AS "FamilyRole")
@@ -294,13 +331,8 @@ export async function listTransitionalMembershipsForFamily(
 
   return prisma.$queryRaw(Prisma.sql`
     SELECT
-      fm."id",
-      fm."userId",
-      fm."role",
-      fm."joinedAt",
-      fm."updatedAt",
-      fm."familyId" AS "legacyRootPersonId",
-      fm."familyRecordId" AS "stableFamilyId"
+      fm."id", fm."userId", fm."role", fm."joinedAt", fm."updatedAt",
+      ${legacySelect}, fm."familyRecordId" AS "stableFamilyId"
     FROM "FamilyMembership" fm
     WHERE fm."familyRecordId" = ${family.id}
     ORDER BY fm."role" ASC, fm."joinedAt" ASC
@@ -311,12 +343,15 @@ export async function setTransitionalMembershipRole(
   membershipId: string,
   role: FamilyRole
 ): Promise<void> {
-  await prisma.familyMembership.update({
-    where: { id: membershipId },
-    data: { role },
-  });
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "FamilyMembership"
+    SET "role" = CAST(${role} AS "FamilyRole"), "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${membershipId}
+  `);
 }
 
 export async function deleteTransitionalMembership(membershipId: string): Promise<void> {
-  await prisma.familyMembership.delete({ where: { id: membershipId } });
+  await prisma.$executeRaw(Prisma.sql`
+    DELETE FROM "FamilyMembership" WHERE "id" = ${membershipId}
+  `);
 }
