@@ -1,5 +1,30 @@
 import prisma from '@/lib/db';
 import { FamilyRole, FamilyMembership, Prisma, Relationship } from '@prisma/client';
+import {
+  deleteTransitionalMembership,
+  ensureMembershipStableReference,
+  getTransitionalMembership,
+  hasLegacyMembershipRootColumn,
+  isStableFamilySchemaReady,
+  listTransitionalMembershipsForFamily,
+  listTransitionalMembershipsForUser,
+  resolveFamilyRecord,
+  setTransitionalMembershipRole,
+  TransitionalMembership,
+  upsertTransitionalMembership,
+} from '@/lib/stable-family';
+
+function asLegacyMembership(membership: TransitionalMembership): FamilyMembership {
+  return {
+    id: membership.id,
+    userId: membership.userId,
+    familyId:
+      membership.legacyRootPersonId || membership.stableFamilyId || '',
+    role: membership.role,
+    joinedAt: membership.joinedAt,
+    updatedAt: membership.updatedAt,
+  };
+}
 
 /**
  * Return every person in the connected genealogy component containing personId.
@@ -37,7 +62,6 @@ export async function getConnectedPersonIds(personId: string): Promise<Set<strin
 
   const connected = new Set<string>();
   const queue = [personId];
-
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (connected.has(current)) continue;
@@ -46,16 +70,10 @@ export async function getConnectedPersonIds(personId: string): Promise<Set<strin
       if (!connected.has(next)) queue.push(next);
     }
   }
-
   return connected;
 }
 
-/**
- * Count ancestors reachable by walking upward through parent links while spouse
- * links are treated as same-generation connections. This is only used to rank
- * stale duplicate Family records: the candidate with fewer upstream ancestors
- * is the higher/root-most record.
- */
+/** Rank stale duplicate Family records by how high their stored roots sit. */
 function upstreamAncestorCount(rootPersonId: string, relationships: Relationship[]): number {
   const visited = new Set<string>();
   const ancestors = new Set<string>();
@@ -68,10 +86,18 @@ function upstreamAncestorCount(rootPersonId: string, relationships: Relationship
 
     for (const relationship of relationships) {
       if (relationship.type === 'SPOUSE') {
-        if (relationship.spouse1Id === current && relationship.spouse2Id && !visited.has(relationship.spouse2Id)) {
+        if (
+          relationship.spouse1Id === current &&
+          relationship.spouse2Id &&
+          !visited.has(relationship.spouse2Id)
+        ) {
           queue.push(relationship.spouse2Id);
         }
-        if (relationship.spouse2Id === current && relationship.spouse1Id && !visited.has(relationship.spouse1Id)) {
+        if (
+          relationship.spouse2Id === current &&
+          relationship.spouse1Id &&
+          !visited.has(relationship.spouse1Id)
+        ) {
           queue.push(relationship.spouse1Id);
         }
       }
@@ -114,73 +140,53 @@ async function getCanonicalFamilyForPerson(personId: string) {
 }
 
 /**
- * Merge stale duplicate Family records that point into the same connected tree.
- *
- * Older app behavior could create one Family for one spouse and another Family
- * for the other branch. Because FamilyMembership currently references
- * Family.rootPersonId, this routine moves all memberships to the canonical root
- * before deleting the duplicate Family rows. It is safe to call repeatedly.
+ * Merge stale duplicate Family rows within one connected genealogy component.
+ * Stable Family.id membership references are moved first, then the duplicate
+ * Family is removed. The old root-person column is kept in sync only as a
+ * compatibility field while it still exists.
  */
 export async function reconcileConnectedFamilies(personId: string): Promise<string | null> {
   const { canonical, families } = await getCanonicalFamilyForPerson(personId);
   if (!canonical) return null;
-  if (families.length === 1) return canonical.rootPersonId;
 
-  await prisma.$transaction(async (tx) => {
+  if (families.length > 1) {
     for (const duplicate of families) {
       if (duplicate.id === canonical.id) continue;
 
-      const memberships = await tx.familyMembership.findMany({
-        where: { familyId: duplicate.rootPersonId },
-      });
-
+      const memberships = await listTransitionalMembershipsForFamily(duplicate.id);
       for (const membership of memberships) {
-        const existing = await tx.familyMembership.findUnique({
-          where: {
-            userId_familyId: {
-              userId: membership.userId,
-              familyId: canonical.rootPersonId,
-            },
-          },
-        });
-
-        if (!existing) {
-          await tx.familyMembership.create({
-            data: {
-              userId: membership.userId,
-              familyId: canonical.rootPersonId,
-              role: membership.role,
-              joinedAt: membership.joinedAt,
-            },
-          });
-        } else if (membership.role === 'ADMIN' && existing.role !== 'ADMIN') {
-          await tx.familyMembership.update({
-            where: { id: existing.id },
-            data: { role: 'ADMIN' },
-          });
-        }
+        await upsertTransitionalMembership(
+          membership.userId,
+          canonical.id,
+          membership.role
+        );
+        await deleteTransitionalMembership(membership.id);
       }
 
-      await tx.familyMembership.deleteMany({
-        where: { familyId: duplicate.rootPersonId },
-      });
-      await tx.family.delete({ where: { id: duplicate.id } });
+      await prisma.family.delete({ where: { id: duplicate.id } });
     }
-  });
+  }
+
+  const canonicalMemberships = await listTransitionalMembershipsForFamily(canonical.id);
+  for (const membership of canonicalMemberships) {
+    await ensureMembershipStableReference(membership.userId, canonical.id);
+  }
 
   return canonical.rootPersonId;
 }
 
-/** Check if a user is a Family Admin for a specific family tree. */
+/** Check if a user is a Family Admin. `familyId` may be Family.id or root person id. */
 export async function isFamilyAdmin(userId: string, familyId: string): Promise<boolean> {
-  const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
-  const membership = await prisma.familyMembership.findUnique({
-    where: { userId_familyId: { userId, familyId: canonicalFamilyId } },
-  });
+  const family = await resolveFamilyRecord(familyId);
+  if (!family) {
+    const root = await findPersonFamilyRoot(familyId);
+    if (!root) return false;
+    return isFamilyAdmin(userId, root);
+  }
+  const membership = await getTransitionalMembership(userId, family.id);
   return membership?.role === 'ADMIN';
 }
 
-/** Check if a user is a System Admin. */
 export async function isSystemAdmin(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -189,7 +195,6 @@ export async function isSystemAdmin(userId: string): Promise<boolean> {
   return user?.role === 'ADMIN';
 }
 
-/** Check if a user can manage a specific family tree. */
 export async function canManageTree(userId: string, familyId: string): Promise<boolean> {
   const [sysAdmin, famAdmin] = await Promise.all([
     isSystemAdmin(userId),
@@ -198,37 +203,43 @@ export async function canManageTree(userId: string, familyId: string): Promise<b
   return sysAdmin || famAdmin;
 }
 
-/** Any membership row counts as a verified family member. */
 export async function isVerifiedMember(userId: string, familyId: string): Promise<boolean> {
-  const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
-  const membership = await prisma.familyMembership.findUnique({
-    where: { userId_familyId: { userId, familyId: canonicalFamilyId } },
-  });
-  return membership !== null;
+  return (await getFamilyMembership(userId, familyId)) !== null;
 }
 
 export async function getFamilyMembership(
   userId: string,
   familyId: string
 ): Promise<FamilyMembership | null> {
-  const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
-  return prisma.familyMembership.findUnique({
-    where: { userId_familyId: { userId, familyId: canonicalFamilyId } },
-  });
+  const family =
+    (await resolveFamilyRecord(familyId)) ||
+    (await findPersonFamilyRoot(familyId).then((root) =>
+      root ? resolveFamilyRecord(root) : null
+    ));
+  if (!family) return null;
+  const membership = await getTransitionalMembership(userId, family.id);
+  return membership ? asLegacyMembership(membership) : null;
 }
 
 export async function getUserFamilies(userId: string) {
-  return prisma.familyMembership.findMany({
-    where: { userId },
-    include: { family: true },
-    orderBy: { joinedAt: 'asc' },
-  });
+  const memberships = await listTransitionalMembershipsForUser(userId);
+  const familyIds = memberships.map((membership) => membership.family.id);
+  const families = await prisma.family.findMany({ where: { id: { in: familyIds } } });
+  const byId = new Map(families.map((family) => [family.id, family]));
+
+  return memberships
+    .map((membership) => {
+      const family = byId.get(membership.family.id);
+      if (!family) return null;
+      return {
+        ...asLegacyMembership(membership),
+        family,
+      };
+    })
+    .filter((membership): membership is NonNullable<typeof membership> => membership !== null);
 }
 
-/**
- * Get a user's default family. A linked profile wins; otherwise the oldest
- * membership is resolved back to the canonical Family root.
- */
+/** A linked profile wins; otherwise use the oldest stable family membership. */
 export async function getUserDefaultFamily(userId: string): Promise<string | null> {
   const linkedPerson = await prisma.person.findFirst({ where: { userId } });
   if (linkedPerson) {
@@ -236,16 +247,10 @@ export async function getUserDefaultFamily(userId: string): Promise<string | nul
     if (familyRoot) return familyRoot;
   }
 
-  const membership = await prisma.familyMembership.findFirst({
-    where: { userId },
-    orderBy: { joinedAt: 'asc' },
-  });
-  if (!membership) return null;
-
-  return (await findPersonFamilyRoot(membership.familyId)) || membership.familyId;
+  const memberships = await listTransitionalMembershipsForUser(userId);
+  return memberships[0]?.family.rootPersonId ?? null;
 }
 
-/** Legacy helper retained for callers that need a purely biological topmost ancestor. */
 export async function findTopmostAncestor(personId: string): Promise<string> {
   const visited = new Set<string>();
   let current = personId;
@@ -262,14 +267,19 @@ export async function findTopmostAncestor(personId: string): Promise<string> {
 }
 
 /**
- * Re-point the single canonical Family record to a user-selected root.
- * Memberships are preserved while the rootPersonId foreign key changes.
+ * Re-point the same permanent Family record to a user-selected root.
+ *
+ * During the transition the physical legacy FamilyMembership.familyId FK may
+ * still reference Family.rootPersonId. We atomically recreate those rows with
+ * the new root while preserving familyRecordId = Family.id. Once the old FK is
+ * removed in Phase 2, this remains safe (and becomes merely conservative).
  */
 export async function reassignFamilyRoot(
   oldRootPersonId: string,
   newRootPersonId: string
 ): Promise<boolean> {
-  const canonicalOldRoot = (await reconcileConnectedFamilies(oldRootPersonId)) || oldRootPersonId;
+  const canonicalOldRoot =
+    (await reconcileConnectedFamilies(oldRootPersonId)) || oldRootPersonId;
   if (canonicalOldRoot === newRootPersonId) return false;
 
   const [newRootPerson, family] = await Promise.all([
@@ -284,14 +294,16 @@ export async function reassignFamilyRoot(
     throw new Error('That person is already the root of another family');
   }
 
-  await prisma.$transaction(async (tx) => {
-    const memberships = await tx.familyMembership.findMany({
-      where: { familyId: canonicalOldRoot },
-      select: { userId: true, role: true, joinedAt: true },
-    });
+  const memberships = await listTransitionalMembershipsForFamily(family.id);
+  const stableReady = await isStableFamilySchemaReady();
+  const hasLegacyColumn = await hasLegacyMembershipRootColumn();
 
+  await prisma.$transaction(async (tx) => {
     if (memberships.length > 0) {
-      await tx.familyMembership.deleteMany({ where: { familyId: canonicalOldRoot } });
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM "FamilyMembership"
+        WHERE "id" IN (${Prisma.join(memberships.map((membership) => membership.id))})
+      `);
     }
 
     await tx.family.update({
@@ -299,34 +311,46 @@ export async function reassignFamilyRoot(
       data: { rootPersonId: newRootPersonId },
     });
 
-    if (memberships.length > 0) {
-      await tx.familyMembership.createMany({
-        data: memberships.map((membership) => ({
-          userId: membership.userId,
-          familyId: newRootPersonId,
-          role: membership.role,
-          joinedAt: membership.joinedAt,
-        })),
-      });
+    for (const membership of memberships) {
+      if (stableReady && hasLegacyColumn) {
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "FamilyMembership"
+            ("id", "userId", "familyId", "familyRecordId", "role", "joinedAt", "updatedAt")
+          VALUES
+            (${membership.id}, ${membership.userId}, ${newRootPersonId}, ${family.id},
+             CAST(${membership.role} AS "FamilyRole"), ${membership.joinedAt}, CURRENT_TIMESTAMP)
+        `);
+      } else if (stableReady) {
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "FamilyMembership"
+            ("id", "userId", "familyRecordId", "role", "joinedAt", "updatedAt")
+          VALUES
+            (${membership.id}, ${membership.userId}, ${family.id},
+             CAST(${membership.role} AS "FamilyRole"), ${membership.joinedAt}, CURRENT_TIMESTAMP)
+        `);
+      } else {
+        await tx.familyMembership.create({
+          data: {
+            id: membership.id,
+            userId: membership.userId,
+            familyId: newRootPersonId,
+            role: membership.role,
+            joinedAt: membership.joinedAt,
+          },
+        });
+      }
     }
   });
 
   return true;
 }
 
-/**
- * Root selection is intentionally manual. Adding an older parent expands the
- * same family but does not silently change the selected root.
- */
+/** Root selection is manual; adding an older parent does not silently change it. */
 export async function promoteFamilyRootIfHigher(personId: string): Promise<string | null> {
   return findPersonFamilyRoot(personId);
 }
 
-/**
- * Resolve any person in a connected component to the single canonical Family
- * root. Unlike the old implementation, spouse connections participate in the
- * lookup and we never return the first stale Family row we happen to encounter.
- */
+/** Resolve any person in a connected component to the canonical root person id. */
 export async function findPersonFamilyRoot(personId: string): Promise<string | null> {
   const { canonical } = await getCanonicalFamilyForPerson(personId);
   return canonical?.rootPersonId ?? null;
@@ -337,23 +361,14 @@ export async function addUserToFamily(
   familyId: string,
   role: FamilyRole = 'MEMBER'
 ): Promise<FamilyMembership> {
-  const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
-  const existing = await prisma.familyMembership.findUnique({
-    where: { userId_familyId: { userId, familyId: canonicalFamilyId } },
-  });
-
-  if (existing) {
-    // Joining/contributing as a MEMBER must never demote an existing Family Admin.
-    if (existing.role === 'ADMIN' || existing.role === role) return existing;
-    return prisma.familyMembership.update({
-      where: { id: existing.id },
-      data: { role },
-    });
-  }
-
-  return prisma.familyMembership.create({
-    data: { userId, familyId: canonicalFamilyId, role },
-  });
+  const family =
+    (await resolveFamilyRecord(familyId)) ||
+    (await findPersonFamilyRoot(familyId).then((root) =>
+      root ? resolveFamilyRecord(root) : null
+    ));
+  if (!family) throw new Error('Family not found');
+  const membership = await upsertTransitionalMembership(userId, family.id, role);
+  return asLegacyMembership(membership);
 }
 
 export async function promoteToFamilyAdmin(
@@ -361,42 +376,55 @@ export async function promoteToFamilyAdmin(
   targetUserId: string,
   familyId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
+  const family = await resolveFamilyRecord(familyId);
+  const familyRef = family?.id || (await findPersonFamilyRoot(familyId));
+  if (!familyRef) return { success: false, error: 'Family not found' };
+
   const [actorIsSystemAdmin, actorIsFamilyAdmin] = await Promise.all([
     isSystemAdmin(actorId),
-    isFamilyAdmin(actorId, canonicalFamilyId),
+    isFamilyAdmin(actorId, familyRef),
   ]);
-
   if (!actorIsSystemAdmin && !actorIsFamilyAdmin) {
     return { success: false, error: 'Not authorized to promote Family Admins' };
   }
 
-  const targetMembership = await getFamilyMembership(targetUserId, canonicalFamilyId);
+  const targetMembership = await getTransitionalMembership(targetUserId, familyRef);
   if (!targetMembership) {
     return { success: false, error: 'User must be a member of this family tree' };
   }
 
-  await prisma.familyMembership.update({
-    where: { id: targetMembership.id },
-    data: { role: 'ADMIN' },
-  });
+  await setTransitionalMembershipRole(targetMembership.id, 'ADMIN');
   return { success: true };
 }
 
 export async function getFamilyAdmins(familyId: string) {
-  const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
-  return prisma.familyMembership.findMany({
-    where: { familyId: canonicalFamilyId, role: 'ADMIN' },
-    include: { user: true },
+  const family = await resolveFamilyRecord(familyId);
+  const familyRef = family?.id || (await findPersonFamilyRoot(familyId));
+  if (!familyRef) return [];
+  const memberships = await listTransitionalMembershipsForFamily(familyRef, 'ADMIN');
+  const users = await prisma.user.findMany({
+    where: { id: { in: memberships.map((membership) => membership.userId) } },
   });
+  const userById = new Map(users.map((user) => [user.id, user]));
+  return memberships.map((membership) => ({
+    ...asLegacyMembership(membership),
+    user: userById.get(membership.userId)!,
+  }));
 }
 
 export async function getVerifiedFamilyMembers(familyId: string) {
-  const canonicalFamilyId = (await findPersonFamilyRoot(familyId)) || familyId;
-  return prisma.familyMembership.findMany({
-    where: { familyId: canonicalFamilyId },
-    include: { user: true },
+  const family = await resolveFamilyRecord(familyId);
+  const familyRef = family?.id || (await findPersonFamilyRoot(familyId));
+  if (!familyRef) return [];
+  const memberships = await listTransitionalMembershipsForFamily(familyRef);
+  const users = await prisma.user.findMany({
+    where: { id: { in: memberships.map((membership) => membership.userId) } },
   });
+  const userById = new Map(users.map((user) => [user.id, user]));
+  return memberships.map((membership) => ({
+    ...asLegacyMembership(membership),
+    user: userById.get(membership.userId)!,
+  }));
 }
 
 export async function notifyFamilyAdmins(
