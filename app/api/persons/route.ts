@@ -11,6 +11,10 @@ import {
   notifyVerifiedMembers,
   addUserToFamily,
 } from '@/lib/family-membership';
+import {
+  ensureFamilyPersonAssociation,
+  ensureMembershipStableReference,
+} from '@/lib/stable-family';
 
 // GET /api/persons - Get all persons or search (public - no auth required)
 export async function GET(request: NextRequest) {
@@ -139,6 +143,12 @@ export async function POST(request: NextRequest) {
       include: { profileImage: true },
     });
 
+    // Phase-1 migration bridge: explicitly associate the new person with the
+    // stable Family.id as soon as it is created. Before Phase 1 this is a no-op.
+    if (targetFamilyId) {
+      await ensureFamilyPersonAssociation(targetFamilyId, person.id);
+    }
+
     await prisma.activity.create({
       data: {
         type: 'PERSON_ADDED',
@@ -163,6 +173,9 @@ export async function POST(request: NextRequest) {
 
     if (targetFamilyId) {
       await addUserToFamily(user.id, targetFamilyId, 'MEMBER');
+      // Keep the existing root-based membership column populated during the
+      // zero-downtime migration while also writing the stable Family.id.
+      await ensureMembershipStableReference(user.id, targetFamilyId);
     }
 
     return NextResponse.json({
