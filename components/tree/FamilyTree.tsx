@@ -91,34 +91,42 @@ function FamilyTreeInner({
   const [isDragging, setIsDragging] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
+  /**
+   * View state is intentionally independent from tree data. When a background
+   * refresh returns a new data object for the same family, the user's pan,
+   * zoom, and expanded/collapsed branches must stay exactly where they are.
+   */
+  const activeRootIdRef = useRef<string | null>(null);
+  const initialFitDoneRef = useRef(false);
+  const userAdjustedViewRef = useRef(false);
+  const lastContainerSizeRef = useRef<{ width: number; height: number } | null>(null);
+
   useEffect(() => {
     transformRef.current = transform;
   }, [transform]);
 
+  /**
+   * Initialize default branch expansion only when switching to a genuinely
+   * different tree. Data updates within the same family preserve the viewer's
+   * current expanded/collapsed state.
+   */
   useEffect(() => {
-    if (data) {
-      setExpandedNodes(collectDefaultExpandedIds(data));
-    }
+    if (!data) return;
+    if (activeRootIdRef.current === data.id) return;
+
+    activeRootIdRef.current = data.id;
+    initialFitDoneRef.current = false;
+    userAdjustedViewRef.current = false;
+    setExpandedNodes(collectDefaultExpandedIds(data));
   }, [data]);
 
-  /**
-   * Fit the entire tree inside the visible container, with padding.
-   *
-   * - We use `scrollWidth`/`scrollHeight` on the unscaled content so the
-   *   measurement is independent of the current scale — this is more robust
-   *   than dividing a transformed `getBoundingClientRect` by the scale, which
-   *   can be off by a fraction of a px and creep on repeated fits.
-   * - The Y axis centers when the tree is shorter than the viewport and
-   *   pins to the top (with padding) when it's taller, so deep trees never
-   *   get clipped at the bottom after expanding a branch.
-   */
+  /** Fit the entire tree inside the visible container, with padding. */
   const handleFit = useCallback(() => {
     const container = containerRef.current;
     const content = contentRef.current;
     if (!container || !content) return;
 
     const cRect = container.getBoundingClientRect();
-    /** scrollWidth/Height are pre-transform (intrinsic) sizes. */
     const naturalW = content.scrollWidth;
     const naturalH = content.scrollHeight;
     if (naturalW <= 0 || naturalH <= 0) return;
@@ -139,67 +147,88 @@ function FamilyTreeInner({
   }, []);
 
   /**
-   * Re-fit on data change AND whenever a branch is opened or collapsed so the
-   * whole tree (with all currently-open branches) stays visible.
-   *
-   * Two rAFs ensure React has committed the new DOM and the browser has
-   * painted it before we measure — a single setTimeout was sometimes firing
-   * mid-layout on slower devices, producing a measurement based on the
-   * pre-expand size.
+   * Auto-fit once for each family/root. Subsequent data updates deliberately
+   * do not re-fit — that is what caused the visible snap/re-render experience.
    */
   useEffect(() => {
-    if (!data) return;
+    if (!data || initialFitDoneRef.current) return;
+
     let raf1 = 0;
     let raf2 = 0;
     raf1 = window.requestAnimationFrame(() => {
-      raf2 = window.requestAnimationFrame(handleFit);
+      raf2 = window.requestAnimationFrame(() => {
+        handleFit();
+        initialFitDoneRef.current = true;
+      });
     });
+
     return () => {
       window.cancelAnimationFrame(raf1);
       window.cancelAnimationFrame(raf2);
     };
-  }, [data, expandedNodes, handleFit]);
+  }, [data, handleFit]);
 
   /**
-   * Re-fit when the container itself resizes (rotation, address bar show/hide,
-   * keyboard appearing, etc). Without this, a viewport change leaves the tree
-   * either clipped or floating in dead space until the user touches it.
+   * Keep the initial view responsive to a meaningful container resize, but
+   * once the user pans or zooms we preserve their exact viewport. They can use
+   * the Fit/Reset controls whenever they want to recenter.
    */
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      // Defer to avoid measuring during the same frame as the resize.
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+
+      const width = entry.contentRect.width;
+      const height = entry.contentRect.height;
+      const previous = lastContainerSizeRef.current;
+      lastContainerSizeRef.current = { width, height };
+
+      if (!previous || userAdjustedViewRef.current) return;
+      if (Math.abs(previous.width - width) < 2 && Math.abs(previous.height - height) < 2) return;
+
       window.requestAnimationFrame(handleFit);
     });
+
     ro.observe(el);
     return () => ro.disconnect();
   }, [handleFit]);
 
   const handleZoomIn = useCallback(() => {
+    userAdjustedViewRef.current = true;
     setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + 0.15) }));
   }, []);
 
   const handleZoomOut = useCallback(() => {
+    userAdjustedViewRef.current = true;
     setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale - 0.15) }));
   }, []);
 
-  const handleReset = useCallback(() => {
+  const handleManualFit = useCallback(() => {
+    userAdjustedViewRef.current = false;
     handleFit();
   }, [handleFit]);
 
-  // Wheel zoom for desktop (mobile uses pinch)
+  const handleReset = useCallback(() => {
+    handleManualFit();
+  }, [handleManualFit]);
+
+  // Wheel zoom for desktop (mobile uses pinch). Attach once so data refreshes
+  // never tear down/rebuild the gesture listener.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      userAdjustedViewRef.current = true;
       const delta = e.deltaY > 0 ? -0.08 : 0.08;
       setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + delta) }));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [data]);
+  }, []);
 
   // ---------- Pointer / pan / pinch handling ----------
 
@@ -215,6 +244,7 @@ function FamilyTreeInner({
       startMidpointY: (a.y + b.y) / 2,
       origTransform: { ...transformRef.current },
     };
+    userAdjustedViewRef.current = true;
     // Cancel any single-finger pan so the gesture switches cleanly to pinch.
     panSessionRef.current = null;
     setIsDragging(false);
@@ -224,14 +254,11 @@ function FamilyTreeInner({
     if ((e.target as HTMLElement).closest('[data-tree-controls]')) return;
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    // If a second finger came down, switch to pinch and stop pan.
     if (activePointersRef.current.size >= 2) {
       startPinchIfNeeded();
       return;
     }
 
-    // Only buttons fire pointerdown reliably with `e.button === 0` for mouse;
-    // touch always reports 0, so this also works on touch.
     if (e.button !== 0 && e.pointerType === 'mouse') return;
 
     const startOnInteractive = !!(e.target as HTMLElement).closest(
@@ -256,7 +283,6 @@ function FamilyTreeInner({
       activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
 
-    // Pinch zoom takes priority when two pointers are active.
     if (activePointersRef.current.size >= 2 && pinchRef.current) {
       const pts = Array.from(activePointersRef.current.values());
       const [a, b] = pts;
@@ -274,24 +300,21 @@ function FamilyTreeInner({
       if (!container) return;
       const rect = container.getBoundingClientRect();
 
-      // Convert original midpoint into content coordinates (pre-transform space).
       const cx = pinchRef.current.startMidpointX - rect.left;
       const cy = pinchRef.current.startMidpointY - rect.top;
       const contentX = (cx - orig.x) / orig.scale;
       const contentY = (cy - orig.y) / orig.scale;
 
-      // Move so the new midpoint anchors to the same content point + the
-      // user's current finger midpoint relative to the container.
       const mx = midX - rect.left;
       const my = midY - rect.top;
       const nextX = mx - contentX * nextScale;
       const nextY = my - contentY * nextScale;
 
+      userAdjustedViewRef.current = true;
       setTransform({ x: nextX, y: nextY, scale: nextScale });
       return;
     }
 
-    // Single-finger pan
     const s = panSessionRef.current;
     if (!s || e.pointerId !== s.pointerId) return;
 
@@ -302,6 +325,7 @@ function FamilyTreeInner({
       s.moved = true;
       if (!s.captureActive) {
         s.captureActive = true;
+        userAdjustedViewRef.current = true;
         setIsDragging(true);
         if (s.startOnInteractive && treeView) {
           treeView.markPanEnded();
@@ -323,7 +347,6 @@ function FamilyTreeInner({
   const endPan = (e: React.PointerEvent) => {
     activePointersRef.current.delete(e.pointerId);
 
-    // If we drop below 2 pointers, end any pinch.
     if (activePointersRef.current.size < 2 && pinchRef.current) {
       pinchRef.current = null;
     }
@@ -427,7 +450,7 @@ function FamilyTreeInner({
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onReset={handleReset}
-        onFit={handleFit}
+        onFit={handleManualFit}
         scale={transform.scale}
       />
 
