@@ -9,12 +9,15 @@ import { clsx } from 'clsx';
 import {
   ArrowRight,
   BookOpen,
+  Briefcase,
+  CalendarDays,
   Contact,
   Heart,
   Images,
   LayoutGrid,
   List as ListIcon,
   Loader2,
+  MapPin,
   Maximize2,
   MoreHorizontal,
   Plus,
@@ -36,6 +39,12 @@ import { flattenTree } from '@/lib/tree-utils';
 import type { PersonWithImage, PersonWithRelations, TreeNode } from '@/types';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+// Free Unsplash photograph by Luis Martinez. Kept as a CSS background so the
+// hero can fade it smoothly into the archival cream surface without requiring
+// Next/Image remote-domain configuration.
+const HERITAGE_ACACIA_IMAGE =
+  'https://images.unsplash.com/photo-1759767119537-3ea0e5ff75de?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=82&w=2200';
 
 interface FamilyTreePreview {
   id: string;
@@ -281,11 +290,31 @@ export default function HomePage() {
       </nav>
 
       <main className="pt-16">
-        <section className="relative overflow-hidden border-b border-[#eadfd6] bg-gradient-to-r from-[#fffdf9] via-[#fcf8f3] to-[#f7f0e9]">
-          <div className="pointer-events-none absolute right-[7%] top-1/2 hidden -translate-y-1/2 opacity-[0.075] lg:block" aria-hidden>
-            <TreePine className="h-56 w-56 text-maroon-800" strokeWidth={0.7} />
+        <section className="relative overflow-hidden border-b border-[#eadfd6] bg-[#fbf8f3]">
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[60%] overflow-hidden lg:block" aria-hidden>
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-[0.48] mix-blend-multiply"
+              style={{
+                backgroundImage: `url('${HERITAGE_ACACIA_IMAGE}')`,
+                filter: 'sepia(0.34) saturate(0.62) contrast(0.9) brightness(1.04)',
+                WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,.28) 20%, black 48%, black 100%)',
+                maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,.28) 20%, black 48%, black 100%)',
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#fbf8f3] via-[#fbf8f3]/55 to-[#e9d7c8]/10" />
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#fbf8f3]/95 to-transparent" />
           </div>
-          <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+          <div
+            className="pointer-events-none absolute inset-y-0 right-[2%] hidden w-[50%] opacity-[0.055] lg:block"
+            aria-hidden
+            style={{
+              backgroundImage:
+                'repeating-linear-gradient(-8deg, transparent 0 18px, rgba(101,26,26,.28) 18px 19px, transparent 19px 35px)',
+              WebkitMaskImage: 'linear-gradient(to right, transparent, black 35%, black)',
+              maskImage: 'linear-gradient(to right, transparent, black 35%, black)',
+            }}
+          />
+          <div className="mx-auto min-h-[252px] max-w-[1600px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-11">
             <div className="relative z-10 max-w-4xl">
               <p className="mb-2 flex items-center gap-2 font-serif text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8b4b3e] sm:text-xs">
                 <span className="h-px w-5 bg-[#9b5b4b]" />
@@ -314,7 +343,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={handleShare}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-white/90 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm transition hover:bg-white"
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm backdrop-blur-sm transition hover:bg-white"
               >
                 <Share2 className="h-4 w-4" />
                 {shareComplete ? 'Link copied' : 'Share Tree'}
@@ -322,7 +351,7 @@ export default function HomePage() {
               <Link
                 href={treeExploreHref}
                 aria-label="Open full family tree"
-                className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfd1c5] bg-white/90 text-[#6f5d54] shadow-sm transition hover:bg-white"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 text-[#6f5d54] shadow-sm backdrop-blur-sm transition hover:bg-white"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Link>
@@ -352,7 +381,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
             <div className="relative h-[min(68dvh,680px)] min-h-[500px] overflow-hidden rounded-2xl border border-[#e6dcd3] bg-[#fffdf9] shadow-[0_18px_45px_-28px_rgba(74,46,32,0.28)]">
               {isLoading ? (
                 <div className="flex h-full items-center justify-center">
@@ -387,6 +416,7 @@ export default function HomePage() {
                 relationships={relationships}
                 isAuthenticated={isAuthenticated}
                 onSelectRelative={(id) => void openPerson(id)}
+                onClose={() => setSelectedPerson(null)}
               />
             </aside>
           </div>
@@ -427,8 +457,8 @@ export default function HomePage() {
       {profileOpenMobile && selectedPerson && (
         <div className="fixed inset-0 z-[100] xl:hidden">
           <button type="button" className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" aria-label="Close person details" onClick={() => setProfileOpenMobile(false)} />
-          <div className="absolute inset-x-3 bottom-3 max-h-[82dvh] overflow-y-auto rounded-2xl bg-[#fffdf9] shadow-2xl sm:left-auto sm:right-4 sm:w-[390px]">
-            <button type="button" onClick={() => setProfileOpenMobile(false)} className="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-full border border-[#e4d8ce] bg-white text-[#6f5f56]" aria-label="Close">
+          <div className="absolute inset-x-3 bottom-3 max-h-[82dvh] overflow-y-auto rounded-2xl bg-[#fffaf5] shadow-2xl sm:left-auto sm:right-4 sm:w-[390px]">
+            <button type="button" onClick={() => setProfileOpenMobile(false)} className="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-full border border-[#e4d8ce] bg-[#fffdf9] text-[#6f5f56]" aria-label="Close">
               <X className="h-4 w-4" />
             </button>
             <ProfilePanel
@@ -494,6 +524,8 @@ function ViewTab({ active, onClick, icon, label, disabled }: { active: boolean; 
   );
 }
 
+type DetailTab = 'overview' | 'events' | 'stories' | 'photos';
+
 function ProfilePanel({
   person,
   loading,
@@ -501,6 +533,7 @@ function ProfilePanel({
   relationships,
   isAuthenticated,
   onSelectRelative,
+  onClose,
   embedded = false,
 }: {
   person: PersonWithRelations | null;
@@ -509,11 +542,18 @@ function ProfilePanel({
   relationships: RelationshipRow[];
   isAuthenticated: boolean;
   onSelectRelative: (id: string) => void;
+  onClose?: () => void;
   embedded?: boolean;
 }) {
+  const [activeTab, setActiveTab] = useState<DetailTab>('overview');
+
+  useEffect(() => {
+    setActiveTab('overview');
+  }, [person?.id]);
+
   if (loading && !person) {
     return (
-      <div className={clsx('flex h-[520px] items-center justify-center rounded-2xl border border-[#e6dcd3] bg-[#fffdf9]', !embedded && 'shadow-sm')}>
+      <div className={clsx('flex h-[520px] items-center justify-center rounded-[18px] border border-[#e2d5ca] bg-[#fffaf5]', !embedded && 'shadow-sm')}>
         <Loader2 className="h-7 w-7 animate-spin text-maroon-500" />
       </div>
     );
@@ -521,7 +561,7 @@ function ProfilePanel({
 
   if (!person) {
     return (
-      <div className={clsx('rounded-2xl border border-[#e6dcd3] bg-[#fffdf9] p-7 text-center text-sm text-[#857870]', !embedded && 'shadow-sm')}>
+      <div className={clsx('rounded-[18px] border border-[#e2d5ca] bg-[#fffaf5] p-7 text-center text-sm text-[#857870]', !embedded && 'shadow-sm')}>
         Select a person in the tree to see their story and relationships.
       </div>
     );
@@ -529,79 +569,203 @@ function ProfilePanel({
 
   const years = personYears(person);
   const isRoot = person.id === rootPersonId;
+  const birthDate = person.birthDate ? new Date(person.birthDate) : null;
+  const deathDate = person.deathDate ? new Date(person.deathDate) : null;
+  const photos = (person.images ?? []).slice(0, 6);
 
   return (
-    <div className={clsx('overflow-hidden rounded-2xl border border-[#e6dcd3] bg-[#fffdf9]', !embedded && 'h-[min(68dvh,680px)] min-h-[500px] shadow-[0_18px_45px_-28px_rgba(74,46,32,0.22)]')}>
+    <div className={clsx('overflow-hidden rounded-[18px] border border-[#e2d5ca] bg-[#fffaf5]', !embedded && 'h-[min(68dvh,680px)] min-h-[500px] shadow-[0_18px_45px_-28px_rgba(74,46,32,0.28)]')}>
       <div className="flex h-full flex-col">
-        <div className="px-6 pb-4 pt-6">
-          <div className="flex items-center gap-4">
+        <div className="relative bg-gradient-to-br from-[#fffdf9] via-[#fffaf5] to-[#f5e9df] px-6 pb-5 pt-6">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-[#735f55] transition hover:bg-[#efe3d8] hover:text-[#4e392f]"
+              aria-label="Close person information"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+
+          <div className="flex items-start gap-4 pr-7">
             {person.profileImage?.url ? (
-              <img src={person.profileImage.url} alt={`${person.firstName} ${person.lastName}`} className="h-20 w-20 shrink-0 rounded-full object-cover ring-4 ring-[#f3ebe4]" />
+              <img
+                src={person.profileImage.url}
+                alt={`${person.firstName} ${person.lastName}`}
+                className="h-24 w-24 shrink-0 rounded-full object-cover ring-4 ring-[#f0e4da] shadow-sm"
+              />
             ) : (
-              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-[#f0e9e2] font-serif text-xl font-semibold text-[#785d50] ring-4 ring-[#f8f2ec]">
+              <div className="grid h-24 w-24 shrink-0 place-items-center rounded-full bg-[#ede2d8] font-serif text-2xl font-semibold text-[#785d50] ring-4 ring-[#f5ece4]">
                 {person.firstName[0]}{person.lastName[0]}
               </div>
             )}
-            <div className="min-w-0">
-              <h2 className="truncate font-serif text-xl font-semibold text-[#33251f]">{person.firstName} {person.lastName}</h2>
-              {years && <p className="mt-1 text-xs text-[#8b7d74]">{years}</p>}
-              {isRoot && <span className="mt-2 inline-flex rounded-md bg-maroon-500 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-white">Root Person</span>}
+            <div className="min-w-0 pt-2">
+              <h2 className="truncate font-serif text-[22px] font-semibold leading-tight text-[#33251f]">{person.firstName} {person.lastName}</h2>
+              {years && <p className="mt-1.5 text-sm text-[#8b7d74]">{years}</p>}
+              {isRoot && (
+                <span className="mt-3 inline-flex rounded-md bg-maroon-500 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.09em] text-white shadow-sm">
+                  Root Person
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="border-b border-[#ebe1d8] px-6">
-          <div className="flex gap-7">
-            <span className="border-b-2 border-maroon-500 pb-3 font-serif text-xs font-semibold text-maroon-700">Overview</span>
-            <Link href={`/person/${person.id}`} className="pb-3 font-serif text-xs text-[#7c6e65] hover:text-maroon-700">Life events</Link>
-            <Link href="/wiki" className="pb-3 font-serif text-xs text-[#7c6e65] hover:text-maroon-700">Stories</Link>
-            <Link href="/gallery" className="pb-3 font-serif text-xs text-[#7c6e65] hover:text-maroon-700">Photos</Link>
+        <div className="border-y border-[#e7d9ce] bg-[#f6ece3]/85 px-5">
+          <div className="grid grid-cols-4 gap-1">
+            <DetailsTab active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>Overview</DetailsTab>
+            <DetailsTab active={activeTab === 'events'} onClick={() => setActiveTab('events')}>Life Events</DetailsTab>
+            <DetailsTab active={activeTab === 'stories'} onClick={() => setActiveTab('stories')}>Stories</DetailsTab>
+            <DetailsTab active={activeTab === 'photos'} onClick={() => setActiveTab('photos')}>Photos</DetailsTab>
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <section>
-            <h3 className="font-serif text-base font-semibold text-[#3a2b24]">About</h3>
-            <p className="mt-2 text-sm leading-6 text-[#756961]">
-              {person.biography || `${person.firstName}'s biography has not been added yet. Family members can help preserve their story by adding memories, places and important life events.`}
-            </p>
-            <Link href={`/person/${person.id}`} className="mt-2 inline-flex text-xs font-semibold text-maroon-600 hover:text-maroon-700">Read more →</Link>
-          </section>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#fffaf5] px-6 py-5">
+          {activeTab === 'overview' && (
+            <>
+              <section>
+                <h3 className="font-serif text-[17px] font-semibold text-[#3a2b24]">About</h3>
+                <p className="mt-2.5 text-sm leading-6 text-[#756961]">
+                  {person.biography || `${person.firstName}'s biography has not been added yet. Family members can help preserve their story by adding memories, places and important life events.`}
+                </p>
+                <Link href={`/person/${person.id}`} className="mt-2.5 inline-flex text-xs font-semibold text-maroon-600 hover:text-maroon-700">Read more →</Link>
+              </section>
 
-          <section className="mt-6 border-t border-[#eee5dd] pt-5">
-            <h3 className="font-serif text-base font-semibold text-[#3a2b24]">Relationships</h3>
-            {relationships.length > 0 ? (
-              <div className="mt-2 divide-y divide-[#eee5dd]">
-                {relationships.slice(0, 6).map((relationship) => (
-                  <button key={`${relationship.label}-${relationship.id}`} type="button" onClick={() => onSelectRelative(relationship.id)} className="flex w-full items-center gap-3 py-3 text-left transition hover:bg-[#fff9f4]">
-                    {relationship.image ? (
-                      <img src={relationship.image} alt="" className="h-9 w-9 rounded-full object-cover" />
-                    ) : (
-                      <span className="grid h-9 w-9 place-items-center rounded-full bg-[#f0e9e2] text-[#846a5d]"><User className="h-4 w-4" /></span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <strong className="block truncate font-serif text-sm font-medium text-[#49362e]">{relationship.name}</strong>
-                      <span className="text-[11px] text-[#92857d]">{relationship.label}</span>
-                    </span>
-                    {relationship.label === 'Spouse' ? <Heart className="h-4 w-4 text-maroon-500" /> : <Users className="h-4 w-4 text-[#9e8b80]" />}
-                  </button>
-                ))}
+              <section className="mt-6 border-t border-[#eaded4] pt-5">
+                <h3 className="font-serif text-[17px] font-semibold text-[#3a2b24]">Relationships</h3>
+                {relationships.length > 0 ? (
+                  <div className="mt-2 divide-y divide-[#eaded4]">
+                    {relationships.slice(0, 6).map((relationship) => (
+                      <button
+                        key={`${relationship.label}-${relationship.id}`}
+                        type="button"
+                        onClick={() => onSelectRelative(relationship.id)}
+                        className="flex w-full items-center gap-3 rounded-lg py-3 text-left transition hover:bg-[#f8eee6]"
+                      >
+                        {relationship.image ? (
+                          <img src={relationship.image} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-[#f1e6dd]" />
+                        ) : (
+                          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#eee3d9] text-[#846a5d]"><User className="h-4 w-4" /></span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <strong className="block truncate font-serif text-sm font-medium text-[#49362e]">{relationship.name}</strong>
+                          <span className="text-[11px] text-[#92857d]">{relationship.label}</span>
+                        </span>
+                        {relationship.label === 'Spouse' ? <Heart className="h-4 w-4 text-maroon-500" /> : <Users className="h-4 w-4 text-[#9e8b80]" />}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs leading-5 text-[#92857d]">No relationships are recorded yet. Use the + branch menu on the tree to add one.</p>
+                )}
+              </section>
+            </>
+          )}
+
+          {activeTab === 'events' && (
+            <section>
+              <h3 className="font-serif text-[17px] font-semibold text-[#3a2b24]">Life Events</h3>
+              <div className="mt-4 space-y-3">
+                {birthDate && !Number.isNaN(birthDate.getTime()) && (
+                  <EventRow icon={<CalendarDays className="h-4 w-4" />} title="Born" detail={birthDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} />
+                )}
+                {person.birthPlace && (
+                  <EventRow icon={<MapPin className="h-4 w-4" />} title="Birthplace" detail={person.birthPlace} />
+                )}
+                {person.occupation && (
+                  <EventRow icon={<Briefcase className="h-4 w-4" />} title="Occupation" detail={person.occupation} />
+                )}
+                {deathDate && !Number.isNaN(deathDate.getTime()) && (
+                  <EventRow icon={<CalendarDays className="h-4 w-4" />} title="Passed" detail={deathDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} />
+                )}
+                {person.deathPlace && (
+                  <EventRow icon={<MapPin className="h-4 w-4" />} title="Place of passing" detail={person.deathPlace} />
+                )}
+                {!birthDate && !person.birthPlace && !person.occupation && !deathDate && !person.deathPlace && (
+                  <p className="rounded-xl border border-[#eaded4] bg-[#f8f0e9] p-4 text-sm leading-6 text-[#7b6c63]">
+                    No life events have been recorded yet. Open the full profile to add important dates, places and milestones.
+                  </p>
+                )}
               </div>
-            ) : (
-              <p className="mt-2 text-xs leading-5 text-[#92857d]">No relationships are recorded yet. Use the + branch menu on the tree to add one.</p>
-            )}
-          </section>
+              <Link href={`/person/${person.id}`} className="mt-4 inline-flex text-xs font-semibold text-maroon-600 hover:text-maroon-700">View full timeline →</Link>
+            </section>
+          )}
+
+          {activeTab === 'stories' && (
+            <section>
+              <h3 className="font-serif text-[17px] font-semibold text-[#3a2b24]">Stories</h3>
+              <div className="mt-4 rounded-xl border border-[#eaded4] bg-[#f8f0e9] p-5">
+                <BookOpen className="h-5 w-5 text-[#9a6b56]" />
+                <p className="mt-3 text-sm leading-6 text-[#756961]">
+                  Family memories and written stories about {person.firstName} can be preserved in the family history archive.
+                </p>
+                <Link href="/wiki" className="mt-3 inline-flex text-xs font-semibold text-maroon-600 hover:text-maroon-700">Browse family stories →</Link>
+              </div>
+            </section>
+          )}
+
+          {activeTab === 'photos' && (
+            <section>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-serif text-[17px] font-semibold text-[#3a2b24]">Photos</h3>
+                <Link href="/gallery" className="text-xs font-semibold text-maroon-600 hover:text-maroon-700">View gallery →</Link>
+              </div>
+              {photos.length > 0 ? (
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {photos.map((photo) => (
+                    <div key={photo.id} className="aspect-[4/3] overflow-hidden rounded-xl border border-[#eaded4] bg-[#f3eae2]">
+                      <img src={photo.url} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-dashed border-[#d9c7b9] bg-[#f8f0e9] p-5 text-center">
+                  <Images className="mx-auto h-6 w-6 text-[#9a6b56]" />
+                  <p className="mt-2 text-sm text-[#756961]">No photos have been linked to this person yet.</p>
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 border-t border-[#ebe1d8] bg-[#fcf8f4] p-4">
-          <Link href={`/person/${person.id}`} className="inline-flex items-center justify-center rounded-lg border border-[#ddcfc3] bg-white px-3 py-2 text-xs font-semibold text-[#5f493d] hover:bg-[#fffaf6]">View Full Profile</Link>
+        <div className="grid grid-cols-2 gap-3 border-t border-[#e7d9ce] bg-[#f4e9e0] p-4">
+          <Link href={`/person/${person.id}`} className="inline-flex items-center justify-center rounded-lg border border-[#d7c7bb] bg-[#fffdf9] px-3 py-2.5 text-xs font-semibold text-[#5f493d] transition hover:bg-white">View Full Profile</Link>
           {isAuthenticated ? (
-            <Link href={`/person/${person.id}/edit`} className="inline-flex items-center justify-center rounded-lg bg-maroon-500 px-3 py-2 text-xs font-semibold text-white hover:bg-maroon-600">Edit Person</Link>
+            <Link href={`/person/${person.id}/edit`} className="inline-flex items-center justify-center rounded-lg bg-maroon-500 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-maroon-600">Edit Person</Link>
           ) : (
-            <Link href="/login" className="inline-flex items-center justify-center rounded-lg bg-maroon-500 px-3 py-2 text-xs font-semibold text-white hover:bg-maroon-600">Sign in</Link>
+            <Link href="/login" className="inline-flex items-center justify-center rounded-lg bg-maroon-500 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-maroon-600">Sign in</Link>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function DetailsTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'relative min-w-0 px-1 py-3 font-serif text-[11px] transition sm:text-xs',
+        active ? 'font-semibold text-maroon-700' : 'text-[#79695f] hover:text-[#4b372e]'
+      )}
+    >
+      <span className="truncate">{children}</span>
+      {active && <span className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-maroon-500" />}
+    </button>
+  );
+}
+
+function EventRow({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-[#eaded4] bg-[#fffdf9] p-3.5">
+      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f0e4da] text-[#8f5f4b]">{icon}</span>
+      <span className="min-w-0">
+        <strong className="block font-serif text-sm font-semibold text-[#49362e]">{title}</strong>
+        <span className="mt-0.5 block text-xs leading-5 text-[#81736a]">{detail}</span>
+      </span>
     </div>
   );
 }

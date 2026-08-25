@@ -163,10 +163,10 @@ body {
   background-color: #342a26 !important;
 }
 
-/* Recently-added family members are informational, not warnings. The tree
-   component still exposes an accessible status marker, but visually we turn
-   the old amber exclamation into a quiet editorial "New" pill. */
-.heritage-app [aria-label="Recently added"] {
+/* Recently-added family members are informational, not warnings. This is
+   intentionally global because the public homepage tree is outside the
+   .heritage-app wrapper used by authenticated sub-pages. */
+[aria-label="Recently added"] {
   left: auto !important;
   right: 0.75rem !important;
   top: -0.55rem !important;
@@ -185,11 +185,11 @@ body {
   font-size: 0 !important;
 }
 
-.heritage-app [aria-label="Recently added"] svg {
+[aria-label="Recently added"] svg {
   display: none !important;
 }
 
-.heritage-app [aria-label="Recently added"]::after {
+[aria-label="Recently added"]::after {
   content: "New";
   font-family: var(--font-inter);
   font-size: 8px;
@@ -197,6 +197,12 @@ body {
   line-height: 1;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* The approved acacia image in the heritage hero should read more clearly
+   while remaining blended into the cream archive surface. */
+.opacity-\[0\.48\] {
+  opacity: 0.4 !important;
 }
 
 /* The old gender-tinted quick-profile hero is intentionally neutralized site-wide. */
