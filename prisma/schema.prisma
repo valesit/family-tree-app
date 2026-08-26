@@ -162,13 +162,14 @@ model Person {
   profileImage   PersonImage? @relation("ProfileImage", fields: [profileImageId], references: [id])
 
   // Relations
-  images            PersonImage[]       @relation("PersonImages")
-  parentRelations   Relationship[]      @relation("ChildRelation")
-  childRelations    Relationship[]      @relation("ParentRelation")
-  spouseRelations1  Relationship[]      @relation("Spouse1Relation")
-  spouseRelations2  Relationship[]      @relation("Spouse2Relation")
-  wikiArticles      WikiArticle[]       @relation("PersonWikiArticles")
+  images             PersonImage[]       @relation("PersonImages")
+  parentRelations    Relationship[]      @relation("ChildRelation")
+  childRelations     Relationship[]      @relation("ParentRelation")
+  spouseRelations1   Relationship[]      @relation("Spouse1Relation")
+  spouseRelations2   Relationship[]      @relation("Spouse2Relation")
+  wikiArticles       WikiArticle[]       @relation("PersonWikiArticles")
   notableNominations NotableNomination[] @relation("NotableNominations")
+  familyLinks        FamilyPerson[]
 
   @@index([firstName, lastName])
   @@index([userId])
@@ -221,6 +222,8 @@ model Relationship {
   spouse1   Person? @relation("Spouse1Relation", fields: [spouse1Id], references: [id], onDelete: Cascade)
   spouse2Id String?
   spouse2   Person? @relation("Spouse2Relation", fields: [spouse2Id], references: [id], onDelete: Cascade)
+
+  familyLinks FamilyRelationship[]
 
   @@index([parentId])
   @@index([childId])
@@ -372,15 +375,16 @@ model Family {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Link to the root/founding person of this family tree
+  // Link to the root/founding person of this family tree. This can change.
   rootPersonId String  @unique
 
   // Who created this family tree (auto becomes Family Admin)
   createdById  String?
   createdBy    User?   @relation("FamilyCreator", fields: [createdById], references: [id])
 
-  // Family memberships
   memberships  FamilyMembership[]
+  people       FamilyPerson[]
+  relationships FamilyRelationship[]
 
   @@index([rootPersonId])
   @@index([createdById])
@@ -390,25 +394,50 @@ model Family {
 // FAMILY MEMBERSHIP
 // ============================================
 
-// Tracks which users belong to which family trees and their role
+// Tracks which users belong to which permanent Family.id and their role.
+// The database column is familyRecordId; application code uses familyId.
 model FamilyMembership {
   id        String     @id @default(cuid())
   role      FamilyRole @default(MEMBER)
   joinedAt  DateTime   @default(now())
   updatedAt DateTime   @updatedAt
-  
-  // The user
+
   userId    String
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // The family tree (linked by rootPersonId)
-  familyId  String
-  family    Family     @relation(fields: [familyId], references: [rootPersonId], onDelete: Cascade)
-  
-  @@unique([userId, familyId])
+
+  familyId  String     @map("familyRecordId")
+  family    Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, familyId], map: "FamilyMembership_userId_familyRecordId_key")
   @@index([userId])
-  @@index([familyId])
+  @@index([familyId], map: "FamilyMembership_familyRecordId_idx")
   @@index([role])
+}
+
+// A person may appear in more than one family context (birth family, married family, etc.).
+model FamilyPerson {
+  familyId  String
+  personId  String
+  createdAt DateTime @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([familyId, personId])
+  @@index([personId])
+}
+
+// Explicitly scopes a genealogy relationship to one or more family contexts.
+model FamilyRelationship {
+  familyId       String
+  relationshipId String
+  createdAt      DateTime @default(now())
+
+  family       Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  relationship Relationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+
+  @@id([familyId, relationshipId])
+  @@index([relationshipId])
 }
 
 // ============================================
@@ -511,11 +540,11 @@ model NotableNomination {
 
 // Images for notable person nominations
 model NotableImage {
-  id          String   @id @default(cuid())
-  url         String
-  caption     String?
-  displayOrder Int     @default(0)
-  uploadedAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  url          String
+  caption      String?
+  displayOrder Int      @default(0)
+  uploadedAt   DateTime @default(now())
 
   nominationId String
   nomination   NotableNomination @relation(fields: [nominationId], references: [id], onDelete: Cascade)
