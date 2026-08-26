@@ -5,17 +5,23 @@ import { authOptions } from '@/lib/auth';
 import { relationshipSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
 import {
-  isSystemAdmin,
-  isFamilyAdmin,
+  addUserToFamily,
   findPersonFamilyRoot,
-  promoteFamilyRootIfHigher,
+  isFamilyAdmin,
+  isSystemAdmin,
+  reconcileConnectedFamilies,
 } from '@/lib/family-membership';
+import {
+  ensureFamilyPersonAssociation,
+  ensureFamilyRelationshipAssociation,
+  ensureMembershipStableReference,
+} from '@/lib/stable-family';
+
+const PARENT_TYPES = ['PARENT_CHILD', 'ADOPTED', 'STEP_PARENT', 'STEP_CHILD', 'FOSTER'] as const;
 
 // GET /api/relationships - Get all relationships (public - no auth required)
 export async function GET(request: NextRequest) {
   try {
-    // Viewing relationships is public - no authentication required
-
     const { searchParams } = new URL(request.url);
     const personId = searchParams.get('personId');
 
@@ -60,9 +66,9 @@ export async function POST(request: NextRequest) {
 
     const user = session.user as SessionUser;
     const body = await request.json();
-    const { approverIds, ...relationshipData } = body;
+    const { approverIds: _unusedApprovers, ...relationshipData } = body;
+    void _unusedApprovers;
 
-    // Validate relationship data
     const validationResult = relationshipSchema.safeParse(relationshipData);
     if (!validationResult.success) {
       return NextResponse.json(
@@ -73,7 +79,13 @@ export async function POST(request: NextRequest) {
 
     const { type, person1Id, person2Id, startDate, endDate, notes } = validationResult.data;
 
-    // Verify both persons exist
+    if (person1Id === person2Id) {
+      return NextResponse.json(
+        { success: false, error: 'A person cannot be related to themselves' },
+        { status: 400 }
+      );
+    }
+
     const [person1, person2] = await Promise.all([
       prisma.person.findUnique({ where: { id: person1Id } }),
       prisma.person.findUnique({ where: { id: person2Id } }),
@@ -86,7 +98,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build relationship data based on type
+    const familyBefore =
+      (await findPersonFamilyRoot(person1Id)) ||
+      (await findPersonFamilyRoot(person2Id));
+
+    const isSysAdmin = await isSystemAdmin(user.id);
+    const isFamAdmin = familyBefore ? await isFamilyAdmin(user.id, familyBefore) : false;
+
+    // Contributions are idempotent. Double taps, retries, and the UI's
+    // co-parent mirroring must never create duplicate relationship rows.
+    const existing = type === 'SPOUSE'
+      ? await prisma.relationship.findFirst({
+          where: {
+            type: 'SPOUSE',
+            OR: [
+              { spouse1Id: person1Id, spouse2Id: person2Id },
+              { spouse1Id: person2Id, spouse2Id: person1Id },
+            ],
+          },
+          include: { parent: true, child: true, spouse1: true, spouse2: true },
+        })
+      : PARENT_TYPES.includes(type as (typeof PARENT_TYPES)[number])
+      ? await prisma.relationship.findFirst({
+          where: {
+            type,
+            parentId: person1Id,
+            childId: person2Id,
+          },
+          include: { parent: true, child: true, spouse1: true, spouse2: true },
+        })
+      : null;
+
+    if (existing) {
+      const canonicalRoot =
+        (await reconcileConnectedFamilies(person1Id)) ||
+        (await findPersonFamilyRoot(person1Id)) ||
+        familyBefore;
+
+      if (canonicalRoot) {
+        await Promise.all([
+          ensureFamilyPersonAssociation(canonicalRoot, person1Id),
+          ensureFamilyPersonAssociation(canonicalRoot, person2Id),
+          ensureFamilyRelationshipAssociation(canonicalRoot, existing.id),
+        ]);
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: existing,
+        familyRootId: canonicalRoot,
+        deduplicated: true,
+        message: 'Relationship already exists.',
+      });
+    }
+
     const relationshipCreateData: {
       type: typeof type;
       startDate?: Date;
@@ -103,7 +168,7 @@ export async function POST(request: NextRequest) {
       notes: notes || undefined,
     };
 
-    if (type === 'PARENT_CHILD' || type === 'ADOPTED' || type === 'STEP_PARENT' || type === 'STEP_CHILD' || type === 'FOSTER') {
+    if (PARENT_TYPES.includes(type as (typeof PARENT_TYPES)[number])) {
       relationshipCreateData.parentId = person1Id;
       relationshipCreateData.childId = person2Id;
     } else if (type === 'SPOUSE') {
@@ -111,15 +176,6 @@ export async function POST(request: NextRequest) {
       relationshipCreateData.spouse2Id = person2Id;
     }
 
-    // Determine family for the relationship
-    const familyId = await findPersonFamilyRoot(person1Id) || await findPersonFamilyRoot(person2Id);
-    
-    // Check if user is System Admin or Family Admin - they can create directly
-    const isSysAdmin = await isSystemAdmin(user.id);
-    const isFamAdmin = familyId ? await isFamilyAdmin(user.id, familyId) : false;
-
-    // Create relationship directly for everyone (like we do for persons)
-    // Relationships appear immediately - the linked persons may have isVerified=false
     const relationship = await prisma.relationship.create({
       data: relationshipCreateData,
       include: {
@@ -130,85 +186,58 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // If a new parent was just slotted in above the existing root, promote
-    // them to be the family root. Best-effort — failures here shouldn't
-    // poison the user-visible relationship creation, so we log and move on.
-    if (
-      type === 'PARENT_CHILD' ||
-      type === 'ADOPTED' ||
-      type === 'STEP_PARENT' ||
-      type === 'STEP_CHILD' ||
-      type === 'FOSTER'
-    ) {
-      try {
-        const promotedRoot = await promoteFamilyRootIfHigher(person2Id);
-        if (promotedRoot && familyId && promotedRoot !== familyId) {
-          await prisma.activity.create({
-            data: {
-              type: 'PERSON_UPDATED',
-              description: `Family root reassigned to ${person1.firstName} ${person1.lastName} (added as ancestor).`,
-              userId: user.id,
-              data: { newRootPersonId: promotedRoot, previousRootPersonId: familyId },
-            },
-          });
-        }
-      } catch (err) {
-        console.error('Auto-promote family root failed:', err);
+    // Relationship creation can connect two branches that previously had stale
+    // Family records. Collapse them immediately so every contributor sees the
+    // same canonical tree on their next fetch.
+    const canonicalRoot =
+      (await reconcileConnectedFamilies(person1Id)) ||
+      (await reconcileConnectedFamilies(person2Id)) ||
+      (await findPersonFamilyRoot(person1Id)) ||
+      (await findPersonFamilyRoot(person2Id)) ||
+      familyBefore;
+
+    // Root changes are deliberately manual. Adding an older parent expands the
+    // existing family but does not silently replace the root selected in the UI.
+
+    if (canonicalRoot) {
+      // Phase-1 migration bridge: every new relationship is explicitly attached
+      // to the stable Family.id, and both endpoints are registered as FamilyPerson
+      // members. Before Phase 1 these helpers intentionally no-op.
+      await Promise.all([
+        ensureFamilyPersonAssociation(canonicalRoot, person1Id),
+        ensureFamilyPersonAssociation(canonicalRoot, person2Id),
+        ensureFamilyRelationshipAssociation(canonicalRoot, relationship.id),
+      ]);
+
+      // If either person has a linked account, make sure that account belongs to
+      // the newly canonical family after a branch/spouse merge and dual-write the
+      // stable Family.id alongside the legacy root id.
+      if (person1.userId) {
+        await addUserToFamily(person1.userId, canonicalRoot, 'MEMBER');
+        await ensureMembershipStableReference(person1.userId, canonicalRoot);
+      }
+      if (person2.userId) {
+        await addUserToFamily(person2.userId, canonicalRoot, 'MEMBER');
+        await ensureMembershipStableReference(person2.userId, canonicalRoot);
       }
     }
 
-    // For spouse relationships, add both spouses to each other's family trees
-    // This enables cross-family navigation (e.g., viewing spouse's birth family)
-    if (type === 'SPOUSE') {
-      const family1 = await findPersonFamilyRoot(person1Id);
-      const family2 = await findPersonFamilyRoot(person2Id);
-      
-      // Add person1 to person2's family (if they have different families)
-      if (family2 && family1 !== family2) {
-        const existingMembership1 = await prisma.familyMembership.findUnique({
-          where: { userId_familyId: { userId: person1.userId || '', familyId: family2 } },
-        });
-        if (person1.userId && !existingMembership1) {
-          await prisma.familyMembership.create({
-            data: {
-              userId: person1.userId,
-              familyId: family2,
-              role: 'MEMBER',
-            },
-          }).catch(() => {}); // Ignore if already exists
-        }
-      }
-      
-      // Add person2 to person1's family (if they have different families)
-      if (family1 && family1 !== family2) {
-        const existingMembership2 = await prisma.familyMembership.findUnique({
-          where: { userId_familyId: { userId: person2.userId || '', familyId: family1 } },
-        });
-        if (person2.userId && !existingMembership2) {
-          await prisma.familyMembership.create({
-            data: {
-              userId: person2.userId,
-              familyId: family1,
-              role: 'MEMBER',
-            },
-          }).catch(() => {}); // Ignore if already exists
-        }
-      }
-    }
-
-    // Log activity
     await prisma.activity.create({
       data: {
         type: 'RELATIONSHIP_ADDED',
         description: `A ${type.toLowerCase().replace('_', '-')} relationship was added between ${person1.firstName} and ${person2.firstName}${!isSysAdmin && !isFamAdmin ? ' (persons may need verification)' : ''}`,
         userId: user.id,
-        data: { relationshipId: relationship.id, familyId },
+        data: {
+          relationshipId: relationship.id,
+          familyId: canonicalRoot || familyBefore,
+        },
       },
     });
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       data: relationship,
+      familyRootId: canonicalRoot,
       message: 'Relationship added successfully.',
     });
   } catch (error) {
@@ -219,4 +248,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

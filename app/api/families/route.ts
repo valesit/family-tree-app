@@ -1,28 +1,41 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { buildCollaborativeFamilyTree } from '@/lib/collaborative-tree';
+import { collectTreeNodeIds } from '@/lib/tree-utils';
+import { findPersonFamilyRoot } from '@/lib/family-membership';
+import type { PersonWithRelations, TreeNode } from '@/types';
 
-const PARENT_CHILD_TYPES = ['PARENT_CHILD', 'ADOPTED', 'STEP_PARENT', 'STEP_CHILD', 'FOSTER'] as const;
+const noStoreHeaders = { 'Cache-Control': 'no-store, max-age=0, must-revalidate' };
 
 async function getStats() {
-  const [totalMembers, livingCount, deceasedCount, maleCount, femaleCount, marriageCount, oldestMember, youngestLiving] =
-    await Promise.all([
-      prisma.person.count(),
-      prisma.person.count({ where: { isLiving: true } }),
-      prisma.person.count({ where: { isLiving: false } }),
-      prisma.person.count({ where: { gender: 'MALE' } }),
-      prisma.person.count({ where: { gender: 'FEMALE' } }),
-      prisma.relationship.count({ where: { type: 'SPOUSE' } }),
-      prisma.person.findFirst({
-        where: { birthDate: { not: null } },
-        orderBy: { birthDate: 'asc' },
-        select: { firstName: true, lastName: true, birthDate: true },
-      }),
-      prisma.person.findFirst({
-        where: { birthDate: { not: null }, isLiving: true },
-        orderBy: { birthDate: 'desc' },
-        select: { firstName: true, lastName: true, birthDate: true },
-      }),
-    ]);
+  const [
+    totalMembers,
+    livingCount,
+    deceasedCount,
+    maleCount,
+    femaleCount,
+    marriageCount,
+    oldestMember,
+    youngestLiving,
+  ] = await Promise.all([
+    prisma.person.count(),
+    prisma.person.count({ where: { isLiving: true } }),
+    prisma.person.count({ where: { isLiving: false } }),
+    prisma.person.count({ where: { gender: 'MALE' } }),
+    prisma.person.count({ where: { gender: 'FEMALE' } }),
+    prisma.relationship.count({ where: { type: 'SPOUSE' } }),
+    prisma.person.findFirst({
+      where: { birthDate: { not: null } },
+      orderBy: { birthDate: 'asc' },
+      select: { firstName: true, lastName: true, birthDate: true },
+    }),
+    prisma.person.findFirst({
+      where: { birthDate: { not: null }, isLiving: true },
+      orderBy: { birthDate: 'desc' },
+      select: { firstName: true, lastName: true, birthDate: true },
+    }),
+  ]);
+
   return {
     totalMembers,
     livingCount,
@@ -31,341 +44,150 @@ async function getStats() {
     femaleCount,
     marriageCount,
     oldestMember: oldestMember
-      ? { name: `${oldestMember.firstName} ${oldestMember.lastName}`, birthYear: new Date(oldestMember.birthDate!).getFullYear() }
+      ? {
+          name: `${oldestMember.firstName} ${oldestMember.lastName}`,
+          birthYear: new Date(oldestMember.birthDate!).getFullYear(),
+        }
       : null,
     youngestLiving: youngestLiving
-      ? { name: `${youngestLiving.firstName} ${youngestLiving.lastName}`, birthYear: new Date(youngestLiving.birthDate!).getFullYear() }
+      ? {
+          name: `${youngestLiving.firstName} ${youngestLiving.lastName}`,
+          birthYear: new Date(youngestLiving.birthDate!).getFullYear(),
+        }
       : null,
   };
 }
 
+function generationCount(tree: TreeNode | null): number {
+  if (!tree) return 0;
+  if (!tree.children?.length) return 1;
+  return 1 + Math.max(...tree.children.map((child) => generationCount(child)));
+}
+
 export async function GET() {
   try {
-    // 1. Try Family table first (explicit family trees)
-    const familyRecords = await prisma.family.findMany({
-      include: { createdBy: true },
-    });
-
-    if (familyRecords.length > 0) {
-      // Load all parent-child relationships once for walking up to topmost ancestor
-      const allParentChild = await prisma.relationship.findMany({
-        where: { type: 'PARENT_CHILD' },
-        select: { parentId: true, childId: true },
-      });
-      const childToParent = new Map<string, string>();
-      for (const r of allParentChild) {
-        if (r.childId && r.parentId) childToParent.set(r.childId, r.parentId);
-      }
-      function findTopmostAncestor(startId: string): string {
-        const visited = new Set<string>();
-        let current = startId;
-        while (true) {
-          visited.add(current);
-          const parent = childToParent.get(current);
-          if (!parent || visited.has(parent)) break;
-          current = parent;
-        }
-        return current;
-      }
-
-      const families = await Promise.all(
-        familyRecords.map(async (f) => {
-          // Walk up from the stored root to the actual topmost ancestor
-          const topmostId = findTopmostAncestor(f.rootPersonId);
-          const person = await prisma.person.findUnique({
-            where: { id: topmostId },
-            include: { profileImage: true },
-          });
-          if (!person) return null;
-          const memberCount = await countFamilyMembers(person.id);
-          const generationCount = await countGenerations(person.id);
-          const notableCount = await prisma.person.count({
-            where: { lastName: person.lastName, isNotable: true },
-          });
-          return {
-            id: person.id,
-            familyName: f.name,
-            foundingAncestor: {
-              id: person.id,
-              firstName: person.firstName,
-              lastName: person.lastName,
-              profileImage: person.profileImage?.url || null,
-              birthYear: person.birthDate ? new Date(person.birthDate).getFullYear() : null,
-              birthPlace: person.birthPlace,
-            },
-            memberCount,
-            generationCount,
-            notableCount,
-            lastUpdated: f.updatedAt?.toISOString() || new Date().toISOString(),
-          };
-        })
-      );
-      const validFamilies = families.filter((f): f is NonNullable<typeof f> => f !== null);
-
-      // Only return early if we actually built valid families from the Family table.
-      // If every Family record pointed to a non-existent/deleted person (stale data),
-      // fall through to the auto-detection fallback below.
-      if (validFamilies.length > 0) {
-        const sorted = validFamilies.sort((a, b) => b.memberCount - a.memberCount);
-        const primary = sorted.find((f) => f.familyName.toLowerCase().includes('sithole')) || sorted[0] || null;
-        return NextResponse.json({
-          success: true,
-          data: {
-            families: sorted,
-            primaryFamilyId: primary?.id || null,
-            stats: await getStats(),
-          },
-        });
-      }
-      // Fall through to auto-detection below.
-    }
-
-    // 2. Fallback: infer from Person/Relationship (roots = never the child in parent-child relations)
-    const [persons, relationships] = await Promise.all([
+    const [persons, relationships, familyRecords] = await Promise.all([
       prisma.person.findMany({ include: { profileImage: true } }),
-      prisma.relationship.findMany({
-        where: { type: { in: [...PARENT_CHILD_TYPES] } },
-        select: { childId: true },
-      }),
+      prisma.relationship.findMany(),
+      prisma.family.findMany({ orderBy: { createdAt: 'asc' } }),
     ]);
-    const childIds = new Set(
-      relationships.map((r) => r.childId).filter((id): id is string => !!id)
-    );
-    let rootPersons = persons
-      .filter((p) => !childIds.has(p.id))
-      .sort((a, b) => {
-        if (!a.birthDate) return 1;
-        if (!b.birthDate) return -1;
-        return a.birthDate.getTime() - b.birthDate.getTime();
-      });
 
-    // 3. Fallback: if we have persons but no roots (bad data), use oldest person as single family
-    if (rootPersons.length === 0 && persons.length > 0) {
-      const sorted = [...persons].sort((a, b) => {
-        if (!a.birthDate) return 1;
-        if (!b.birthDate) return -1;
-        return a.birthDate.getTime() - b.birthDate.getTime();
-      });
-      rootPersons = [sorted[0]];
+    const personMap = new Map(persons.map((person) => [person.id, person]));
+    const asTreePersons = persons as unknown as PersonWithRelations[];
+
+    const buildPreview = async (rootId: string, familyName?: string, updatedAt?: Date) => {
+      const person = personMap.get(rootId);
+      if (!person) return null;
+
+      const tree = buildCollaborativeFamilyTree(rootId, asTreePersons, relationships);
+      const ids = collectTreeNodeIds(tree);
+      const spouse = tree?.spouse || tree?.spouses?.[0];
+      const inferredName =
+        spouse && spouse.lastName !== person.lastName
+          ? `${person.lastName}/${spouse.lastName}`
+          : person.lastName;
+
+      return {
+        id: rootId,
+        familyName: familyName || inferredName,
+        foundingAncestor: {
+          id: person.id,
+          firstName: person.firstName,
+          lastName: person.lastName,
+          profileImage: person.profileImage?.url || null,
+          birthYear: person.birthDate ? new Date(person.birthDate).getFullYear() : null,
+          birthPlace: person.birthPlace,
+        },
+        memberCount: ids.size,
+        generationCount: generationCount(tree),
+        notableCount: persons.filter((candidate) => ids.has(candidate.id) && candidate.isNotable).length,
+        lastUpdated: (updatedAt || person.updatedAt || new Date()).toISOString(),
+      };
+    };
+
+    // Existing Family rows are authoritative, but legacy versions could leave
+    // multiple rows inside the same connected tree. Resolve every row through
+    // the canonical family lookup and de-duplicate the previews by root id.
+    const previewsByRoot = new Map<string, Awaited<ReturnType<typeof buildPreview>>>();
+    for (const family of familyRecords) {
+      const canonicalRoot =
+        (await findPersonFamilyRoot(family.rootPersonId)) || family.rootPersonId;
+      if (previewsByRoot.has(canonicalRoot)) continue;
+
+      const canonicalFamily =
+        familyRecords.find((candidate) => candidate.rootPersonId === canonicalRoot) || family;
+      previewsByRoot.set(
+        canonicalRoot,
+        await buildPreview(canonicalRoot, canonicalFamily.name, canonicalFamily.updatedAt)
+      );
     }
 
-    // Group root persons by last name to form family units
-    const familyGroups: { [key: string]: typeof rootPersons } = {};
-    
-    for (const person of rootPersons) {
-      const familyKey = person.lastName.toUpperCase();
-      if (!familyGroups[familyKey]) {
-        familyGroups[familyKey] = [];
-      }
-      familyGroups[familyKey].push(person);
-    }
-
-    // Build family previews
-    type FounderType = typeof rootPersons[number];
-    const families = await Promise.all(
-      Object.entries(familyGroups).map(async ([lastName, founders]) => {
-        // Get the oldest founder as the main ancestor
-        const mainAncestor = founders.reduce((oldest: FounderType, current: FounderType) => {
-          if (!oldest.birthDate) return current;
-          if (!current.birthDate) return oldest;
-          return current.birthDate < oldest.birthDate ? current : oldest;
-        }, founders[0]);
-
-        // Count all descendants for this family
-        const memberCount = await countFamilyMembers(mainAncestor.id);
-        
-        // Count generations
-        const generationCount = await countGenerations(mainAncestor.id);
-        
-        // Count notable persons in this family
-        const notableCount = await prisma.person.count({
-          where: {
-            lastName: lastName,
-            isNotable: true
-          }
-        });
-
-        // Get spouse surnames for the family name
-        const spouseSurnames = await getSpouseSurnames(founders.map((f: { id: string }) => f.id), lastName);
-
-        // Create family name (e.g., "Sithole" or "Sithole/Moyo")
-        const familyName = spouseSurnames.length > 0 
-          ? `${lastName}/${spouseSurnames[0]}`
-          : lastName;
-
-        return {
-          id: mainAncestor.id,
-          familyName,
-          foundingAncestor: {
-            id: mainAncestor.id,
-            firstName: mainAncestor.firstName,
-            lastName: mainAncestor.lastName,
-            profileImage: mainAncestor.profileImage?.url || null,
-            birthYear: mainAncestor.birthDate ? new Date(mainAncestor.birthDate).getFullYear() : null,
-            birthPlace: mainAncestor.birthPlace,
-          },
-          memberCount,
-          generationCount,
-          notableCount,
-          lastUpdated: mainAncestor.updatedAt?.toISOString() || new Date().toISOString(),
-        };
-      })
+    let families = Array.from(previewsByRoot.values()).filter(
+      (family): family is NonNullable<typeof family> => family !== null
     );
 
-    const stats = await getStats();
-    const sortedFallback = families.sort((a: (typeof families)[number], b: (typeof families)[number]) => b.memberCount - a.memberCount);
-    const primaryFallback = sortedFallback.find((f) => f.familyName.toLowerCase().includes('sithole')) || sortedFallback[0] || null;
+    // Fresh database fallback: infer candidate roots and choose the largest
+    // collaborative tree. A spouse-only branch may also look parentless, but it
+    // will naturally rank below the real ancestor because the couple-aware tree
+    // rooted higher contains more people/generations.
+    if (families.length === 0 && persons.length > 0) {
+      const childIds = new Set(
+        relationships
+          .filter((relationship) => relationship.type === 'PARENT_CHILD')
+          .map((relationship) => relationship.childId)
+          .filter((id): id is string => Boolean(id))
+      );
 
-    // Persist the auto-detected root as a Family record so subsequent requests
-    // hit the primary (stored) path instead of re-inferring. This makes the
-    // choice stable across data changes — e.g. adding a birth date to a
-    // spouse won't flip the "topmost" tiebreaker underneath us.
-    // Best-effort: any DB failure is logged and swallowed so a public GET
-    // never 500s because of a persistence side-effect.
-    if (primaryFallback) {
+      const candidateRoots = persons.filter((person) => !childIds.has(person.id));
+      const roots = candidateRoots.length > 0 ? candidateRoots : persons.slice(0, 1);
+      families = (
+        await Promise.all(roots.map((root) => buildPreview(root.id)))
+      ).filter((family): family is NonNullable<typeof family> => family !== null);
+    }
+
+    const sorted = families.sort((a, b) => {
+      if (b.memberCount !== a.memberCount) return b.memberCount - a.memberCount;
+      return b.generationCount - a.generationCount;
+    });
+    const primary =
+      sorted.find((family) => family.familyName.toLowerCase().includes('sithole')) ||
+      sorted[0] ||
+      null;
+
+    if (primary && familyRecords.length === 0) {
       try {
         await prisma.family.upsert({
-          where: { rootPersonId: primaryFallback.id },
+          where: { rootPersonId: primary.id },
           create: {
-            rootPersonId: primaryFallback.id,
-            name: primaryFallback.familyName,
+            rootPersonId: primary.id,
+            name: primary.familyName,
             description: null,
             motto: null,
             crestImage: null,
           },
           update: {},
         });
-      } catch (upsertError) {
-        console.error(
-          'Failed to persist auto-detected family root:',
-          upsertError
-        );
+      } catch (error) {
+        console.error('Failed to persist auto-detected family root:', error);
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        families: sortedFallback,
-        primaryFamilyId: primaryFallback?.id || null,
-        stats,
-      }
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          families: sorted,
+          primaryFamilyId: primary?.id || null,
+          stats: await getStats(),
+        },
+      },
+      { headers: noStoreHeaders }
+    );
   } catch (error) {
     console.error('Error fetching families:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch families' },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders }
     );
   }
-}
-
-// Helper function to get spouse surnames
-async function getSpouseSurnames(founderIds: string[], excludeLastName: string): Promise<string[]> {
-  const spouseSurnames: string[] = [];
-  
-  for (const founderId of founderIds) {
-    // Get spouse relationships where this person is spouse1
-    const spouseRels1 = await prisma.relationship.findMany({
-      where: {
-        type: 'SPOUSE',
-        spouse1Id: founderId,
-      },
-      include: {
-        spouse2: { select: { lastName: true } }
-      }
-    });
-    
-    for (const rel of spouseRels1) {
-      if (rel.spouse2 && rel.spouse2.lastName !== excludeLastName && !spouseSurnames.includes(rel.spouse2.lastName)) {
-        spouseSurnames.push(rel.spouse2.lastName);
-      }
-    }
-    
-    // Get spouse relationships where this person is spouse2
-    const spouseRels2 = await prisma.relationship.findMany({
-      where: {
-        type: 'SPOUSE',
-        spouse2Id: founderId,
-      },
-      include: {
-        spouse1: { select: { lastName: true } }
-      }
-    });
-    
-    for (const rel of spouseRels2) {
-      if (rel.spouse1 && rel.spouse1.lastName !== excludeLastName && !spouseSurnames.includes(rel.spouse1.lastName)) {
-        spouseSurnames.push(rel.spouse1.lastName);
-      }
-    }
-  }
-  
-  return spouseSurnames;
-}
-
-// Helper function to count all family members recursively
-async function countFamilyMembers(rootPersonId: string, visited = new Set<string>()): Promise<number> {
-  if (visited.has(rootPersonId)) return 0;
-  visited.add(rootPersonId);
-  
-  let count = 1;
-  
-  // Get children
-  const childRelations = await prisma.relationship.findMany({
-    where: {
-      type: 'PARENT_CHILD',
-      parentId: rootPersonId
-    },
-    select: { childId: true }
-  });
-
-  for (const rel of childRelations) {
-    if (rel.childId) {
-      count += await countFamilyMembers(rel.childId, visited);
-    }
-  }
-
-  // Get spouse
-  const spouseRelations = await prisma.relationship.findMany({
-    where: {
-      type: 'SPOUSE',
-      OR: [
-        { spouse1Id: rootPersonId },
-        { spouse2Id: rootPersonId }
-      ]
-    },
-    select: { spouse1Id: true, spouse2Id: true }
-  });
-
-  for (const rel of spouseRelations) {
-    const spouseId = rel.spouse1Id === rootPersonId ? rel.spouse2Id : rel.spouse1Id;
-    if (spouseId && !visited.has(spouseId)) {
-      visited.add(spouseId);
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
-// Helper function to count generations
-async function countGenerations(rootPersonId: string, currentGen = 1, maxGen = { value: 1 }): Promise<number> {
-  maxGen.value = Math.max(maxGen.value, currentGen);
-  
-  // Get children
-  const childRelations = await prisma.relationship.findMany({
-    where: {
-      type: 'PARENT_CHILD',
-      parentId: rootPersonId
-    },
-    select: { childId: true }
-  });
-
-  for (const rel of childRelations) {
-    if (rel.childId) {
-      await countGenerations(rel.childId, currentGen + 1, maxGen);
-    }
-  }
-
-  return maxGen.value;
 }

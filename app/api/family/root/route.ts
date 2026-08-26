@@ -9,19 +9,13 @@ import {
   isSystemAdmin,
   reassignFamilyRoot,
 } from '@/lib/family-membership';
+import {
+  ensureFamilyPersonAssociation,
+  upsertTransitionalMembership,
+} from '@/lib/stable-family';
 
 // PATCH /api/family/root
-//
 // Body: { personId: string }
-//
-// Reassigns the root of the family tree containing `personId` to that person.
-// Only System Admins or Family Admins of the affected tree may call this.
-//
-// Use cases:
-//   - The auto-promotion didn't kick in (e.g. data was imported), and an
-//     admin wants to fix the canonical ancestor.
-//   - An admin wants to deliberately re-anchor the tree to a different
-//     known ancestor.
 export async function PATCH(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -33,10 +27,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const personId = typeof body.personId === 'string' ? body.personId : '';
     if (!personId) {
-      return NextResponse.json(
-        { success: false, error: 'personId is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'personId is required' }, { status: 400 });
     }
 
     const person = await prisma.person.findUnique({
@@ -49,26 +40,18 @@ export async function PATCH(request: NextRequest) {
 
     const currentRoot = await findPersonFamilyRoot(personId);
 
-    // Case 1: No Family record exists yet for this person's tree.
-    // Create one anchored at `personId`. Only System Admins can do this,
-    // since there's no existing FamilyMembership to derive family-admin
-    // scope from.
     if (!currentRoot) {
       const sysAdmin = await isSystemAdmin(user.id);
       if (!sysAdmin) {
         return NextResponse.json(
           {
             success: false,
-            error:
-              'Only System Admins can create a new family tree root when no Family record exists.',
+            error: 'Only System Admins can create a new family tree root when no Family record exists.',
           },
           { status: 403 }
         );
       }
 
-      // Derive family name: lastName, or lastName/spouseLastName if the
-      // person has a current spouse with a different last name. Mirrors
-      // the fallback naming convention used by GET /api/tree.
       const spouseRel = await prisma.relationship.findFirst({
         where: {
           type: 'SPOUSE',
@@ -85,15 +68,13 @@ export async function PATCH(request: NextRequest) {
             where: { id: spouseId },
             select: { lastName: true },
           });
-          if (spouse && spouse.lastName && spouse.lastName !== person.lastName) {
+          if (spouse?.lastName && spouse.lastName !== person.lastName) {
             derivedName = `${person.lastName}/${spouse.lastName}`;
           }
         }
       }
 
-      // Idempotent create: if two callers race, the second falls through
-      // to the "already the root" fast-path below on the next request.
-      await prisma.family.upsert({
+      const family = await prisma.family.upsert({
         where: { rootPersonId: personId },
         create: {
           rootPersonId: personId,
@@ -106,26 +87,27 @@ export async function PATCH(request: NextRequest) {
         update: {},
       });
 
+      // The permanent Family.id is authoritative for membership/person scope.
+      // These helpers are no-ops before the additive Phase-1 migration.
+      await ensureFamilyPersonAssociation(family.id, personId);
+      await upsertTransitionalMembership(user.id, family.id, 'ADMIN');
+
       await prisma.activity.create({
         data: {
           type: 'PERSON_UPDATED',
           description: `${derivedName} was set as the root ancestor of the family tree`,
           userId: user.id,
-          data: {
-            newRootPersonId: personId,
-          },
+          data: { familyId: family.id, newRootPersonId: personId },
         },
       });
 
       return NextResponse.json({
         success: true,
-        data: { rootPersonId: personId, previousRootPersonId: null },
+        data: { familyId: family.id, rootPersonId: personId, previousRootPersonId: null },
         message: `${person.firstName} ${person.lastName} is now the family root.`,
       });
     }
 
-    // Case 2: A Family record already exists. Reassignment path — require
-    // System Admin or Family Admin of THIS tree.
     const sysAdmin = await isSystemAdmin(user.id);
     const famAdmin = sysAdmin ? true : await isFamilyAdmin(user.id, currentRoot);
     if (!sysAdmin && !famAdmin) {
@@ -136,14 +118,18 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (currentRoot === personId) {
+      const family = await prisma.family.findUnique({ where: { rootPersonId: currentRoot } });
+      if (family) await ensureFamilyPersonAssociation(family.id, personId);
       return NextResponse.json({
         success: true,
-        data: { rootPersonId: currentRoot },
+        data: { familyId: family?.id ?? null, rootPersonId: currentRoot },
         message: `${person.firstName} ${person.lastName} is already the family root.`,
       });
     }
 
+    const familyBefore = await prisma.family.findUnique({ where: { rootPersonId: currentRoot } });
     await reassignFamilyRoot(currentRoot, personId);
+    if (familyBefore) await ensureFamilyPersonAssociation(familyBefore.id, personId);
 
     await prisma.activity.create({
       data: {
@@ -151,6 +137,7 @@ export async function PATCH(request: NextRequest) {
         description: `Family root reassigned to ${person.firstName} ${person.lastName} by admin.`,
         userId: user.id,
         data: {
+          familyId: familyBefore?.id ?? null,
           newRootPersonId: personId,
           previousRootPersonId: currentRoot,
         },
@@ -159,12 +146,15 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { rootPersonId: personId, previousRootPersonId: currentRoot },
+      data: {
+        familyId: familyBefore?.id ?? null,
+        rootPersonId: personId,
+        previousRootPersonId: currentRoot,
+      },
       message: `${person.firstName} ${person.lastName} is now the family root.`,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Failed to reassign family root';
+    const message = error instanceof Error ? error.message : 'Failed to reassign family root';
     console.error('PATCH /api/family/root', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
