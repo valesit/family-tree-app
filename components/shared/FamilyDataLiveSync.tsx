@@ -6,12 +6,13 @@ import { useSWRConfig } from 'swr';
 const LIVE_KEYS = ['/api/tree', '/api/families', '/api/user/families', '/api/persons', '/api/relationships'];
 
 /**
- * Lightweight collaborative refresh for genealogy data.
+ * Event-driven collaborative refresh for genealogy data.
  *
- * Family trees change relatively infrequently, so a short SWR revalidation
- * interval gives users near-real-time updates without the complexity of a
- * websocket service. Only keys that are already present in the current tab's
- * SWR cache are revalidated.
+ * Do not poll on a timer: even when the tree viewport is preserved, periodic
+ * network revalidation makes the application look like it is refreshing.
+ * Instead, refresh cached family data when the user returns to the tab/window
+ * or reconnects. Local create/update flows continue to mutate/reload their
+ * affected data immediately after a successful write.
  */
 export function FamilyDataLiveSync() {
   const { mutate } = useSWRConfig();
@@ -29,16 +30,18 @@ export function FamilyDataLiveSync() {
       );
     };
 
-    const interval = window.setInterval(revalidateFamilyData, 3000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') revalidateFamilyData();
+    };
+
     window.addEventListener('focus', revalidateFamilyData);
     window.addEventListener('online', revalidateFamilyData);
-    document.addEventListener('visibilitychange', revalidateFamilyData);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener('focus', revalidateFamilyData);
       window.removeEventListener('online', revalidateFamilyData);
-      document.removeEventListener('visibilitychange', revalidateFamilyData);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [mutate]);
 
