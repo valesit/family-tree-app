@@ -1,14 +1,30 @@
 import type { Relationship } from '@prisma/client';
 import type { PersonWithRelations, SpouseNode, TreeNode } from '@/types';
 
+const NEW_PERSON_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+type CollaborativeTreeNode = TreeNode & {
+  isNew?: boolean;
+  parentIds?: string[];
+};
+
+type CollaborativeSpouseNode = SpouseNode & {
+  isNew?: boolean;
+  parentIds?: string[];
+};
+
+function wasAddedWithinLast30Days(createdAt: Date): boolean {
+  const age = Date.now() - createdAt.getTime();
+  return age >= 0 && age <= NEW_PERSON_WINDOW_MS;
+}
+
 /**
  * Build the visible genealogy tree from relationship records.
  *
- * The important distinction from a simple parent->children traversal is that a
- * married couple is treated as one visual household. Children linked to either
- * spouse are collected, de-duplicated, and rendered beneath the couple. This
- * prevents a contribution from appearing to replace existing children merely
- * because it was attached through the other parent.
+ * A married couple is treated as one visual household for collecting children,
+ * but every child also carries its explicit parent ids. The renderer can use
+ * those ids and the child's own visual anchor to draw genealogy connectors to
+ * the actual child rather than to the midpoint of that child's marriage.
  */
 export function buildCollaborativeFamilyTree(
   rootPersonId: string,
@@ -19,6 +35,20 @@ export function buildCollaborativeFamilyTree(
 ): TreeNode | null {
   const personMap = new Map(persons.map((person) => [person.id, person]));
   const visited = new Set<string>();
+
+  const parentIdsFor = (personId: string) =>
+    Array.from(
+      new Set(
+        relationships
+          .filter(
+            (relationship) =>
+              relationship.type === 'PARENT_CHILD' &&
+              relationship.childId === personId &&
+              relationship.parentId
+          )
+          .map((relationship) => relationship.parentId!)
+      )
+    );
 
   const spouseRelationsFor = (personId: string) =>
     relationships
@@ -38,7 +68,7 @@ export function buildCollaborativeFamilyTree(
     relationship: Relationship,
     marriageOrder: number
   ): SpouseNode {
-    return {
+    const spouseNode: CollaborativeSpouseNode = {
       id: person.id,
       name: `${person.firstName} ${person.lastName}`,
       firstName: person.firstName,
@@ -49,6 +79,8 @@ export function buildCollaborativeFamilyTree(
       profileImage: person.profileImage?.url,
       isLiving: person.isLiving,
       isVerified: person.isVerified ?? true,
+      isNew: wasAddedWithinLast30Days(person.createdAt),
+      parentIds: parentIdsFor(person.id),
       marriageDate: relationship.startDate?.toISOString(),
       divorceDate: relationship.endDate?.toISOString(),
       marriageOrder,
@@ -64,6 +96,7 @@ export function buildCollaborativeFamilyTree(
         maidenName: person.maidenName || undefined,
       },
     };
+    return spouseNode;
   }
 
   function buildNode(personId: string, depth = 0): TreeNode | null {
@@ -74,7 +107,7 @@ export function buildCollaborativeFamilyTree(
 
     visited.add(personId);
 
-    const node: TreeNode = {
+    const node: CollaborativeTreeNode = {
       id: person.id,
       name: `${person.firstName} ${person.lastName}`,
       firstName: person.firstName,
@@ -85,6 +118,8 @@ export function buildCollaborativeFamilyTree(
       profileImage: person.profileImage?.url,
       isLiving: person.isLiving,
       isVerified: person.isVerified ?? true,
+      isNew: wasAddedWithinLast30Days(person.createdAt),
+      parentIds: parentIdsFor(person.id),
       attributes: {
         birthYear: person.birthDate
           ? new Date(person.birthDate).getFullYear().toString()
@@ -121,9 +156,8 @@ export function buildCollaborativeFamilyTree(
     }
 
     if (direction === 'descendants' || direction === 'both') {
-      // Treat the couple as one household for descendant rendering. A child may
-      // have been contributed through either parent, or correctly linked to
-      // both. Either way it appears exactly once beneath the couple.
+      // Collect children contributed through either member of this household.
+      // Parentage itself remains explicit in each child's parentIds metadata.
       const householdParentIds = new Set([personId, ...spouseIds]);
       const childIds = new Set<string>();
 

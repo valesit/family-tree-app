@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
 import { useTreeViewOptional } from './TreeViewContext';
 import {
-  AlertCircle,
   ChevronDown,
   ChevronRight,
   Crown,
@@ -40,10 +39,16 @@ interface TreeNodeProps {
   exportMode?: boolean;
   exportFields?: TreeNodeExportFields;
   maxLevels?: number;
+  incomingFromParent?: boolean;
 }
 
+type DisplayTreePerson = (TreeNodeType | SpouseNode) & {
+  isNew?: boolean;
+  parentIds?: string[];
+};
+
 type VisualPartner = {
-  person: TreeNodeType | SpouseNode;
+  person: DisplayTreePerson;
   spouseCard: boolean;
   marriageOrder?: number;
 };
@@ -65,9 +70,13 @@ export function TreeNode({
   exportMode = false,
   exportFields,
   maxLevels,
+  incomingFromParent = false,
 }: TreeNodeProps) {
   const treeView = useTreeViewOptional();
   const [branchMenuFor, setBranchMenuFor] = useState<string | null>(null);
+  const nodeContainerRef = useRef<HTMLDivElement>(null);
+  const canonicalCardRef = useRef<HTMLDivElement>(null);
+  const [lineageAnchorPercent, setLineageAnchorPercent] = useState(50);
 
   const exportLevelOk = typeof maxLevels !== 'number' || level + 1 < maxLevels;
   const hasChildren = Boolean(node.children?.length) && (!exportMode || exportLevelOk);
@@ -111,23 +120,21 @@ export function TreeNode({
     : undefined;
 
   const effectiveSetRoot = onSetRoot ?? defaultSetRoot;
-
-  const allSpouses = node.spouses || (node.spouse ? [node.spouse] : []);
+  const displayNode = node as DisplayTreePerson;
+  const allSpouses = (node.spouses || (node.spouse ? [node.spouse] : [])) as DisplayTreePerson[];
   const hasMultipleSpouses = allSpouses.length > 1;
 
   /*
-   * Genealogy convention for this product: the husband/father is the visual
-   * anchor on the left and spouse(s) extend to the right. The stored tree node
-   * is still the canonical data node; this only changes presentation order.
-   * If gender is unknown or there is no male partner, keep the stored node as
-   * the left anchor so we never invent relationship semantics.
+   * Keep the husband/father on the left when the data supports it. This is only
+   * visual ordering: node remains the canonical person through whom the lineage
+   * arrived, and the incoming connector is routed to node's own card below.
    */
   const maleSpouseIndex = node.gender === 'MALE'
     ? -1
     : allSpouses.findIndex((spouse) => spouse.gender === 'MALE');
 
-  const visualAnchor: TreeNodeType | SpouseNode =
-    maleSpouseIndex >= 0 ? allSpouses[maleSpouseIndex] : node;
+  const visualAnchor: DisplayTreePerson =
+    maleSpouseIndex >= 0 ? allSpouses[maleSpouseIndex] : displayNode;
 
   const visualPartners: VisualPartner[] = visualAnchor.id === node.id
     ? allSpouses.map((spouse, index) => ({
@@ -140,7 +147,7 @@ export function TreeNode({
       }))
     : [
         {
-          person: node,
+          person: displayNode,
           spouseCard: true,
           marriageOrder:
             'marriageOrder' in visualAnchor && typeof visualAnchor.marriageOrder === 'number'
@@ -159,6 +166,30 @@ export function TreeNode({
           })),
       ];
 
+  /*
+   * A child can be visually positioned on either side of their spouse. Measure
+   * the canonical child's actual card position and route the incoming genealogy
+   * line to that card. This prevents a line from ending at the marriage midpoint
+   * and incorrectly suggesting that the spouse is also a child of the parents.
+   */
+  useLayoutEffect(() => {
+    if (!incomingFromParent) return;
+    const container = nodeContainerRef.current;
+    const card = canonicalCardRef.current;
+    if (!container || !card) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    if (!containerRect.width) return;
+
+    const cardCenter = cardRect.left + cardRect.width / 2;
+    const percentage = ((cardCenter - containerRect.left) / containerRect.width) * 100;
+    setLineageAnchorPercent(Math.min(98, Math.max(2, percentage)));
+  }, [incomingFromParent, node.id, visualAnchor.id, visualPartners.length, expandedNodes]);
+
+  const routeStartPercent = Math.min(50, lineageAnchorPercent);
+  const routeWidthPercent = Math.abs(lineageAnchorPercent - 50);
+
   const runAction = (action: ((id: string) => void) | undefined, personId: string) => {
     setBranchMenuFor(null);
     action?.(personId);
@@ -170,7 +201,7 @@ export function TreeNode({
     marriageOrder,
     totalSpouses,
   }: {
-    person: TreeNodeType | SpouseNode;
+    person: DisplayTreePerson;
     spouse?: boolean;
     marriageOrder?: number;
     totalSpouses?: number;
@@ -187,7 +218,10 @@ export function TreeNode({
       : null;
 
     return (
-      <div className="relative">
+      <div
+        ref={person.id === node.id ? canonicalCardRef : undefined}
+        className="relative"
+      >
         <button
           type="button"
           data-clickable="true"
@@ -208,13 +242,13 @@ export function TreeNode({
             </span>
           )}
 
-          {person.isVerified === false && !exportMode && (
+          {person.isNew && !exportMode && (
             <span
-              className="absolute -left-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#fffdf9] text-amber-600 ring-1 ring-amber-300"
-              title="Recently added — pending review"
-              aria-label="Recently added"
+              className="absolute -top-2.5 right-3 rounded-full border border-[#dfd2c6] bg-[#f5eee8] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#765f52] shadow-[0_2px_7px_rgba(74,46,32,0.06)]"
+              title="Added within the last 30 days"
+              aria-label="Added within the last 30 days"
             >
-              <AlertCircle className="h-3 w-3" />
+              New
             </span>
           )}
 
@@ -305,8 +339,29 @@ export function TreeNode({
   };
 
   return (
-    <div className="group/tree flex flex-col items-center">
-      {/* Husband/father anchors the couple on the left; spouse(s) extend right. */}
+    <div ref={nodeContainerRef} className="group/tree relative flex flex-col items-center">
+      {incomingFromParent && (
+        <div className="relative h-8 w-full min-w-[210px]" aria-hidden>
+          <span className="absolute left-1/2 top-0 h-3 w-px -translate-x-1/2 bg-[#b58b6a]" />
+          {routeWidthPercent > 0.25 && (
+            <span
+              className="absolute top-3 h-px bg-[#b58b6a]"
+              style={{ left: `${routeStartPercent}%`, width: `${routeWidthPercent}%` }}
+            />
+          )}
+          <span
+            className="absolute bottom-0 top-3 w-px -translate-x-1/2 bg-[#b58b6a]"
+            style={{ left: `${lineageAnchorPercent}%` }}
+          />
+          <ChevronDown
+            className="absolute -bottom-1 h-3 w-3 -translate-x-1/2 text-[#9d6f55]"
+            style={{ left: `${lineageAnchorPercent}%` }}
+          />
+        </div>
+      )}
+
+      {/* Husband/father can remain on the left, while lineage still terminates
+          on the canonical child's own card. */}
       <div className="flex items-center gap-3">
         <PersonCard person={visualAnchor} />
 
@@ -383,6 +438,7 @@ export function TreeNode({
                       exportMode={exportMode}
                       exportFields={exportFields}
                       maxLevels={maxLevels}
+                      incomingFromParent
                     />
                   </div>
                 );
