@@ -75,13 +75,18 @@ export const authOptions: NextAuthOptions = {
         token.phone = (user as SessionUser).phone;
         token.linkedPersonId = (user as SessionUser).linkedPersonId;
       }
-      
-      // Handle session updates
+
+      // Keep session state current immediately after profile claiming, photo
+      // changes and account edits instead of requiring a sign-out/sign-in.
       if (trigger === 'update' && session) {
-        token.name = session.name;
-        token.image = session.image;
+        if (typeof session.name !== 'undefined') token.name = session.name;
+        if (typeof session.image !== 'undefined') token.picture = session.image;
+        if (typeof session.phone !== 'undefined') token.phone = session.phone;
+        if (typeof session.linkedPersonId !== 'undefined') {
+          token.linkedPersonId = session.linkedPersonId;
+        }
       }
-      
+
       return token;
     },
     async session({ session, token }) {
@@ -90,6 +95,9 @@ export const authOptions: NextAuthOptions = {
         (session.user as SessionUser).role = token.role as 'ADMIN' | 'MEMBER' | 'VIEWER';
         (session.user as SessionUser).phone = token.phone as string | null;
         (session.user as SessionUser).linkedPersonId = token.linkedPersonId as string | null;
+        if (typeof token.picture !== 'undefined') {
+          session.user.image = token.picture as string | null;
+        }
       }
       return session;
     },
@@ -97,7 +105,6 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signIn({ user, isNewUser }) {
       if (isNewUser && user.id) {
-        // Create welcome notification for new users
         await prisma.notification.create({
           data: {
             userId: user.id,
@@ -111,19 +118,15 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-// Helper to get session user
 export async function getSessionUser(session: { user?: SessionUser } | null): Promise<SessionUser | null> {
   if (!session?.user) return null;
   return session.user as SessionUser;
 }
 
-// Hash password helper
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }
 
-// Verify password helper
 export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
   return bcrypt.compare(password, hashedPassword);
 }
-

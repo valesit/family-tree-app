@@ -4,12 +4,17 @@ import { put } from '@vercel/blob';
 import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { SessionUser } from '@/types';
+import {
+  findPersonFamilyRoot,
+  isFamilyAdmin,
+  isSystemAdmin,
+} from '@/lib/family-membership';
 
-// POST /api/upload - Upload an image for a person
+// POST /api/upload - Upload an image for a family member.
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -20,20 +25,39 @@ export async function POST(request: NextRequest) {
     const isProfile = formData.get('isProfile') === 'true';
 
     if (!image) {
-      return NextResponse.json(
-        { success: false, error: 'No image provided' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 });
     }
-
     if (!personId) {
+      return NextResponse.json({ success: false, error: 'Person ID is required' }, { status: 400 });
+    }
+
+    const person = await prisma.person.findUnique({
+      where: { id: personId },
+      select: {
+        id: true,
+        userId: true,
+        addedById: true,
+      },
+    });
+    if (!person) {
+      return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
+    }
+
+    const rootId = await findPersonFamilyRoot(personId);
+    const [sysAdmin, familyAdmin] = await Promise.all([
+      isSystemAdmin(user.id),
+      rootId ? isFamilyAdmin(user.id, rootId) : Promise.resolve(false),
+    ]);
+    const ownsProfile = person.userId === user.id;
+    const justAddedPerson = person.addedById === user.id;
+
+    if (!sysAdmin && !familyAdmin && !ownsProfile && !justAddedPerson) {
       return NextResponse.json(
-        { success: false, error: 'Person ID is required' },
-        { status: 400 }
+        { success: false, error: 'You do not have permission to change this person’s photos' },
+        { status: 403 }
       );
     }
 
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(image.type)) {
       return NextResponse.json(
@@ -42,7 +66,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024;
     if (image.size > maxSize) {
       return NextResponse.json(
@@ -69,28 +92,37 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // If this is a profile image, update the person's profile image
     if (isProfile) {
       await prisma.person.update({
         where: { id: personId },
         data: { profileImageId: personImage.id },
       });
+
+      // A claimed family profile is the source of truth for the member's
+      // family-facing avatar. Keep the account avatar in sync for messaging.
+      if (person.userId) {
+        await prisma.user.update({
+          where: { id: person.userId },
+          data: { image: url },
+        });
+      }
     }
 
-    // Log activity
     await prisma.activity.create({
       data: {
         type: 'IMAGE_UPLOADED',
-        description: 'A photo was added to the family tree',
+        description: isProfile
+          ? 'A profile photo was updated'
+          : 'A photo was added to the family tree',
         userId: user.id,
-        data: { personId, imageId: personImage.id },
+        data: { personId, imageId: personImage.id, isProfile },
       },
     });
 
     return NextResponse.json({
       success: true,
       data: personImage,
-      message: 'Image uploaded successfully.',
+      message: isProfile ? 'Profile photo updated.' : 'Image uploaded successfully.',
     });
   } catch (error) {
     console.error('Error uploading image:', error);
@@ -100,4 +132,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -6,6 +6,7 @@ import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
 import {
   findPersonFamilyRoot,
+  getFamilyMembership,
   isFamilyAdmin,
   isSystemAdmin,
   promoteFamilyRootIfHigher,
@@ -13,13 +14,13 @@ import {
 
 // GET /api/persons/[id] - Get a single person (public - no auth required)
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const session = await getServerSession(authOptions);
-    const isAuthenticated = !!session?.user;
+    const sessionUser = session?.user as SessionUser | undefined;
 
     const person = await prisma.person.findUnique({
       where: { id },
@@ -27,24 +28,16 @@ export async function GET(
         profileImage: true,
         images: true,
         parentRelations: {
-          include: {
-            parent: { include: { profileImage: true } },
-          },
+          include: { parent: { include: { profileImage: true } } },
         },
         childRelations: {
-          include: {
-            child: { include: { profileImage: true } },
-          },
+          include: { child: { include: { profileImage: true } } },
         },
         spouseRelations1: {
-          include: {
-            spouse2: { include: { profileImage: true } },
-          },
+          include: { spouse2: { include: { profileImage: true } } },
         },
         spouseRelations2: {
-          include: {
-            spouse1: { include: { profileImage: true } },
-          },
+          include: { spouse1: { include: { profileImage: true } } },
         },
         user: {
           select: {
@@ -62,19 +55,24 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
 
-    // Privacy: only expose the linked user's phone number to authenticated
-    // family members AND only when they've opted in to WhatsApp contact.
-    // Anonymous viewers never see phone numbers.
+    // Only members of the same family can receive the optional WhatsApp deep
+    // link. Anonymous viewers and unrelated accounts never receive the phone.
+    let isSameFamily = false;
+    if (sessionUser) {
+      const rootId = await findPersonFamilyRoot(id);
+      isSameFamily = !!rootId && !!(await getFamilyMembership(sessionUser.id, rootId));
+      if (sessionUser.role === 'ADMIN') isSameFamily = true;
+    }
+
     type PersonShape = typeof person;
     let safePerson: PersonShape = person;
     if (person.user) {
       const optedIn = person.user.whatsappOptIn && !!person.user.phone;
-      const phoneVisible = isAuthenticated && optedIn;
       safePerson = {
         ...person,
         user: {
           ...person.user,
-          phone: phoneVisible ? person.user.phone : null,
+          phone: isSameFamily && optedIn ? person.user.phone : null,
         },
       };
     }
@@ -89,34 +87,47 @@ export async function GET(
   }
 }
 
-// PUT /api/persons/[id] - Update a person
+// PUT /api/persons/[id] - Update a person.
+// Direct edits are limited to the claimed profile owner, Family Admins and System Admins.
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = session.user as SessionUser;
     const { id } = await params;
     const body = await request.json();
-    // Ignore any legacy `approverIds` payload — approval workflow has been removed.
     const { approverIds: _unusedApprovers, ...personData } = body;
     void _unusedApprovers;
 
-    // Check if person exists
-    const existingPerson = await prisma.person.findUnique({
-      where: { id },
-    });
-
+    const existingPerson = await prisma.person.findUnique({ where: { id } });
     if (!existingPerson) {
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
 
-    // Validate person data
+    const ownsProfile = existingPerson.userId === user.id;
+    const sysAdmin = await isSystemAdmin(user.id);
+    let famAdmin = false;
+    if (!sysAdmin && !ownsProfile) {
+      const familyRoot = await findPersonFamilyRoot(id);
+      famAdmin = !!familyRoot && (await isFamilyAdmin(user.id, familyRoot));
+    }
+
+    if (!ownsProfile && !sysAdmin && !famAdmin) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Only the profile owner or a Family Admin can edit this family member directly',
+        },
+        { status: 403 }
+      );
+    }
+
     const validationResult = personSchema.safeParse(personData);
     if (!validationResult.success) {
       return NextResponse.json(
@@ -125,7 +136,6 @@ export async function PUT(
       );
     }
 
-    // Anyone signed in can edit directly — no approval queue.
     const updated = await prisma.person.update({
       where: { id },
       data: {
@@ -157,29 +167,13 @@ export async function PUT(
 }
 
 // DELETE /api/persons/[id] - Remove a person from the family tree.
-//
-// Authorization:
-//   - System Admins (User.role === 'ADMIN') can delete anyone.
-//   - Family Admins can delete persons in trees where they have FamilyMembership.role === 'ADMIN'.
-//
-// Guardrails:
-//   - The family's root person cannot be deleted — that would orphan every
-//     descendant in the tree. Admins must reassign or rebuild manually.
-//   - You cannot delete your own linked profile this way (unlink first via
-//     /api/persons/[id]/claim DELETE, then delete).
-//
-// Cascades (defined in schema.prisma):
-//   - Relationship rows (parent/child/spouse) referencing this person are
-//     removed automatically via onDelete: Cascade.
-//   - PersonImage and NotableNomination cascade. WikiArticle.aboutPerson
-//     is set to NULL so historical articles survive.
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -188,34 +182,19 @@ export async function DELETE(
 
     const person = await prisma.person.findUnique({
       where: { id },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        userId: true,
-      },
+      select: { id: true, firstName: true, lastName: true, userId: true },
     });
 
     if (!person) {
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
 
-    // Heal stale Family.rootPersonId values before evaluating the root
-    // guardrail. Older trees may still point at a mid-tree "root" because
-    // the auto-promote hook in /api/relationships only fires on new
-    // relationships. Walking up to the actual topmost ancestor here
-    // ensures the guardrail blocks only the *current* root, not a stale
-    // pointer at someone (like Thandiwe) who is no longer topmost.
-    // Failures are non-fatal — if healing breaks for any reason, fall
-    // through to the original guardrail logic below.
     try {
       await promoteFamilyRootIfHigher(id);
     } catch (err) {
       console.error('Heal family root before delete failed:', err);
     }
 
-    // Refuse to delete the root of any family tree — that would cascade
-    // every descendant relationship and orphan the whole tree.
     const familyAsRoot = await prisma.family.findUnique({
       where: { rootPersonId: id },
       select: { id: true, name: true },
@@ -224,42 +203,33 @@ export async function DELETE(
       return NextResponse.json(
         {
           success: false,
-          error:
-            'This person is the root of a family tree and cannot be deleted. Reassign the root first.',
+          error: 'This person is the root of a family tree and cannot be deleted. Reassign the root first.',
         },
         { status: 400 }
       );
     }
 
-    // Refuse to delete one's own linked profile via this endpoint.
     if (person.userId && person.userId === user.id) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'You cannot delete your own linked profile. Unlink your account first if needed.',
+          error: 'You cannot delete your own linked profile. Unlink your account first if needed.',
         },
         { status: 400 }
       );
     }
 
-    // Authorization: System Admin OR Family Admin of the person's tree.
     const sysAdmin = await isSystemAdmin(user.id);
     let famAdmin = false;
     let familyId: string | null = null;
     if (!sysAdmin) {
       familyId = await findPersonFamilyRoot(id);
-      if (familyId) {
-        famAdmin = await isFamilyAdmin(user.id, familyId);
-      }
+      if (familyId) famAdmin = await isFamilyAdmin(user.id, familyId);
     }
 
     if (!sysAdmin && !famAdmin) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Only System Admins or Family Admins can delete a family member',
-        },
+        { success: false, error: 'Only System Admins or Family Admins can delete a family member' },
         { status: 403 }
       );
     }
@@ -287,4 +257,3 @@ export async function DELETE(
     );
   }
 }
-

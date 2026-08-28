@@ -4,39 +4,139 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { messageSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
+import { getUserFamilies } from '@/lib/family-membership';
 
-// GET /api/messages - Get conversations and messages
+async function familyIdsForUser(userId: string): Promise<string[]> {
+  const memberships = await getUserFamilies(userId);
+  return memberships.map((membership) => membership.family.id);
+}
+
+async function canDirectMessage(
+  sender: SessionUser,
+  receiverId: string
+): Promise<boolean> {
+  if (!receiverId || receiverId === sender.id) return false;
+
+  // The recipient must have claimed a family-tree profile. That is what makes
+  // them an active family profile rather than just an account in the database.
+  const linkedRecipient = await prisma.person.findFirst({
+    where: { userId: receiverId },
+    select: { id: true },
+  });
+  if (!linkedRecipient) return false;
+
+  if (sender.role === 'ADMIN') return true;
+
+  const familyIds = await familyIdsForUser(sender.id);
+  if (familyIds.length === 0) return false;
+
+  const sharedMembership = await prisma.familyMembership.findFirst({
+    where: {
+      userId: receiverId,
+      familyId: { in: familyIds },
+    },
+    select: { id: true },
+  });
+  return !!sharedMembership;
+}
+
+async function activeFamilyContacts(user: SessionUser) {
+  const familyIds = user.role === 'ADMIN' ? [] : await familyIdsForUser(user.id);
+
+  const people = await prisma.person.findMany({
+    where: {
+      userId: { not: null },
+      NOT: { userId: user.id },
+      ...(user.role === 'ADMIN'
+        ? {}
+        : {
+            familyLinks: {
+              some: { familyId: { in: familyIds } },
+            },
+          }),
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      profileImage: { select: { url: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          phone: true,
+          whatsappOptIn: true,
+          role: true,
+        },
+      },
+    },
+    orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+  });
+
+  const byUserId = new Map<string, {
+    id: string;
+    name: string;
+    image: string | null;
+    phone: string | null;
+    whatsappOptIn: boolean;
+    personId: string;
+  }>();
+
+  for (const person of people) {
+    if (!person.user) continue;
+    if (byUserId.has(person.user.id)) continue;
+    byUserId.set(person.user.id, {
+      id: person.user.id,
+      name: `${person.firstName} ${person.lastName}`.trim() || person.user.name || 'Family member',
+      image: person.profileImage?.url || person.user.image || null,
+      phone:
+        person.user.whatsappOptIn && person.user.phone
+          ? person.user.phone
+          : null,
+      whatsappOptIn: person.user.whatsappOptIn,
+      personId: person.id,
+    });
+  }
+
+  return Array.from(byUserId.values());
+}
+
+// GET /api/messages - conversations, a DM thread, or the active family directory.
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = session.user as SessionUser;
     const { searchParams } = new URL(request.url);
     const conversationId = searchParams.get('conversationId');
-    const userId = searchParams.get('userId'); // For direct messages
+    const userId = searchParams.get('userId');
 
     if (conversationId) {
-      // Get messages from a specific conversation
+      const conversation = await prisma.conversation.findFirst({
+        where: {
+          id: conversationId,
+          participants: { some: { userId: user.id } },
+        },
+        select: { id: true },
+      });
+      if (!conversation) {
+        return NextResponse.json({ success: false, error: 'Conversation not found' }, { status: 404 });
+      }
+
       const messages = await prisma.message.findMany({
         where: { conversationId },
         include: {
-          sender: {
-            select: { id: true, name: true, email: true, image: true },
-          },
+          sender: { select: { id: true, name: true, email: true, image: true } },
         },
         orderBy: { createdAt: 'asc' },
       });
 
-      // Mark messages as read
       await prisma.message.updateMany({
-        where: {
-          conversationId,
-          receiverId: user.id,
-          isRead: false,
-        },
+        where: { conversationId, receiverId: user.id, isRead: false },
         data: { isRead: true },
       });
 
@@ -44,7 +144,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (userId) {
-      // Get direct messages with a specific user
+      if (!(await canDirectMessage(user, userId))) {
+        return NextResponse.json(
+          { success: false, error: 'You can only message active members of your family' },
+          { status: 403 }
+        );
+      }
+
       const messages = await prisma.message.findMany({
         where: {
           OR: [
@@ -53,91 +159,61 @@ export async function GET(request: NextRequest) {
           ],
         },
         include: {
-          sender: {
-            select: { id: true, name: true, email: true, image: true },
-          },
+          sender: { select: { id: true, name: true, email: true, image: true } },
         },
         orderBy: { createdAt: 'asc' },
       });
 
-      // Mark messages as read
       await prisma.message.updateMany({
-        where: {
-          senderId: userId,
-          receiverId: user.id,
-          isRead: false,
-        },
+        where: { senderId: userId, receiverId: user.id, isRead: false },
         data: { isRead: true },
       });
 
       return NextResponse.json({ success: true, data: messages });
     }
 
-    // Get all conversations
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        participants: {
-          some: { userId: user.id },
-        },
-      },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          include: {
-            sender: {
-              select: { id: true, name: true },
-            },
+    const [conversations, recentDMs, availableContacts] = await Promise.all([
+      prisma.conversation.findMany({
+        where: { participants: { some: { userId: user.id } } },
+        include: {
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: { sender: { select: { id: true, name: true } } },
           },
+          participants: true,
         },
-        participants: {
-          include: {
-            // We can't include user here, so we'll handle it separately
-          },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      prisma.message.findMany({
+        where: {
+          OR: [{ senderId: user.id }, { receiverId: user.id }],
+          conversationId: null,
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        include: {
+          sender: { select: { id: true, name: true, email: true, image: true } },
+          receiver: { select: { id: true, name: true, email: true, image: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      activeFamilyContacts(user),
+    ]);
 
-    // Get recent direct message contacts
-    const recentDMs = await prisma.message.findMany({
-      where: {
-        OR: [
-          { senderId: user.id },
-          { receiverId: user.id },
-        ],
-        conversationId: null,
-      },
-      include: {
-        sender: {
-          select: { id: true, name: true, email: true, image: true },
-        },
-        receiver: {
-          select: { id: true, name: true, email: true, image: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      distinct: ['senderId', 'receiverId'],
-    });
-
-    // Process to get unique contacts
     type RecentDM = typeof recentDMs[number];
-    const contactMap = new Map();
-    recentDMs.forEach((msg: RecentDM) => {
+    const contactMap = new Map<string, { user: NonNullable<RecentDM['sender']>; lastMessage: RecentDM }>();
+    for (const msg of recentDMs) {
       const contact = msg.senderId === user.id ? msg.receiver : msg.sender;
       if (contact && !contactMap.has(contact.id)) {
-        contactMap.set(contact.id, {
-          user: contact,
-          lastMessage: msg,
-        });
+        contactMap.set(contact.id, { user: contact, lastMessage: msg });
       }
-    });
+    }
 
     return NextResponse.json({
       success: true,
       data: {
         conversations,
         directMessages: Array.from(contactMap.values()),
+        availableContacts,
       },
     });
   } catch (error) {
@@ -149,18 +225,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/messages - Send a message
+// POST /api/messages - send a direct or group message.
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = session.user as SessionUser;
     const body = await request.json();
-
-    // Validate message data
     const validationResult = messageSchema.safeParse(body);
     if (!validationResult.success) {
       return NextResponse.json(
@@ -171,7 +245,23 @@ export async function POST(request: NextRequest) {
 
     const { content, receiverId, conversationId } = validationResult.data;
 
-    // Create the message
+    if (receiverId && !(await canDirectMessage(user, receiverId))) {
+      return NextResponse.json(
+        { success: false, error: 'You can only message active members of your family' },
+        { status: 403 }
+      );
+    }
+
+    if (conversationId) {
+      const participant = await prisma.conversationParticipant.findUnique({
+        where: { userId_conversationId: { userId: user.id, conversationId } },
+        select: { id: true },
+      });
+      if (!participant) {
+        return NextResponse.json({ success: false, error: 'Not part of this conversation' }, { status: 403 });
+      }
+    }
+
     const message = await prisma.message.create({
       data: {
         content,
@@ -180,13 +270,10 @@ export async function POST(request: NextRequest) {
         conversationId,
       },
       include: {
-        sender: {
-          select: { id: true, name: true, email: true, image: true },
-        },
+        sender: { select: { id: true, name: true, email: true, image: true } },
       },
     });
 
-    // Update conversation timestamp if exists
     if (conversationId) {
       await prisma.conversation.update({
         where: { id: conversationId },
@@ -194,14 +281,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create notification for receiver
     if (receiverId) {
       await prisma.notification.create({
         data: {
           userId: receiverId,
           type: 'NEW_MESSAGE',
           title: 'New Message',
-          message: `${user.name} sent you a message`,
+          message: `${user.name || 'A family member'} sent you a message`,
           data: { senderId: user.id, messageId: message.id },
         },
       });
@@ -216,4 +302,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
