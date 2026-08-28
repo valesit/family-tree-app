@@ -1,1054 +1,423 @@
 'use client';
 
-import { use } from 'react';
+import { use, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
-import { PersonCard } from '@/components/person';
-import { Card, Button, Avatar } from '@/components/ui';
+import { format } from 'date-fns';
+import { Avatar, Button, Card } from '@/components/ui';
 import { PersonWithRelations, SessionUser } from '@/types';
-import { 
-  ArrowLeft, 
-  Edit, 
-  Flag, 
-  Users, 
-  ChevronRight, 
-  Loader2, 
+import {
   AlertCircle,
-  MessageSquare,
-  ImagePlus,
-  Lock,
-  LogIn,
+  ArrowLeft,
   Award,
-  Star,
-  Send,
-  Mail,
-  UserCheck,
+  Briefcase,
+  CalendarDays,
+  Camera,
+  ChevronRight,
+  Edit,
+  Heart,
   LinkIcon,
-  Unlink,
-  CheckCircle2,
-  AlertTriangle,
-  X,
-  Phone,
+  Loader2,
+  Lock,
+  MapPin,
+  MessageSquare,
+  Send,
   Trash2,
-  Crown,
+  UserCheck,
+  Users,
 } from 'lucide-react';
-import { useState } from 'react';
-import Link from 'next/link';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+type Tribute = {
+  id: string;
+  content: string;
+  personId: string;
+  authorId: string;
+  createdAt: string;
+  updatedAt: string;
+  authorName: string | null;
+  authorImage: string | null;
+};
+
+type RelatedPerson = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  profileImage?: { url: string } | null;
+  isLiving?: boolean;
+  birthDate?: string | Date | null;
+};
+
+type ParentRelation = { parent?: RelatedPerson | null };
+type ChildRelation = { child?: RelatedPerson | null };
+type SpouseRelation1 = { spouse2?: RelatedPerson | null };
+type SpouseRelation2 = { spouse1?: RelatedPerson | null };
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+function ageAt(birthValue?: string | Date | null, endValue?: string | Date | null) {
+  if (!birthValue) return null;
+  const birth = new Date(birthValue);
+  const end = endValue ? new Date(endValue) : new Date();
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(end.getTime())) return null;
+  let age = end.getFullYear() - birth.getFullYear();
+  const monthDelta = end.getMonth() - birth.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && end.getDate() < birth.getDate())) age -= 1;
+  return age;
+}
+
 export default function PersonDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
-  const { data: session, status } = useSession();
-  
-  // Notable person state
-  const [showNotableForm, setShowNotableForm] = useState(false);
-  const [notableTitle, setNotableTitle] = useState('');
-  const [notableDescription, setNotableDescription] = useState('');
-  const [isSubmittingNotable, setIsSubmittingNotable] = useState(false);
-  
-  // Claim profile state
-  const [isClaimingProfile, setIsClaimingProfile] = useState(false);
-  
-  // Dispute profile state
-  const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [disputeReason, setDisputeReason] = useState('');
-  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
-
-  // Delete-member state (admins only)
-  const [isDeletingPerson, setIsDeletingPerson] = useState(false);
-
-  // Set-as-family-root state (admins only)
-  const [isAssigningRoot, setIsAssigningRoot] = useState(false);
-
+  const { data: session, status, update } = useSession();
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
-  const isAdmin = user?.role === 'ADMIN';
 
-  // Pull the current user's family memberships so we can show the delete
-  // affordance to Family Admins (in addition to System Admins). The server
-  // is the source of truth on authorization; this just gates the UI.
-  const { data: userFamiliesData } = useSWR<{
-    success: boolean;
-    data: { families: Array<{ id: string; role: 'ADMIN' | 'MEMBER' }> };
-  }>(isAuthenticated ? '/api/user/families' : null, fetcher, {
-    revalidateOnFocus: false,
-  });
-  const isFamilyAdminAnywhere = !!userFamiliesData?.data?.families?.some(
-    (f) => f.role === 'ADMIN'
-  );
-  const canDeleteThisPerson = isAdmin || isFamilyAdminAnywhere;
-
-  // Look up whether this person is currently the stored root of any Family.
-  // The /api/family endpoint returns null when no Family is anchored to this id.
-  const { data: familyAtThisPerson, mutate: refetchFamilyAtThisPerson } = useSWR<{
-    success: boolean;
-    data: { id: string; rootPersonId: string } | null;
-  }>(
-    isAuthenticated ? `/api/family?rootPersonId=${encodeURIComponent(id)}` : null,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
-  const isCurrentRoot = !!familyAtThisPerson?.data;
+  const [tributeText, setTributeText] = useState('');
+  const [tributeBusy, setTributeBusy] = useState(false);
+  const [tributeError, setTributeError] = useState<string | null>(null);
+  const [claimBusy, setClaimBusy] = useState(false);
 
   const { data, error, isLoading, mutate } = useSWR<{
     success: boolean;
     data: PersonWithRelations;
-  }>(`/api/persons/${id}`, fetcher);
+  }>(`/api/persons/${id}`, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    refreshInterval: 0,
+  });
+
+  const { data: tributeData, mutate: refreshTributes } = useSWR<{
+    success: boolean;
+    data: Tribute[];
+  }>(`/api/persons/${id}/tributes`, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    refreshInterval: 0,
+  });
+
+  const person = data?.data;
+  const isOwnProfile = !!person?.userId && person.userId === user?.id;
+
+  const parents = useMemo(
+    () => person?.parentRelations?.map((r: ParentRelation) => r.parent).filter(Boolean) as RelatedPerson[] | undefined,
+    [person]
+  ) ?? [];
+  const children = useMemo(
+    () => person?.childRelations?.map((r: ChildRelation) => r.child).filter(Boolean) as RelatedPerson[] | undefined,
+    [person]
+  ) ?? [];
+  const spouses = useMemo(() => {
+    if (!person) return [] as RelatedPerson[];
+    return [
+      ...(person.spouseRelations1?.map((r: SpouseRelation1) => r.spouse2) || []),
+      ...(person.spouseRelations2?.map((r: SpouseRelation2) => r.spouse1) || []),
+    ].filter(Boolean) as RelatedPerson[];
+  }, [person]);
+
+  const handleClaimProfile = async () => {
+    if (!person) return;
+    if (!window.confirm(`Link your account to ${person.firstName} ${person.lastName}?`)) return;
+    setClaimBusy(true);
+    try {
+      const response = await fetch(`/api/persons/${id}/claim`, { method: 'POST' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) throw new Error(result?.error || 'Could not claim this profile');
+      await update({ linkedPersonId: id });
+      await mutate();
+    } catch (claimError) {
+      window.alert(claimError instanceof Error ? claimError.message : 'Could not claim this profile.');
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
+  const handlePostTribute = async () => {
+    const content = tributeText.trim();
+    if (!content) return;
+    setTributeBusy(true);
+    setTributeError(null);
+    try {
+      const response = await fetch(`/api/persons/${id}/tributes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) throw new Error(result?.error || 'Could not post your message');
+      setTributeText('');
+      await refreshTributes();
+    } catch (postError) {
+      setTributeError(postError instanceof Error ? postError.message : 'Could not post your message.');
+    } finally {
+      setTributeBusy(false);
+    }
+  };
+
+  const handleDeleteTribute = async (tributeId: string) => {
+    if (!window.confirm('Remove this family message?')) return;
+    const response = await fetch(`/api/tributes/${tributeId}`, { method: 'DELETE' });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.success) {
+      setTributeError(result?.error || 'Could not remove this message.');
+      return;
+    }
+    await refreshTributes();
+  };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-maroon-500" />
       </div>
     );
   }
 
-  if (error || !data?.success) {
+  if (error || !person) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]">
-        <AlertCircle className="w-12 h-12 text-rose-500 mb-4" />
-        <p className="text-slate-600 mb-4">Failed to load person details</p>
-        <Button onClick={() => router.back()}>Go Back</Button>
+      <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center">
+        <AlertCircle className="mb-4 h-10 w-10 text-rose-500" />
+        <h1 className="font-serif text-2xl font-semibold text-[#382a24]">Profile unavailable</h1>
+        <p className="mt-2 text-sm text-[#7d6e66]">We could not load this family member.</p>
+        <Button className="mt-5" onClick={() => router.back()}>Go back</Button>
       </div>
     );
   }
 
-  const person = data.data;
-
-  // Handle marking/nominating as notable
-  const handleMarkAsNotable = async (isDirect: boolean = false) => {
-    if (!notableTitle.trim()) {
-      alert('Please enter a title for the notable person');
-      return;
-    }
-
-    setIsSubmittingNotable(true);
-    try {
-      if (isDirect && isAdmin) {
-        // Admin direct update
-        const response = await fetch(`/api/persons/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...person,
-            isNotable: true,
-            notableTitle: notableTitle,
-            notableDescription: notableDescription,
-            birthDate: person.birthDate ? new Date(person.birthDate).toISOString() : null,
-            deathDate: person.deathDate ? new Date(person.deathDate).toISOString() : null,
-          }),
-        });
-
-        if (response.ok) {
-          mutate();
-          setShowNotableForm(false);
-          setNotableTitle('');
-          setNotableDescription('');
-          alert('Person marked as notable!');
-        } else {
-          throw new Error('Failed to update');
-        }
-      } else {
-        // Submit nomination for approval
-        const response = await fetch('/api/notable', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            personId: id,
-            title: notableTitle,
-            description: notableDescription,
-          }),
-        });
-
-        if (response.ok) {
-          setShowNotableForm(false);
-          setNotableTitle('');
-          setNotableDescription('');
-          alert('Nomination submitted! An admin will review it shortly.');
-        } else {
-          throw new Error('Failed to submit nomination');
-        }
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Failed to process. Please try again.');
-    } finally {
-      setIsSubmittingNotable(false);
-    }
-  };
-
-  // Handle removing notable status (admin only)
-  const handleRemoveNotable = async () => {
-    if (!confirm('Remove notable status from this person?')) return;
-
-    try {
-      const response = await fetch(`/api/persons/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...person,
-          isNotable: false,
-          notableTitle: null,
-          notableDescription: null,
-          notableAchievements: null,
-          birthDate: person.birthDate ? new Date(person.birthDate).toISOString() : null,
-          deathDate: person.deathDate ? new Date(person.deathDate).toISOString() : null,
-        }),
-      });
-
-      if (response.ok) {
-        mutate();
-        alert('Notable status removed');
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  // Handle claiming profile
-  const handleClaimProfile = async () => {
-    if (!confirm(`Are you ${person.firstName} ${person.lastName}? This will link your account to this profile in the family tree.`)) {
-      return;
-    }
-
-    setIsClaimingProfile(true);
-    try {
-      const response = await fetch(`/api/persons/${id}/claim`, {
-        method: 'POST',
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        mutate();
-        alert(result.message);
-      } else {
-        alert(result.error || 'Failed to claim profile');
-      }
-    } catch (error) {
-      console.error('Error claiming profile:', error);
-      alert('Failed to claim profile. Please try again.');
-    } finally {
-      setIsClaimingProfile(false);
-    }
-  };
-
-  // Handle unlinking profile (admin or self)
-  const handleUnlinkProfile = async () => {
-    if (!confirm('Are you sure you want to unlink this profile from the associated account?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/persons/${id}/claim`, {
-        method: 'DELETE',
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        mutate();
-        alert('Profile unlinked successfully');
-      } else {
-        alert(result.error || 'Failed to unlink profile');
-      }
-    } catch (error) {
-      console.error('Error unlinking profile:', error);
-      alert('Failed to unlink profile');
-    }
-  };
-
-  // Promote this person to be the family's root ancestor. Server enforces
-  // admin authorization and cleans up the FamilyMembership FK swap.
-  const handleSetAsRoot = async () => {
-    const fullName = `${person.firstName} ${person.lastName}`.trim();
-    if (
-      !confirm(
-        `Make ${fullName} the root ancestor of this family tree?\n\n` +
-          `This re-anchors the tree's canonical "topmost" person. ` +
-          `Family Admin permissions follow the new root.`
-      )
-    ) {
-      return;
-    }
-    setIsAssigningRoot(true);
-    try {
-      const response = await fetch('/api/family/root', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personId: id }),
-      });
-      const result = await response.json();
-      if (!result.success) {
-        alert(result.error || 'Failed to set family root');
-        return;
-      }
-      alert(result.message || `${fullName} is now the family root.`);
-      await Promise.all([mutate(), refetchFamilyAtThisPerson()]);
-      router.refresh();
-    } catch (error) {
-      console.error('Error setting family root:', error);
-      alert('Failed to set family root. Please try again.');
-    } finally {
-      setIsAssigningRoot(false);
-    }
-  };
-
-  // Permanently remove this person from the family tree. Requires a typed
-  // confirmation of the person's full name to guard against fat-finger
-  // deletes — the cascade is destructive (relationships, images, etc.).
-  const handleDeletePerson = async () => {
-    const fullName = `${person.firstName} ${person.lastName}`.trim();
-    const typed = window.prompt(
-      `Permanently delete ${fullName}?\n\n` +
-        `This will remove their relationships, photos, and notable nominations. ` +
-        `This cannot be undone.\n\n` +
-        `Type "${fullName}" to confirm:`
-    );
-    if (typed === null) return;
-    if (typed.trim() !== fullName) {
-      alert('Name did not match — deletion cancelled.');
-      return;
-    }
-
-    setIsDeletingPerson(true);
-    try {
-      const response = await fetch(`/api/persons/${id}`, { method: 'DELETE' });
-      const result = await response.json();
-      if (!result.success) {
-        alert(result.error || 'Failed to delete person');
-        return;
-      }
-      // Navigate away — this person no longer exists.
-      alert(result.message || `${fullName} was removed.`);
-      router.push('/');
-      router.refresh();
-    } catch (error) {
-      console.error('Error deleting person:', error);
-      alert('Failed to delete person. Please try again.');
-    } finally {
-      setIsDeletingPerson(false);
-    }
-  };
-
-  // Check if current user is linked to this person
-  const isLinkedToCurrentUser = person?.userId === user?.id;
-
-  // Handle dispute submission
-  const handleSubmitDispute = async () => {
-    if (!disputeReason.trim()) {
-      alert('Please explain why you believe this is your profile');
-      return;
-    }
-
-    setIsSubmittingDispute(true);
-    try {
-      // Create a correction request for the dispute
-      const response = await fetch('/api/corrections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          personId: id,
-          currentData: {
-            linkedUserId: person.userId,
-            disputeType: 'PROFILE_CLAIM_DISPUTE',
-          },
-          proposedData: {
-            requestedUserId: user?.id,
-            requestedUserEmail: user?.email,
-            requestedUserName: user?.name,
-          },
-          reason: `PROFILE DISPUTE: ${disputeReason}`,
-        }),
-      });
-
-      if (response.ok) {
-        setShowDisputeForm(false);
-        setDisputeReason('');
-        alert('Your dispute has been submitted. An admin will review it and contact you.');
-      } else {
-        const result = await response.json();
-        alert(result.error || 'Failed to submit dispute');
-      }
-    } catch (error) {
-      console.error('Error submitting dispute:', error);
-      alert('Failed to submit dispute. Please try again.');
-    } finally {
-      setIsSubmittingDispute(false);
-    }
-  };
-
-  // Get family relationships - using explicit types to satisfy TypeScript strict mode
-  type RelatedPerson = { 
-    id: string; 
-    firstName: string; 
-    lastName: string; 
-    profileImage?: { url: string } | null;
-    isLiving?: boolean;
-    birthDate?: Date | string | null;
-    deathDate?: Date | string | null;
-  };
-  type ParentRelation = { parent?: RelatedPerson | null };
-  type ChildRelation = { child?: RelatedPerson | null };
-  type SpouseRelation1 = { spouse2?: RelatedPerson | null };
-  type SpouseRelation2 = { spouse1?: RelatedPerson | null };
-  
-  const parents = person.parentRelations?.map((r: ParentRelation) => r.parent).filter(Boolean) || [];
-  const children = person.childRelations?.map((r: ChildRelation) => r.child).filter(Boolean) || [];
-  const spouses = [
-    ...(person.spouseRelations1?.map((r: SpouseRelation1) => r.spouse2) || []),
-    ...(person.spouseRelations2?.map((r: SpouseRelation2) => r.spouse1) || []),
-  ].filter(Boolean);
+  const fullName = `${person.firstName} ${person.middleName ? `${person.middleName} ` : ''}${person.lastName}`.trim();
+  const lifeAge = ageAt(person.birthDate, person.isLiving ? null : person.deathDate);
+  const tributes = tributeData?.data ?? [];
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            href="/"
-            className="inline-flex items-center text-slate-600 hover:text-slate-900 mb-4"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Tree
-          </Link>
-        </div>
+    <div className="min-h-screen bg-[#fbf9f5] py-8 sm:py-10">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <Link href="/tree" className="mb-5 inline-flex items-center gap-2 text-sm text-[#74645b] hover:text-[#5f2521]">
+          <ArrowLeft className="h-4 w-4" />
+          Back to family tree
+        </Link>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main content */}
-          <div className="lg:col-span-2">
-            <PersonCard
-              person={person}
-              showActions={isAuthenticated}
-              onEdit={isAuthenticated ? () => router.push(`/person/${id}/edit`) : undefined}
-            />
-
-            {/* Sign in prompt for guests */}
-            {!isAuthenticated && (
-              <Card className="mt-6 bg-amber-50 border-amber-200">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-                    <Lock className="w-6 h-6 text-amber-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-amber-900">Want to contribute?</h3>
-                    <p className="text-sm text-amber-700">
-                      Sign in to edit information, add photos, or request corrections.
-                    </p>
-                  </div>
-                  <Link href={`/login?callbackUrl=/person/${id}`}>
-                    <Button variant="outline" size="sm">
-                      <LogIn className="w-4 h-4 mr-2" />
-                      Sign In
-                    </Button>
-                  </Link>
+        <Card className="overflow-hidden border-[#dfd2c6] bg-[#fffdf9]" padding="none">
+          <div className="bg-gradient-to-r from-[#efe1d7] via-[#faf4ee] to-[#fffdf9] p-6 sm:p-8">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+              <Avatar
+                src={person.profileImage?.url}
+                name={fullName}
+                size="2xl"
+                className="ring-4 ring-[#fffaf6] shadow-md"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8f6c5b]">Family profile</p>
+                  {person.userId && (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-emerald-700">Active profile</span>
+                  )}
                 </div>
-              </Card>
-            )}
+                <h1 className="mt-1 font-serif text-3xl font-semibold text-[#382a24] sm:text-4xl">{fullName}</h1>
+                {person.nickname && <p className="mt-1 text-sm italic text-[#8c776b]">“{person.nickname}”</p>}
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#77665d]">
+                  {person.birthDate && (
+                    <span>{format(new Date(person.birthDate), 'MMMM d, yyyy')}{person.deathDate ? ` – ${format(new Date(person.deathDate), 'MMMM d, yyyy')}` : ''}</span>
+                  )}
+                  {lifeAge !== null && <span>{person.isLiving ? `${lifeAge} years old` : `Lived ${lifeAge} years`}</span>}
+                </div>
 
-            {/* Photo Gallery */}
-            {person.images && person.images.length > 0 && (
-              <Card className="mt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-slate-900">Photos</h3>
+                <div className="mt-5 flex flex-wrap gap-2">
                   {isAuthenticated && (
-                    <Button variant="outline" size="sm">
-                      <ImagePlus className="w-4 h-4 mr-2" />
-                      Add Photo
+                    <Link href={`/person/${id}/edit`}>
+                      <Button size="sm"><Edit className="mr-2 h-4 w-4" />{isOwnProfile ? 'Edit my profile' : 'Edit information'}</Button>
+                    </Link>
+                  )}
+                  {person.userId && person.userId !== user?.id && isAuthenticated && (
+                    <Button size="sm" variant="outline" onClick={() => router.push(`/messages?userId=${person.userId}`)}>
+                      <MessageSquare className="mr-2 h-4 w-4" />Message {person.firstName}
+                    </Button>
+                  )}
+                  {!person.userId && isAuthenticated && !user?.linkedPersonId && (
+                    <Button size="sm" variant="outline" onClick={handleClaimProfile} isLoading={claimBusy}>
+                      <LinkIcon className="mr-2 h-4 w-4" />This is me
                     </Button>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  {person.images.map((image: { id: string; url: string; caption?: string | null }) => (
-                    <div
-                      key={image.id}
-                      className="aspect-square rounded-lg overflow-hidden bg-slate-100"
-                    >
-                      <img
-                        src={image.url}
-                        alt={image.caption || 'Family photo'}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-          </div>
-
-          {/* Sidebar - Family connections */}
-          <div className="space-y-6">
-            {/* Claim / Link Profile Card */}
-            <Card className={`${
-              isLinkedToCurrentUser 
-                ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'
-                : person.userId
-                ? 'bg-slate-50 border-slate-200'
-                : 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200'
-            }`}>
-              <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                <LinkIcon className={`w-5 h-5 ${
-                  isLinkedToCurrentUser ? 'text-green-500' : person.userId ? 'text-slate-400' : 'text-purple-500'
-                }`} />
-                Profile Link
-              </h3>
-
-              {isLinkedToCurrentUser ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-green-700">
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span className="text-sm font-medium">This is your profile</span>
-                  </div>
-                  <p className="text-xs text-green-600">
-                    Your account is linked to this family tree entry. You can receive messages from relatives.
-                  </p>
-                  <button
-                    onClick={handleUnlinkProfile}
-                    className="text-xs text-slate-500 hover:text-red-500 transition-colors flex items-center gap-1"
-                  >
-                    <Unlink className="w-3 h-3" />
-                    Unlink my account
-                  </button>
-                </div>
-              ) : person.userId ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-slate-600">
-                    This profile is linked to another account.
-                  </p>
-                  {isAdmin ? (
-                    <button
-                      onClick={handleUnlinkProfile}
-                      className="text-xs text-slate-500 hover:text-red-500 transition-colors flex items-center gap-1"
-                    >
-                      <Unlink className="w-3 h-3" />
-                      Unlink profile (Admin)
-                    </button>
-                  ) : isAuthenticated && (
-                    <button
-                      onClick={() => setShowDisputeForm(true)}
-                      className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      Is this actually you? Report an issue
-                    </button>
-                  )}
-                </div>
-              ) : isAuthenticated ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    Is this you? Link your account to this profile to:
-                  </p>
-                  <ul className="text-xs text-slate-500 space-y-1 ml-4">
-                    <li>• Receive messages from relatives</li>
-                    <li>• Get notified of family updates</li>
-                    <li>• Easily edit your own information</li>
-                  </ul>
-                  <Button
-                    fullWidth
-                    onClick={handleClaimProfile}
-                    isLoading={isClaimingProfile}
-                    className="bg-purple-500 hover:bg-purple-600"
-                  >
-                    <LinkIcon className="w-4 h-4 mr-2" />
-                    This is Me - Link My Account
-                  </Button>
-                  <p className="text-xs text-green-600 text-center">
-                    ✓ Instant linking - no approval needed
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    Is this you in the family tree?
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Create an account to claim this profile and connect with your family.
-                  </p>
-                  <ul className="text-xs text-slate-500 space-y-1 ml-4">
-                    <li>• Receive messages from relatives</li>
-                    <li>• Get notified of family updates</li>
-                    <li>• Easily edit your own information</li>
-                  </ul>
-                  <Link href={`/register?claimPersonId=${id}&name=${encodeURIComponent(person.firstName + ' ' + person.lastName)}`}>
-                    <Button
-                      fullWidth
-                      className="bg-purple-500 hover:bg-purple-600"
-                    >
-                      <UserCheck className="w-4 h-4 mr-2" />
-                      Create Account & Claim Profile
-                    </Button>
-                  </Link>
-                  <p className="text-xs text-slate-400 text-center">
-                    Already have an account?{' '}
-                    <Link href={`/login?callbackUrl=/person/${id}`} className="text-purple-600 hover:underline">
-                      Sign in
-                    </Link>
-                  </p>
-                </div>
-              )}
-            </Card>
-
-            {/* Contact / Message Card */}
-            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-              <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                <Send className="w-5 h-5 text-blue-500" />
-                Contact
-              </h3>
-              {person.userId ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    This person has a linked account and can receive messages.
-                  </p>
-                  {isAuthenticated ? (
-                    <>
-                      <Button
-                        fullWidth
-                        onClick={() => router.push(`/messages?userId=${person.userId}`)}
-                        className="bg-blue-500 hover:bg-blue-600"
-                      >
-                        <MessageSquare className="w-4 h-4 mr-2" />
-                        Send Direct Message
-                      </Button>
-
-                      {/* WhatsApp button surfaces only when the person opted in
-                          AND has a phone. Server strips the phone otherwise. */}
-                      {person.user?.whatsappOptIn && person.user?.phone && (() => {
-                        const digits = person.user.phone.replace(/[^\d]/g, '');
-                        if (!digits) return null;
-                        const greeting = encodeURIComponent(
-                          `Hi ${person.firstName}, reaching out via the family tree.`
-                        );
-                        const url = `https://wa.me/${digits}?text=${greeting}`;
-                        return (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
-                          >
-                            <Phone className="w-4 h-4" />
-                            Contact via WhatsApp
-                          </a>
-                        );
-                      })()}
-                    </>
-                  ) : (
-                    <Link href={`/login?callbackUrl=/person/${id}`}>
-                      <Button variant="outline" fullWidth>
-                        <LogIn className="w-4 h-4 mr-2" />
-                        Sign in to Message
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-3 bg-white/60 rounded-lg">
-                    <UserCheck className="w-5 h-5 text-slate-400 mt-0.5" />
-                    <div>
-                      <p className="text-sm text-slate-600">
-                        This person hasn&apos;t claimed their profile yet.
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        If you know them, let them know they can create an account and link to this profile.
-                      </p>
-                    </div>
-                  </div>
-                  {person.email && !person.isPrivate && (
-                    <a 
-                      href={`mailto:${person.email}`}
-                      className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-                    >
-                      <Mail className="w-4 h-4" />
-                      Email {person.firstName}
-                    </a>
-                  )}
-                </div>
-              )}
-            </Card>
-
-            {/* Notable Person Card */}
-            <Card className={person.isNotable ? 'bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200' : ''}>
-              <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                <Award className={`w-5 h-5 ${person.isNotable ? 'text-amber-500' : 'text-slate-400'}`} />
-                Notable Status
-              </h3>
-              
-              {person.isNotable ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Star className="w-4 h-4 text-amber-500" fill="currentColor" />
-                    <span className="text-sm font-medium text-amber-700">{person.notableTitle}</span>
-                  </div>
-                  {person.notableDescription && (
-                    <p className="text-sm text-slate-600">{person.notableDescription}</p>
-                  )}
-                  {isAdmin && (
-                    <button
-                      onClick={handleRemoveNotable}
-                      className="text-xs text-slate-500 hover:text-red-500 transition-colors"
-                    >
-                      Remove notable status
-                    </button>
-                  )}
-                </div>
-              ) : showNotableForm ? (
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Title (e.g., Community Leader, Philanthropist)"
-                    value={notableTitle}
-                    onChange={(e) => setNotableTitle(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none"
-                  />
-                  <textarea
-                    placeholder="Why is this person notable? Describe their achievements..."
-                    value={notableDescription}
-                    onChange={(e) => setNotableDescription(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none resize-none"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleMarkAsNotable(isAdmin)}
-                      isLoading={isSubmittingNotable}
-                      className="flex-1 bg-amber-500 hover:bg-amber-600"
-                    >
-                      {isAdmin ? 'Mark as Notable' : 'Submit Nomination'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setShowNotableForm(false);
-                        setNotableTitle('');
-                        setNotableDescription('');
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                  {!isAdmin && (
-                    <p className="text-xs text-slate-500">
-                      Your nomination will be reviewed by an admin before being published.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    {isAdmin 
-                      ? 'Mark this person as notable to highlight their achievements.'
-                      : 'Nominate this person as a notable family member.'
-                    }
-                  </p>
-                  {isAuthenticated ? (
-                    <Button
-                      variant="outline"
-                      fullWidth
-                      onClick={() => setShowNotableForm(true)}
-                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                    >
-                      <Award className="w-4 h-4 mr-2" />
-                      {isAdmin ? 'Mark as Notable' : 'Nominate as Notable'}
-                    </Button>
-                  ) : (
-                    <Link href={`/login?callbackUrl=/person/${id}`}>
-                      <Button variant="outline" fullWidth size="sm">
-                        Sign in to nominate
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              )}
-            </Card>
-
-            {/* Actions (authenticated only) */}
-            {isAuthenticated && (
-              <Card>
-                <h3 className="font-semibold text-slate-900 mb-4">Actions</h3>
-                <div className="space-y-2">
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => router.push(`/person/${id}/edit`)}
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit Information
-                  </Button>
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => router.push(`/corrections/new?personId=${id}`)}
-                  >
-                    <Flag className="w-4 h-4 mr-2" />
-                    Request Correction
-                  </Button>
-
-                  {/* Admin: re-anchor the tree to this person. Hidden when
-                      this person is already the stored root. The auto-promote
-                      hook in /api/relationships handles most cases — this is
-                      the manual override. */}
-                  {canDeleteThisPerson && !isCurrentRoot && (
-                    <Button
-                      variant="outline"
-                      fullWidth
-                      onClick={handleSetAsRoot}
-                      isLoading={isAssigningRoot}
-                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                    >
-                      <Crown className="w-4 h-4 mr-2" />
-                      Set as Family Root
-                    </Button>
-                  )}
-
-                  {canDeleteThisPerson && isCurrentRoot && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                      <Crown className="w-4 h-4 shrink-0" />
-                      <span>This person is the current family root.</span>
-                    </div>
-                  )}
-
-                  {/* Destructive action — only for System Admins or Family
-                      Admins; the API enforces it as well. Hidden for the
-                      person's own linked profile. */}
-                  {canDeleteThisPerson && !isLinkedToCurrentUser && (
-                    <div className="pt-2 mt-2 border-t border-slate-200">
-                      <Button
-                        variant="outline"
-                        fullWidth
-                        onClick={handleDeletePerson}
-                        isLoading={isDeletingPerson}
-                        className="border-red-200 text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete from Tree
-                      </Button>
-                      <p className="mt-1.5 text-[11px] text-slate-500 leading-snug">
-                        Admins only. Use this to remove a member that was added
-                        in error. This cannot be undone.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
-
-            {/* Parents */}
-            {parents.length > 0 && (
-              <Card>
-                <h3 className="font-semibold text-slate-900 mb-4 flex items-center">
-                  <Users className="w-5 h-5 mr-2 text-slate-400" />
-                  Parents
-                </h3>
-                <div className="space-y-2">
-                  {parents.map((parent: RelatedPerson | null | undefined) => (
-                    <Link
-                      key={parent!.id}
-                      href={`/person/${parent!.id}`}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors"
-                    >
-                      <Avatar
-                        src={parent!.profileImage?.url}
-                        name={`${parent!.firstName} ${parent!.lastName}`}
-                        size="md"
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium text-slate-900">
-                          {parent!.firstName} {parent!.lastName}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {parent!.isLiving ? 'Living' : 'Deceased'}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-slate-400" />
-                    </Link>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {/* Spouses */}
-            {spouses.length > 0 && (
-              <Card>
-                <h3 className="font-semibold text-slate-900 mb-4 flex items-center">
-                  <Users className="w-5 h-5 mr-2 text-rose-400" />
-                  Spouse(s)
-                </h3>
-                <div className="space-y-2">
-                  {spouses.map((spouse: RelatedPerson | null | undefined) => (
-                    <Link
-                      key={spouse!.id}
-                      href={`/person/${spouse!.id}`}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors"
-                    >
-                      <Avatar
-                        src={spouse!.profileImage?.url}
-                        name={`${spouse!.firstName} ${spouse!.lastName}`}
-                        size="md"
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium text-slate-900">
-                          {spouse!.firstName} {spouse!.lastName}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {spouse!.isLiving ? 'Living' : 'Deceased'}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-slate-400" />
-                    </Link>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {/* Children */}
-            {children.length > 0 && (
-              <Card>
-                <h3 className="font-semibold text-slate-900 mb-4 flex items-center">
-                  <Users className="w-5 h-5 mr-2 text-maroon-400" />
-                  Children ({children.length})
-                </h3>
-                <div className="space-y-2">
-                  {children.map((child: RelatedPerson | null | undefined) => (
-                    <Link
-                      key={child!.id}
-                      href={`/person/${child!.id}`}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors"
-                    >
-                      <Avatar
-                        src={child!.profileImage?.url}
-                        name={`${child!.firstName} ${child!.lastName}`}
-                        size="md"
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium text-slate-900">
-                          {child!.firstName} {child!.lastName}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {child!.isLiving ? 'Living' : 'Deceased'}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-slate-400" />
-                    </Link>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {/* Add family member (authenticated only) */}
-            {isAuthenticated && (
-              <Card className="bg-maroon-50 border-maroon-200">
-                <h3 className="font-semibold text-maroon-900 mb-3">
-                  Add Family Member
-                </h3>
-                <div className="space-y-2">
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => router.push(`/add-person?parentId=${id}`)}
-                    className="justify-start"
-                  >
-                    Add Child
-                  </Button>
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => router.push(`/add-person?spouseId=${id}`)}
-                    className="justify-start"
-                  >
-                    Add Spouse
-                  </Button>
-                </div>
-              </Card>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Dispute Profile Modal */}
-      {showDisputeForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                    <AlertTriangle className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-900">Dispute Profile Link</h3>
-                    <p className="text-xs text-slate-500">Report incorrect profile ownership</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowDisputeForm(false);
-                    setDisputeReason('');
-                  }}
-                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-slate-400" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="p-3 bg-slate-50 rounded-lg text-sm text-slate-600">
-                  <p>
-                    This profile is currently linked to another account. If you believe this is 
-                    actually your profile in the family tree, please explain why and an admin 
-                    will review your request.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Why do you believe this is your profile?
-                  </label>
-                  <textarea
-                    value={disputeReason}
-                    onChange={(e) => setDisputeReason(e.target.value)}
-                    placeholder="e.g., This is my name and birth date. I can verify my identity with..."
-                    rows={4}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none resize-none"
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setShowDisputeForm(false);
-                      setDisputeReason('');
-                    }}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSubmitDispute}
-                    isLoading={isSubmittingDispute}
-                    className="flex-1 bg-amber-500 hover:bg-amber-600"
-                  >
-                    Submit Dispute
-                  </Button>
-                </div>
-
-                <p className="text-xs text-slate-400 text-center">
-                  An admin will review your request and may contact you for verification.
-                </p>
               </div>
             </div>
           </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4">
+            <ProfileFact icon={<CalendarDays className="h-4 w-4" />} label="Birthday" value={person.birthDate ? format(new Date(person.birthDate), 'MMMM d') : 'Not recorded'} detail={person.birthDate ? new Date(person.birthDate).getFullYear().toString() : undefined} />
+            <ProfileFact icon={<MapPin className="h-4 w-4" />} label="Birthplace" value={person.birthPlace || 'Not recorded'} />
+            <ProfileFact icon={<Briefcase className="h-4 w-4" />} label="Occupation" value={person.occupation || 'Not recorded'} />
+            <ProfileFact icon={<Heart className="h-4 w-4" />} label="Family messages" value={tributes.length.toString()} detail={person.isLiving ? 'gratitude & encouragement' : 'memories & eulogies'} />
+          </div>
+        </Card>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.75fr)]">
+          <main className="space-y-6">
+            <Card className="border-[#e3d7cd] bg-[#fffdf9]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#9a735f]">About</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold text-[#382a24]">{person.firstName}’s story</h2>
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#706057]">
+                {person.biography || `${person.firstName}'s biography has not been added yet. Family members can help preserve their story by adding memories, places and important life details.`}
+              </p>
+              {person.isNotable && (
+                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+                  <div className="flex items-center gap-2 text-amber-800"><Award className="h-4 w-4" /><span className="text-sm font-semibold">{person.notableTitle || 'Notable family member'}</span></div>
+                  {person.notableDescription && <p className="mt-2 text-sm leading-6 text-amber-900/80">{person.notableDescription}</p>}
+                </div>
+              )}
+            </Card>
+
+            {person.images && person.images.length > 0 && (
+              <Card className="border-[#e3d7cd] bg-[#fffdf9]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#9a735f]">Photo archive</p>
+                    <h2 className="mt-1 font-serif text-2xl font-semibold text-[#382a24]">Photos</h2>
+                  </div>
+                  {isAuthenticated && <Link href={`/person/${id}/edit`} className="text-xs font-semibold text-[#742825] hover:underline"><Camera className="mr-1 inline h-3.5 w-3.5" />Manage photo</Link>}
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {person.images.map((image: { id: string; url: string; caption?: string | null }) => (
+                    <figure key={image.id} className="overflow-hidden rounded-xl border border-[#eadfd6] bg-[#f7f1ec]">
+                      <img src={image.url} alt={image.caption || `${person.firstName} family photo`} className="aspect-square w-full object-cover" />
+                      {image.caption && <figcaption className="p-2 text-xs text-[#7f6e65]">{image.caption}</figcaption>}
+                    </figure>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <Card id="tributes" className="border-[#e3d7cd] bg-[#fffdf9]">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#9a735f]">Words from family</p>
+                <h2 className="mt-1 font-serif text-2xl font-semibold text-[#382a24]">{person.isLiving ? `Gratitude & encouragement for ${person.firstName}` : `In memory of ${person.firstName}`}</h2>
+                <p className="mt-2 text-sm leading-6 text-[#7a6960]">
+                  {person.isLiving
+                    ? 'Share a short note of gratitude, appreciation or encouragement that becomes part of this family profile.'
+                    : 'Share a short memory, reflection or eulogy that helps preserve how this person is remembered.'}
+                </p>
+              </div>
+
+              {isAuthenticated && !isOwnProfile ? (
+                <div className="mt-5 rounded-xl border border-[#e5d9cf] bg-[#faf6f2] p-4">
+                  <textarea
+                    value={tributeText}
+                    onChange={(event) => setTributeText(event.target.value.slice(0, 1000))}
+                    rows={4}
+                    placeholder={person.isLiving ? `Write something meaningful for ${person.firstName}…` : `Share a memory of ${person.firstName}…`}
+                    className="w-full resize-none rounded-lg border border-[#ddd0c6] bg-white px-3 py-3 text-sm leading-6 text-[#4c3b33] outline-none focus:border-[#8a4a42]"
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-[#9b8a80]">{tributeText.length}/1000</span>
+                    <Button size="sm" onClick={handlePostTribute} isLoading={tributeBusy} disabled={!tributeText.trim()}>
+                      <Send className="mr-2 h-3.5 w-3.5" />Post to profile
+                    </Button>
+                  </div>
+                  {tributeError && <p className="mt-2 text-xs text-rose-600">{tributeError}</p>}
+                </div>
+              ) : !isAuthenticated ? (
+                <div className="mt-5 rounded-xl border border-[#e5d9cf] bg-[#faf6f2] p-4 text-sm text-[#75645c]">
+                  <Lock className="mr-2 inline h-4 w-4" />
+                  <Link href={`/login?callbackUrl=/person/${id}`} className="font-semibold text-[#742825] hover:underline">Sign in</Link> to leave a family message.
+                </div>
+              ) : null}
+
+              <div className="mt-5 space-y-3">
+                {tributes.map((tribute) => (
+                  <article key={tribute.id} className="rounded-xl border border-[#eadfd6] bg-[#fcf9f6] p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <Avatar src={tribute.authorImage || undefined} name={tribute.authorName || 'Family member'} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-[#57473f]">“{tribute.content}”</p>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs text-[#8f7c71]">— {tribute.authorName || 'Family member'} · {format(new Date(tribute.createdAt), 'MMM d, yyyy')}</p>
+                          {(tribute.authorId === user?.id || user?.role === 'ADMIN') && (
+                            <button type="button" onClick={() => handleDeleteTribute(tribute.id)} className="inline-flex items-center gap-1 text-[11px] text-[#aa7770] hover:text-rose-700">
+                              <Trash2 className="h-3 w-3" />Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {tributes.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-[#e2d5ca] px-5 py-7 text-center text-sm text-[#8a7970]">No family messages have been shared yet.</div>
+                )}
+              </div>
+            </Card>
+          </main>
+
+          <aside className="space-y-6">
+            {!person.userId && (
+              <Card className="border-[#dfd2c6] bg-[#fffdf9]">
+                <h3 className="font-serif text-xl font-semibold text-[#382a24]">Is this you?</h3>
+                <p className="mt-2 text-sm leading-6 text-[#75655d]">Claim this family-tree entry to manage your own details, profile photo and receive private messages from relatives.</p>
+                {isAuthenticated ? (
+                  user?.linkedPersonId ? (
+                    <p className="mt-4 rounded-lg bg-[#f6efe9] p-3 text-xs text-[#7a665c]">Your account is already linked to another family profile.</p>
+                  ) : (
+                    <Button className="mt-4" fullWidth onClick={handleClaimProfile} isLoading={claimBusy}><UserCheck className="mr-2 h-4 w-4" />This is me</Button>
+                  )
+                ) : (
+                  <Link href={`/register?claimPersonId=${id}&name=${encodeURIComponent(fullName)}`} className="mt-4 block"><Button fullWidth><UserCheck className="mr-2 h-4 w-4" />Join & claim profile</Button></Link>
+                )}
+              </Card>
+            )}
+
+            {person.userId && person.userId !== user?.id && (
+              <Card className="border-[#dfd2c6] bg-[#fffdf9]">
+                <h3 className="font-serif text-xl font-semibold text-[#382a24]">Connect</h3>
+                <p className="mt-2 text-sm text-[#75655d]">{person.firstName} has an active profile and can receive private family messages.</p>
+                {isAuthenticated ? (
+                  <Button className="mt-4" fullWidth onClick={() => router.push(`/messages?userId=${person.userId}`)}><MessageSquare className="mr-2 h-4 w-4" />Send message</Button>
+                ) : (
+                  <Link href={`/login?callbackUrl=/person/${id}`} className="mt-4 block"><Button variant="outline" fullWidth>Sign in to message</Button></Link>
+                )}
+              </Card>
+            )}
+
+            <RelationshipCard title="Parents" icon={<Users className="h-4 w-4" />} people={parents} />
+            <RelationshipCard title="Spouse(s)" icon={<Heart className="h-4 w-4" />} people={spouses} />
+            <RelationshipCard title={`Children${children.length ? ` (${children.length})` : ''}`} icon={<Users className="h-4 w-4" />} people={children} />
+          </aside>
         </div>
-      )}
+      </div>
     </div>
+  );
+}
+
+function ProfileFact({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail?: string }) {
+  return (
+    <div className="border-b border-[#eee4dc] p-5 sm:border-b-0 sm:border-r last:border-r-0">
+      <div className="flex items-center gap-2 text-[#956b58]">{icon}<span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{label}</span></div>
+      <p className="mt-2 text-sm font-semibold text-[#43332c]">{value}</p>
+      {detail && <p className="mt-0.5 text-[11px] text-[#948279]">{detail}</p>}
+    </div>
+  );
+}
+
+function RelationshipCard({ title, icon, people }: { title: string; icon: React.ReactNode; people: RelatedPerson[] }) {
+  if (people.length === 0) return null;
+  return (
+    <Card className="border-[#e3d7cd] bg-[#fffdf9]">
+      <div className="flex items-center gap-2 text-[#6d554a]">{icon}<h3 className="font-serif text-lg font-semibold text-[#382a24]">{title}</h3></div>
+      <div className="mt-3 space-y-1">
+        {people.map((person) => (
+          <Link key={person.id} href={`/person/${person.id}`} className="flex items-center gap-3 rounded-xl p-2.5 transition hover:bg-[#f8f3ee]">
+            <Avatar src={person.profileImage?.url} name={`${person.firstName} ${person.lastName}`} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-[#493831]">{person.firstName} {person.lastName}</p>
+              <p className="text-[11px] text-[#99887e]">{person.isLiving === false ? 'Deceased' : 'Family member'}</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-[#b5a79e]" />
+          </Link>
+        ))}
+      </div>
+    </Card>
   );
 }
