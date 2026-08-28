@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { profileSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
 
-// GET /api/auth/profile — current user's profile (including whatsappOptIn)
+// GET /api/auth/profile — current account plus its claimed family-tree profile.
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -24,6 +24,33 @@ export async function GET() {
         image: true,
         whatsappOptIn: true,
         role: true,
+        linkedPerson: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            maidenName: true,
+            nickname: true,
+            birthDate: true,
+            birthPlace: true,
+            deathDate: true,
+            deathPlace: true,
+            biography: true,
+            occupation: true,
+            isLiving: true,
+            profileImage: { select: { id: true, url: true } },
+            _count: {
+              select: {
+                parentRelations: true,
+                childRelations: true,
+                spouseRelations1: true,
+                spouseRelations2: true,
+                images: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -31,14 +58,33 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data });
+    let tributeCount = 0;
+    if (data.linkedPerson) {
+      const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS "count"
+        FROM "Tribute"
+        WHERE "personId" = ${data.linkedPerson.id}
+          AND "isHidden" = FALSE
+      `;
+      tributeCount = Number(rows[0]?.count ?? 0);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...data,
+        linkedPerson: data.linkedPerson
+          ? { ...data.linkedPerson, tributeCount }
+          : null,
+      },
+    });
   } catch (e) {
     console.error('GET /api/auth/profile', e);
     return NextResponse.json({ success: false, error: 'Failed to load profile' }, { status: 500 });
   }
 }
 
-// PUT /api/auth/profile — update name, email, phone, whatsappOptIn
+// PUT /api/auth/profile — update account-level contact/privacy settings.
 export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -57,13 +103,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const { name, email, phone, whatsappOptIn } = result.data;
-
-    // If they don't have a phone number, WhatsApp opt-in cannot be enabled.
-    // (Strip the flag rather than failing — keeps the form forgiving.)
     const cleanPhone = phone ? phone : null;
     const safeOptIn = Boolean(whatsappOptIn) && !!cleanPhone;
 
-    // Make sure email/phone aren't already taken by another account.
     if (email) {
       const existing = await prisma.user.findFirst({
         where: { email, NOT: { id: user.id } },
