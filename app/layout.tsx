@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
-import { FamilyDataLiveSync } from '@/components/shared/FamilyDataLiveSync';
+import { HomeSignInAction } from '@/components/shared/HomeSignInAction';
 
 export const metadata: Metadata = {
   title: 'FamilyTree - Build Your Family Tree Together',
@@ -23,8 +23,8 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <AuthProvider>
-          <FamilyDataLiveSync />
           {children}
+          <HomeSignInAction />
         </AuthProvider>
       </body>
     </html>
