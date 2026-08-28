@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
@@ -111,17 +112,9 @@ export function TreeNode({
     : undefined;
 
   const effectiveSetRoot = onSetRoot ?? defaultSetRoot;
-
   const allSpouses = node.spouses || (node.spouse ? [node.spouse] : []);
   const hasMultipleSpouses = allSpouses.length > 1;
 
-  /*
-   * Genealogy convention for this product: the husband/father is the visual
-   * anchor on the left and spouse(s) extend to the right. The stored tree node
-   * is still the canonical data node; this only changes presentation order.
-   * If gender is unknown or there is no male partner, keep the stored node as
-   * the left anchor so we never invent relationship semantics.
-   */
   const maleSpouseIndex = node.gender === 'MALE'
     ? -1
     : allSpouses.findIndex((spouse) => spouse.gender === 'MALE');
@@ -186,18 +179,29 @@ export function TreeNode({
       ? `${marriageOrder}${marriageOrder === 1 ? 'st' : marriageOrder === 2 ? 'nd' : marriageOrder === 3 ? 'rd' : 'th'}`
       : null;
 
+    const openQuickView = () => {
+      if (treeView?.consumeIfSuppressClick()) return;
+      onNodeClick(person);
+    };
+
     return (
       <div className="relative">
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           data-clickable="true"
           onClick={(event) => {
             event.stopPropagation();
-            if (treeView?.consumeIfSuppressClick()) return;
-            onNodeClick(person);
+            openQuickView();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              openQuickView();
+            }
           }}
           className={clsx(
-            'relative flex min-h-[112px] min-w-[210px] items-center gap-3 rounded-xl border bg-gradient-to-br from-[#fffefa] to-[#fffaf5] px-4 py-3 text-left shadow-[0_8px_22px_-14px_rgba(67,43,31,0.32)] transition-all duration-200',
+            'relative flex min-h-[112px] min-w-[210px] cursor-pointer items-center gap-3 rounded-xl border bg-gradient-to-br from-[#fffefa] to-[#fffaf5] px-4 py-3 text-left shadow-[0_8px_22px_-14px_rgba(67,43,31,0.32)] transition-all duration-200',
             'hover:-translate-y-0.5 hover:border-[#caa995] hover:shadow-[0_12px_28px_-14px_rgba(67,43,31,0.38)]',
             personIsRoot ? 'border-maroon-500/70 ring-1 ring-maroon-500/10' : 'border-[#dfd2c6]'
           )}
@@ -245,8 +249,26 @@ export function TreeNode({
           )}
 
           <div className="min-w-0 flex-1">
-            <p className="font-serif text-[15px] font-semibold leading-tight text-[#382a24]">{person.firstName}</p>
-            <p className="mt-0.5 font-serif text-[13px] text-[#66564d]">{person.lastName}</p>
+            {exportMode ? (
+              <>
+                <p className="font-serif text-[15px] font-semibold leading-tight text-[#382a24]">{person.firstName}</p>
+                <p className="mt-0.5 font-serif text-[13px] text-[#66564d]">{person.lastName}</p>
+              </>
+            ) : (
+              <Link
+                href={`/person/${person.id}`}
+                data-clickable="true"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (treeView?.consumeIfSuppressClick()) event.preventDefault();
+                }}
+                className="group/name block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
+                title={`View ${person.firstName} ${person.lastName}'s profile`}
+              >
+                <p className="font-serif text-[15px] font-semibold leading-tight text-[#382a24] underline-offset-2 group-hover/name:text-maroon-700 group-hover/name:underline">{person.firstName}</p>
+                <p className="mt-0.5 font-serif text-[13px] text-[#66564d] underline-offset-2 group-hover/name:text-maroon-700 group-hover/name:underline">{person.lastName}</p>
+              </Link>
+            )}
             {showDates && birthYear && (
               <p className="mt-1.5 text-[10px] text-[#95877e]">
                 {birthYear}{deathYear ? ` – ${deathYear}` : ' –'}
@@ -262,7 +284,7 @@ export function TreeNode({
               <p className="mt-1 text-[9px] italic text-[#95877e]">{person.attributes.occupation}</p>
             )}
           </div>
-        </button>
+        </div>
 
         {!effectiveReadOnly && (onAddChild || onAddSpouse || onAddParent || effectiveSetRoot) && (
           <div className="absolute -bottom-3 -right-3 z-40" data-clickable="true">
@@ -306,7 +328,6 @@ export function TreeNode({
 
   return (
     <div className="group/tree flex flex-col items-center">
-      {/* Husband/father anchors the couple on the left; spouse(s) extend right. */}
       <div className="flex items-center gap-3">
         <PersonCard person={visualAnchor} />
 
@@ -332,9 +353,6 @@ export function TreeNode({
 
       {hasChildren && (
         <div className="flex flex-col items-center">
-          {/* Keep the lineage trunk uninterrupted. The expand/collapse control
-              sits just off the line so the tree reads like a traditional
-              genealogy chart instead of an org-chart arrow. */}
           <div className="relative h-10 w-10">
             <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[#b58b6a]" aria-hidden />
             {!exportMode && (
