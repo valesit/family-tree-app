@@ -17,8 +17,6 @@ async function canDirectMessage(
 ): Promise<boolean> {
   if (!receiverId || receiverId === sender.id) return false;
 
-  // The recipient must have claimed a family-tree profile. That is what makes
-  // them an active family profile rather than just an account in the database.
   const linkedRecipient = await prisma.person.findFirst({
     where: { userId: receiverId },
     select: { id: true },
@@ -41,19 +39,31 @@ async function canDirectMessage(
 }
 
 async function activeFamilyContacts(user: SessionUser) {
-  const familyIds = user.role === 'ADMIN' ? [] : await familyIdsForUser(user.id);
+  let eligibleUserIds: string[] | null = null;
+
+  if (user.role !== 'ADMIN') {
+    const familyIds = await familyIdsForUser(user.id);
+    if (familyIds.length === 0) return [];
+
+    const memberships = await prisma.familyMembership.findMany({
+      where: {
+        familyId: { in: familyIds },
+        NOT: { userId: user.id },
+      },
+      select: { userId: true },
+    });
+
+    eligibleUserIds = Array.from(new Set(memberships.map((membership) => membership.userId)));
+    if (eligibleUserIds.length === 0) return [];
+  }
 
   const people = await prisma.person.findMany({
     where: {
-      userId: { not: null },
+      userId: {
+        not: null,
+        ...(eligibleUserIds ? { in: eligibleUserIds } : {}),
+      },
       NOT: { userId: user.id },
-      ...(user.role === 'ADMIN'
-        ? {}
-        : {
-            familyLinks: {
-              some: { familyId: { in: familyIds } },
-            },
-          }),
     },
     select: {
       id: true,
@@ -84,8 +94,7 @@ async function activeFamilyContacts(user: SessionUser) {
   }>();
 
   for (const person of people) {
-    if (!person.user) continue;
-    if (byUserId.has(person.user.id)) continue;
+    if (!person.user || byUserId.has(person.user.id)) continue;
     byUserId.set(person.user.id, {
       id: person.user.id,
       name: `${person.firstName} ${person.lastName}`.trim() || person.user.name || 'Family member',
@@ -208,14 +217,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        conversations,
-        directMessages: Array.from(contactMap.values()),
-        availableContacts,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          conversations,
+          directMessages: Array.from(contactMap.values()),
+          availableContacts,
+        },
       },
-    });
+      { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+    );
   } catch (error) {
     console.error('Error fetching messages:', error);
     return NextResponse.json(

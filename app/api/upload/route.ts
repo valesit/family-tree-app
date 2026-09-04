@@ -10,6 +10,23 @@ import {
   isSystemAdmin,
 } from '@/lib/family-membership';
 
+function getBlobToken() {
+  return process.env.BLOB_READ_WRITE_TOKEN || process.env.FAMILY_BLOB_READ_WRITE_TOKEN || null;
+}
+
+function uploadErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    const text = error.message.toLowerCase();
+    if (text.includes('token') || text.includes('unauthorized') || text.includes('forbidden')) {
+      return 'Photo storage is not configured correctly. Reconnect the Vercel Blob store and redeploy.';
+    }
+    if (text.includes('public access') || text.includes('private store')) {
+      return 'This Blob store does not allow public image URLs. Connect a public Vercel Blob store for family photos.';
+    }
+  }
+  return 'Failed to upload image';
+}
+
 // POST /api/upload - Upload an image for a family member.
 export async function POST(request: NextRequest) {
   try {
@@ -29,6 +46,17 @@ export async function POST(request: NextRequest) {
     }
     if (!personId) {
       return NextResponse.json({ success: false, error: 'Person ID is required' }, { status: 400 });
+    }
+
+    const blobToken = getBlobToken();
+    if (!blobToken) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Photo storage is not configured. Connect the Vercel Blob store and redeploy.',
+        },
+        { status: 503 }
+      );
     }
 
     const person = await prisma.person.findUnique({
@@ -74,15 +102,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { url } = await put(
-      `persons/${personId}/${Date.now()}-${image.name}`,
-      image,
-      {
-        access: 'public',
-        addRandomSuffix: true,
-        token: process.env.FAMILY_BLOB_READ_WRITE_TOKEN,
-      }
-    );
+    let url: string;
+    try {
+      const blob = await put(
+        `persons/${personId}/${Date.now()}-${image.name}`,
+        image,
+        {
+          access: 'public',
+          addRandomSuffix: true,
+          token: blobToken,
+        }
+      );
+      url = blob.url;
+    } catch (error) {
+      console.error('Vercel Blob profile upload failed:', error);
+      return NextResponse.json(
+        { success: false, error: uploadErrorMessage(error) },
+        { status: 502 }
+      );
+    }
 
     const personImage = await prisma.personImage.create({
       data: {
@@ -119,11 +157,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: personImage,
-      message: isProfile ? 'Profile photo updated.' : 'Image uploaded successfully.',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: { ...personImage, url },
+        message: isProfile ? 'Profile photo updated.' : 'Image uploaded successfully.',
+      },
+      { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+    );
   } catch (error) {
     console.error('Error uploading image:', error);
     return NextResponse.json(

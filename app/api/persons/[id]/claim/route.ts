@@ -49,7 +49,7 @@ export async function POST(
       );
     }
 
-    const familyId = await findPersonFamilyRoot(personId);
+    const familyRootId = await findPersonFamilyRoot(personId);
 
     const updatedPerson = await prisma.$transaction(async (tx) => {
       const linked = await tx.person.update({
@@ -72,8 +72,32 @@ export async function POST(
       return linked;
     });
 
-    if (familyId) {
-      await addUserToFamily(user.id, familyId, 'MEMBER');
+    if (familyRootId) {
+      await addUserToFamily(user.id, familyRootId, 'MEMBER');
+
+      // Keep the claimed person's stable family graph association aligned with
+      // the account membership. Older records may predate the FamilyPerson
+      // backfill, which previously caused claimed users to disappear from
+      // family-scoped features such as messaging.
+      const familyRecord = await prisma.family.findUnique({
+        where: { rootPersonId: familyRootId },
+        select: { id: true },
+      });
+      if (familyRecord) {
+        await prisma.familyPerson.upsert({
+          where: {
+            familyId_personId: {
+              familyId: familyRecord.id,
+              personId,
+            },
+          },
+          create: {
+            familyId: familyRecord.id,
+            personId,
+          },
+          update: {},
+        });
+      }
     }
 
     await prisma.activity.create({
@@ -81,16 +105,16 @@ export async function POST(
         type: 'PERSON_UPDATED',
         description: `${user.name || user.email || 'A family member'} claimed the profile of ${person.firstName} ${person.lastName} ("This is me")`,
         userId: user.id,
-        data: { personId, familyId },
+        data: { personId, familyId: familyRootId },
       },
     });
 
-    if (familyId) {
-      await notifyFamilyAdmins(familyId, {
+    if (familyRootId) {
+      await notifyFamilyAdmins(familyRootId, {
         type: 'PROFILE_CLAIMED',
         title: 'Profile Claimed',
         message: `${user.name || user.email} has claimed the profile of ${person.firstName} ${person.lastName}`,
-        data: { personId, userId: user.id, familyId },
+        data: { personId, userId: user.id, familyId: familyRootId },
       });
     }
 
@@ -105,7 +129,7 @@ export async function POST(
           type: 'PROFILE_CLAIMED' as const,
           title: 'Profile Claimed',
           message: `${user.name || user.email || 'A family member'} has claimed the profile of ${person.firstName} ${person.lastName}`,
-          data: { personId, userId: user.id, familyId },
+          data: { personId, userId: user.id, familyId: familyRootId },
         })),
       });
     }
