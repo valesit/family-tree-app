@@ -5,12 +5,14 @@ import { authOptions } from '@/lib/auth';
 import { profileSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
 
+const noStoreHeaders = { 'Cache-Control': 'no-store, max-age=0, must-revalidate' };
+
 // GET /api/auth/profile — current account plus its claimed family-tree profile.
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401, headers: noStoreHeaders });
     }
     const user = session.user as SessionUser;
 
@@ -55,7 +57,7 @@ export async function GET() {
     });
 
     if (!data) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404, headers: noStoreHeaders });
     }
 
     let tributeCount = 0;
@@ -69,18 +71,24 @@ export async function GET() {
       tributeCount = Number(rows[0]?.count ?? 0);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...data,
-        linkedPerson: data.linkedPerson
-          ? { ...data.linkedPerson, tributeCount }
-          : null,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          ...data,
+          linkedPerson: data.linkedPerson
+            ? { ...data.linkedPerson, tributeCount }
+            : null,
+        },
       },
-    });
+      { headers: noStoreHeaders }
+    );
   } catch (e) {
     console.error('GET /api/auth/profile', e);
-    return NextResponse.json({ success: false, error: 'Failed to load profile' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: 'Failed to load profile' },
+      { status: 500, headers: noStoreHeaders }
+    );
   }
 }
 
