@@ -26,7 +26,7 @@ export async function GET(
       where: { id },
       include: {
         profileImage: true,
-        images: true,
+        images: { orderBy: { uploadedAt: 'desc' } },
         parentRelations: {
           include: { parent: { include: { profileImage: true } } },
         },

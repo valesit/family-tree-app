@@ -20,7 +20,7 @@ interface PageProps {
 export default function EditPersonPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
 
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
@@ -144,6 +144,13 @@ export default function EditPersonPage({ params }: PageProps) {
               uploadResult?.error || 'Upload failed'
             }`
           );
+        }
+
+        // Keep the active NextAuth session in sync with the account avatar.
+        // Without this, the navbar can keep rendering initials until sign-out.
+        const uploadedUrl = uploadResult?.data?.url;
+        if (uploadedUrl) {
+          await update({ image: uploadedUrl });
         }
       }
 
