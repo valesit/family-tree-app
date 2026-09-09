@@ -33,7 +33,7 @@ import {
   Users,
 } from 'lucide-react';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then((r) => r.json());
 
 type LinkedPerson = {
   id: string;
@@ -185,8 +185,12 @@ export default function ProfilePage() {
     event.target.value = '';
     if (!file || !linkedPerson) return;
 
-    const valid = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!valid.includes(file.type) || file.size > 5 * 1024 * 1024) {
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    const supportedByType = validTypes.includes(file.type);
+    const supportedByExtension = validExtensions.includes(extension);
+    if ((!supportedByType && !supportedByExtension) || file.size > 5 * 1024 * 1024) {
       setMessage({ type: 'error', text: 'Choose a JPEG, PNG, GIF or WebP image smaller than 5MB.' });
       return;
     }
