@@ -69,15 +69,18 @@ export async function GET() {
       tributeCount = Number(rows[0]?.count ?? 0);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...data,
-        linkedPerson: data.linkedPerson
-          ? { ...data.linkedPerson, tributeCount }
-          : null,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          ...data,
+          linkedPerson: data.linkedPerson
+            ? { ...data.linkedPerson, tributeCount }
+            : null,
+        },
       },
-    });
+      { headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' } }
+    );
   } catch (e) {
     console.error('GET /api/auth/profile', e);
     return NextResponse.json({ success: false, error: 'Failed to load profile' }, { status: 500 });
