@@ -148,7 +148,7 @@ export default function EditPersonPage({ params }: PageProps) {
       }
 
       // Use a full navigation so the profile page cannot reuse stale SWR data.
-      window.location.assign(`/person/${id}`);
+      window.location.assign(`/person/${id}?photoUpdated=${Date.now()}`);
     } catch (error) {
       console.error('Error updating person:', error);
       alert(error instanceof Error ? error.message : 'Failed to update person');
