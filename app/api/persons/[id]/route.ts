@@ -77,7 +77,10 @@ export async function GET(
       };
     }
 
-    return NextResponse.json({ success: true, data: safePerson });
+    return NextResponse.json(
+      { success: true, data: safePerson },
+      { headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' } }
+    );
   } catch (error) {
     console.error('Error fetching person:', error);
     return NextResponse.json(
