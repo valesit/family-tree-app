@@ -84,6 +84,17 @@ export function PersonForm({
 
   const isLiving = watch('isLiving');
 
+  const openFilePicker = () => {
+    const input = fileInputRef.current;
+    if (!input) return;
+
+    // Reset before opening the picker so selecting the same file again still
+    // emits a change event. Do not reset it from the change handler: some
+    // browsers clear the FileList before React has finished processing it.
+    input.value = '';
+    input.click();
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -100,16 +111,14 @@ export function PersonForm({
     if (!hasSupportedType && !hasSupportedExtension) {
       setProfileImage(null);
       setSelectedFileName(null);
-      setImageError('Please choose a JPEG, PNG, GIF, or WebP image.');
-      e.target.value = '';
+      setImageError(`“${file.name}” is not a supported image. Please choose a JPEG, PNG, GIF, or WebP image.`);
       return;
     }
 
     if (file.size > maxSize) {
       setProfileImage(null);
       setSelectedFileName(null);
-      setImageError('Profile photos must be smaller than 5MB.');
-      e.target.value = '';
+      setImageError(`“${file.name}” is too large. Profile photos must be smaller than 5MB.`);
       return;
     }
 
@@ -117,8 +126,6 @@ export function PersonForm({
     setProfileImage(file);
     setSelectedFileName(file.name);
     setImagePreview(URL.createObjectURL(file));
-    // Clearing the input allows the same file to be selected again.
-    e.target.value = '';
   };
 
   const handleFormSubmit = async (data: PersonInput) => {
@@ -140,7 +147,7 @@ export function PersonForm({
             />
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={openFilePicker}
               className="absolute inset-0 rounded-full focus:outline-none focus:ring-2 focus:ring-maroon-500 focus:ring-offset-2"
               aria-label={initialImageUrl || imagePreview ? 'Change profile photo' : 'Upload profile photo'}
             >
@@ -152,24 +159,25 @@ export function PersonForm({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
+            id="person-profile-photo"
             onChange={handleImageChange}
             className="hidden"
           />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={openFilePicker}
             className="mt-2 text-sm text-slate-500 underline-offset-2 hover:text-maroon-600 hover:underline"
           >
             {initialImageUrl || imagePreview ? 'Click to change photo' : 'Click to upload photo'}
           </button>
+          <p className="mt-1 text-xs text-slate-500">JPEG, PNG, GIF, or WebP · max 5MB</p>
           {selectedFileName && (
-            <p className="mt-2 max-w-full truncate rounded-md bg-emerald-50 px-3 py-2 text-center text-xs font-medium text-emerald-800" role="status" aria-live="polite">
+            <p data-testid="person-photo-status" className="mt-2 max-w-full truncate rounded-md bg-emerald-50 px-3 py-2 text-center text-xs font-medium text-emerald-800" role="status" aria-live="polite">
               New photo selected: {selectedFileName}
             </p>
           )}
           {imageError && (
-            <p className="mt-2 text-center text-sm text-rose-600" role="alert">
+            <p data-testid="person-photo-error" className="mt-2 text-center text-sm text-rose-600" role="alert">
               {imageError}
             </p>
           )}
