@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
         id: true,
         userId: true,
         addedById: true,
+        profileImageId: true,
       },
     });
     if (!person) {
@@ -86,8 +87,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(image.type)) {
+    const mimeByExtension: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+    };
+    const extension = image.name.split('.').pop()?.toLowerCase() || '';
+    const contentType = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(image.type)
+      ? image.type
+      : mimeByExtension[extension];
+
+    // Desktop file pickers can send an empty or generic MIME type. The file
+    // extension is a safe fallback because the client only accepts image files.
+    if (!contentType) {
       return NextResponse.json(
         { success: false, error: 'Invalid image type. Allowed: JPEG, PNG, GIF, WebP' },
         { status: 400 }
@@ -111,6 +125,7 @@ export async function POST(request: NextRequest) {
           access: 'public',
           addRandomSuffix: true,
           token: blobToken,
+          contentType,
         }
       );
       url = blob.url;
@@ -122,15 +137,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const personImage = await prisma.personImage.create({
-      data: {
-        url,
-        personId,
-        isPrimary: isProfile,
-      },
-    });
+    // Reuse the current profile-photo record when replacing an avatar. This
+    // keeps a replacement from creating a second active profile photo.
+    let personImage = person.profileImageId
+      ? await prisma.personImage.findUnique({ where: { id: person.profileImageId } })
+      : null;
+
+    if (personImage) {
+      personImage = await prisma.personImage.update({
+        where: { id: personImage.id },
+        data: { url, isPrimary: isProfile },
+      });
+    } else {
+      personImage = await prisma.personImage.create({
+        data: {
+          url,
+          personId,
+          isPrimary: isProfile,
+        },
+      });
+    }
 
     if (isProfile) {
+      await prisma.personImage.updateMany({
+        where: { personId, id: { not: personImage.id } },
+        data: { isPrimary: false },
+      });
+
       await prisma.person.update({
         where: { id: personId },
         data: { profileImageId: personImage.id },
