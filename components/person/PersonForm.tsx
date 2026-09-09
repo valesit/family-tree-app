@@ -38,6 +38,7 @@ export function PersonForm({
   submitLabel = 'Save',
 }: PersonFormProps) {
   const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(initialImageUrl || null);
   const [imageError, setImageError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,6 +99,7 @@ export function PersonForm({
     // as a fallback so a valid JPEG/PNG is not silently discarded.
     if (!hasSupportedType && !hasSupportedExtension) {
       setProfileImage(null);
+      setSelectedFileName(null);
       setImageError('Please choose a JPEG, PNG, GIF, or WebP image.');
       e.target.value = '';
       return;
@@ -105,6 +107,7 @@ export function PersonForm({
 
     if (file.size > maxSize) {
       setProfileImage(null);
+      setSelectedFileName(null);
       setImageError('Profile photos must be smaller than 5MB.');
       e.target.value = '';
       return;
@@ -112,6 +115,7 @@ export function PersonForm({
 
     setImageError(null);
     setProfileImage(file);
+    setSelectedFileName(file.name);
     setImagePreview(URL.createObjectURL(file));
     // Clearing the input allows the same file to be selected again.
     e.target.value = '';
@@ -159,9 +163,9 @@ export function PersonForm({
           >
             {initialImageUrl || imagePreview ? 'Click to change photo' : 'Click to upload photo'}
           </button>
-          {profileImage && (
-            <p className="mt-1 max-w-full truncate text-xs text-emerald-700" role="status">
-              New photo selected: {profileImage.name}
+          {selectedFileName && (
+            <p className="mt-2 max-w-full truncate rounded-md bg-emerald-50 px-3 py-2 text-center text-xs font-medium text-emerald-800" role="status" aria-live="polite">
+              New photo selected: {selectedFileName}
             </p>
           )}
           {imageError && (
