@@ -99,6 +99,7 @@ export default function ProfilePage() {
   const [activeSection, setActiveSection] = useState<'family' | 'account' | 'security'>('family');
   const [saving, setSaving] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [selectedPhotoName, setSelectedPhotoName] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -195,6 +196,7 @@ export default function ProfilePage() {
       return;
     }
 
+    setSelectedPhotoName(file.name);
     setPhotoBusy(true);
     setMessage(null);
     try {
@@ -212,6 +214,7 @@ export default function ProfilePage() {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not upload photo.' });
     } finally {
       setPhotoBusy(false);
+      setSelectedPhotoName(null);
     }
   };
 
@@ -295,10 +298,15 @@ export default function ProfilePage() {
                           <input
                             ref={photoInputRef}
                             type="file"
-                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
                             className="hidden"
                             onChange={handlePhotoChange}
                           />
+                          {selectedPhotoName && (
+                            <p className="mt-3 max-w-[220px] truncate text-xs font-medium text-[#6f2e2a]" role="status" aria-live="polite">
+                              {photoBusy ? 'Uploading' : 'Selected'}: {selectedPhotoName}
+                            </p>
+                          )}
                         </div>
 
                         <div className="min-w-0 flex-1">
