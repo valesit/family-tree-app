@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     // Reuse the current profile-photo record when replacing an avatar. This
     // keeps a replacement from creating a second active profile photo.
-    let personImage = person.profileImageId
+    let personImage = isProfile && person.profileImageId
       ? await prisma.personImage.findUnique({ where: { id: person.profileImageId } })
       : null;
 
