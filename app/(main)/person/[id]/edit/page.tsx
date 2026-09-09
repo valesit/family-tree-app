@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
@@ -11,7 +11,7 @@ import { PersonInput } from '@/lib/validators';
 import { ArrowLeft, Loader2, AlertCircle, Lock } from 'lucide-react';
 import Link from 'next/link';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(res => res.json());
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -25,6 +25,7 @@ export default function EditPersonPage({ params }: PageProps) {
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
+  const [isSaving, setIsSaving] = useState(false);
 
   const { data, error, isLoading: isPersonLoading } = useSWR<{
     success: boolean;
@@ -100,6 +101,7 @@ export default function EditPersonPage({ params }: PageProps) {
   };
 
   const handleSubmit = async (formData: PersonInput, profileImage?: File) => {
+    setIsSaving(true);
     try {
       // Keep the payload in the same shape expected by personSchema. The API
       // owns date conversion and facts JSON serialization before writing to Prisma.
@@ -145,12 +147,13 @@ export default function EditPersonPage({ params }: PageProps) {
         }
       }
 
-      // Redirect back to person page
-      router.push(`/person/${id}`);
-      router.refresh();
+      // Use a full navigation so the profile page cannot reuse stale SWR data.
+      window.location.assign(`/person/${id}`);
     } catch (error) {
       console.error('Error updating person:', error);
       alert(error instanceof Error ? error.message : 'Failed to update person');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -184,6 +187,7 @@ export default function EditPersonPage({ params }: PageProps) {
           initialImageUrl={person.profileImage?.url}
           onSubmit={handleSubmit}
           onCancel={handleCancel}
+          isLoading={isSaving}
           title={`Edit ${person.firstName} ${person.lastName}`}
           submitLabel="Save Changes"
         />

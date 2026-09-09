@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { clsx } from 'clsx';
 import Image from 'next/image';
 
@@ -59,7 +60,15 @@ export function Avatar({ src, alt, name, size = 'md', className }: AvatarProps) 
     '2xl': 96,
   };
 
-  if (src) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [src]);
+
+  if (src && !imageFailed) {
+    const isExternalImage = src.startsWith('http') || src.startsWith('data:');
+
     return (
       <div
         className={clsx(
@@ -69,10 +78,13 @@ export function Avatar({ src, alt, name, size = 'md', className }: AvatarProps) 
         )}
       >
         <Image
+          key={src}
           src={src}
           alt={alt || name || 'Avatar'}
           width={imageSizes[size]}
           height={imageSizes[size]}
+          unoptimized={isExternalImage}
+          onError={() => setImageFailed(true)}
           className="object-cover w-full h-full"
         />
       </div>
@@ -92,4 +104,3 @@ export function Avatar({ src, alt, name, size = 'md', className }: AvatarProps) 
     </div>
   );
 }
-

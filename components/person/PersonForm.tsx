@@ -88,9 +88,15 @@ export function PersonForm({
     if (!file) return;
 
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    const hasSupportedType = validTypes.includes(file.type);
+    const hasSupportedExtension = validExtensions.includes(extension);
     const maxSize = 5 * 1024 * 1024;
 
-    if (!validTypes.includes(file.type)) {
+    // Some desktop file pickers do not provide a MIME type. Use the extension
+    // as a fallback so a valid JPEG/PNG is not silently discarded.
+    if (!hasSupportedType && !hasSupportedExtension) {
       setProfileImage(null);
       setImageError('Please choose a JPEG, PNG, GIF, or WebP image.');
       e.target.value = '';
@@ -106,11 +112,9 @@ export function PersonForm({
 
     setImageError(null);
     setProfileImage(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setImagePreview(URL.createObjectURL(file));
+    // Clearing the input allows the same file to be selected again.
+    e.target.value = '';
   };
 
   const handleFormSubmit = async (data: PersonInput) => {
@@ -133,22 +137,33 @@ export function PersonForm({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute bottom-0 right-0 p-2 bg-maroon-500 text-white rounded-full shadow-lg hover:bg-maroon-600 transition-colors"
+              className="absolute inset-0 rounded-full focus:outline-none focus:ring-2 focus:ring-maroon-500 focus:ring-offset-2"
               aria-label={initialImageUrl || imagePreview ? 'Change profile photo' : 'Upload profile photo'}
             >
-              <Camera className="w-4 h-4" />
+              <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full bg-maroon-500 text-white shadow-lg transition-colors hover:bg-maroon-600">
+                <Camera className="h-4 w-4" />
+              </span>
             </button>
           </div>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
+            accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
             onChange={handleImageChange}
             className="hidden"
           />
-          <p className="text-sm text-slate-500 mt-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-2 text-sm text-slate-500 underline-offset-2 hover:text-maroon-600 hover:underline"
+          >
             {initialImageUrl || imagePreview ? 'Click to change photo' : 'Click to upload photo'}
-          </p>
+          </button>
+          {profileImage && (
+            <p className="mt-1 max-w-full truncate text-xs text-emerald-700" role="status">
+              New photo selected: {profileImage.name}
+            </p>
+          )}
           {imageError && (
             <p className="mt-2 text-center text-sm text-rose-600" role="alert">
               {imageError}
