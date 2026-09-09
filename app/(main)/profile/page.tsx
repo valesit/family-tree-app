@@ -99,7 +99,7 @@ export default function ProfilePage() {
   const [activeSection, setActiveSection] = useState<'family' | 'account' | 'security'>('family');
   const [saving, setSaving] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
-  const [selectedPhotoName, setSelectedPhotoName] = useState<string | null>(null);
+  const [photoStatus, setPhotoStatus] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,6 +139,15 @@ export default function ProfilePage() {
   const spouseCount = linkedPerson
     ? linkedPerson._count.spouseRelations1 + linkedPerson._count.spouseRelations2
     : 0;
+
+  const openPhotoPicker = () => {
+    const input = photoInputRef.current;
+    if (!input || photoBusy) return;
+
+    // Clear before opening so the same file can be selected repeatedly.
+    input.value = '';
+    input.click();
+  };
 
   const handleAccountUpdate = async (data: ProfileInput) => {
     setSaving(true);
@@ -183,22 +192,40 @@ export default function ProfilePage() {
 
   const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !linkedPerson) return;
+    if (!file) {
+      setPhotoStatus('No photo was selected.');
+      return;
+    }
+
+    if (!linkedPerson) {
+      const text = 'Your account is not linked to a family profile yet.';
+      setPhotoStatus(text);
+      setMessage({ type: 'error', text });
+      return;
+    }
 
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
     const supportedByType = validTypes.includes(file.type);
     const supportedByExtension = validExtensions.includes(extension);
-    if ((!supportedByType && !supportedByExtension) || file.size > 5 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'Choose a JPEG, PNG, GIF or WebP image smaller than 5MB.' });
+    if (!supportedByType && !supportedByExtension) {
+      const text = `“${file.name}” is not supported. Choose a JPEG, PNG, GIF or WebP image.`;
+      setPhotoStatus(`Invalid file: ${text}`);
+      setMessage({ type: 'error', text });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      const text = `“${file.name}” is too large. Choose an image smaller than 5MB.`;
+      setPhotoStatus(`Invalid file: ${text}`);
+      setMessage({ type: 'error', text });
       return;
     }
 
-    setSelectedPhotoName(file.name);
+    setPhotoStatus(`Uploading: ${file.name}`);
     setPhotoBusy(true);
     setMessage(null);
+    const startedAt = Date.now();
     try {
       const formData = new FormData();
       formData.append('image', file);
@@ -210,11 +237,17 @@ export default function ProfilePage() {
       await update({ image: result.data.url });
       await refreshProfile();
       setMessage({ type: 'success', text: 'Profile photo updated.' });
+      setPhotoStatus('Profile photo updated.');
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not upload photo.' });
+      const text = error instanceof Error ? error.message : 'Could not upload photo.';
+      setMessage({ type: 'error', text });
+      setPhotoStatus(`Upload failed: ${text}`);
     } finally {
+      // Keep the uploading state on screen long enough to be observable even
+      // when the Blob request completes from a warm region.
+      const remaining = 450 - (Date.now() - startedAt);
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
       setPhotoBusy(false);
-      setSelectedPhotoName(null);
     }
   };
 
@@ -289,7 +322,7 @@ export default function ProfilePage() {
                           <button
                             type="button"
                             disabled={photoBusy}
-                            onClick={() => photoInputRef.current?.click()}
+                            onClick={openPhotoPicker}
                             className="absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full border-2 border-[#fffdf9] bg-[#701f1d] text-white shadow-md hover:bg-[#5f1918] disabled:opacity-50"
                             aria-label="Change profile photo"
                           >
@@ -298,18 +331,19 @@ export default function ProfilePage() {
                           <input
                             ref={photoInputRef}
                             type="file"
-                            accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
+                            id="profile-photo-upload"
                             className="hidden"
                             onChange={handlePhotoChange}
                           />
-                          {selectedPhotoName && (
-                            <p className="mt-3 max-w-[220px] truncate text-xs font-medium text-[#6f2e2a]" role="status" aria-live="polite">
-                              {photoBusy ? 'Uploading' : 'Selected'}: {selectedPhotoName}
-                            </p>
-                          )}
                         </div>
 
                         <div className="min-w-0 flex-1">
+                          {photoStatus && (
+                            <p data-testid="profile-photo-status" className={`mb-2 max-w-[360px] truncate text-xs font-medium ${photoStatus.startsWith('Invalid') || photoStatus.startsWith('Upload failed') ? 'text-rose-700' : 'text-[#6f2e2a]'}`} role="status" aria-live="polite">
+                              {photoStatus}
+                            </p>
+                          )}
+                          <p className="mb-2 text-xs text-[#8b7a70]">JPEG, PNG, GIF, or WebP · max 5MB</p>
                           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8e6856]">Claimed family profile</p>
                           <h2 className="mt-1 font-serif text-3xl font-semibold text-[#382a24]">
                             {linkedPerson.firstName} {linkedPerson.middleName ? `${linkedPerson.middleName} ` : ''}{linkedPerson.lastName}
