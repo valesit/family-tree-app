@@ -21,12 +21,11 @@ export function FamilyDataLiveSync() {
     const revalidateFamilyData = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
 
+      // Preserve cached data so a focus refresh cannot remount forms and discard selected files.
       void mutate(
         (key) =>
           typeof key === 'string' &&
-          LIVE_KEYS.some((prefix) => key.startsWith(prefix)),
-        undefined,
-        { revalidate: true }
+          LIVE_KEYS.some((prefix) => key.startsWith(prefix))
       );
     };
 
