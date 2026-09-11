@@ -22,6 +22,8 @@ import {
   BookOpen,
   Images,
   ShieldCheck,
+  MessagesSquare,
+  HeartHandshake,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui';
 import { SessionUser } from '@/types';
@@ -60,6 +62,8 @@ export function Navbar() {
     { href: '/tree', label: 'Tree', icon: TreePine },
     { href: '/wiki', label: 'Stories', icon: BookOpen },
     { href: '/gallery', label: 'Gallery', icon: Images },
+    { href: '/forum', label: 'Forum', icon: MessagesSquare },
+    { href: '/support', label: 'Support a Family Business/Cause', icon: HeartHandshake },
     { href: '/messages', label: 'Messages', icon: MessageSquare },
   ];
 
@@ -67,6 +71,8 @@ export function Navbar() {
     { href: '/', label: 'Home', icon: Home },
     { href: '/wiki', label: 'Stories', icon: BookOpen },
     { href: '/gallery', label: 'Gallery', icon: Images },
+    { href: '/forum', label: 'Forum', icon: MessagesSquare },
+    { href: '/support', label: 'Support a Family Business/Cause', icon: HeartHandshake },
   ];
 
   const navItems = isAuthenticated ? authNavItems : guestNavItems;
@@ -89,7 +95,7 @@ export function Navbar() {
             </span>
           </Link>
 
-          <div className="hidden h-full items-stretch md:flex">
+          <div className="hidden h-full items-stretch xl:flex">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -98,14 +104,14 @@ export function Navbar() {
                   key={item.href}
                   href={item.href}
                   className={clsx(
-                    'relative flex h-full items-center gap-2 px-4 font-serif text-sm transition-colors',
+                    'relative flex h-full items-center gap-2 px-3 font-serif text-sm transition-colors',
                     isActive
                       ? 'font-semibold text-maroon-700'
                       : 'text-[#6e6058] hover:text-[#332720]'
                   )}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="max-w-36 leading-tight">{item.label}</span>
                   {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-maroon-500" />}
                 </Link>
               );
@@ -120,7 +126,7 @@ export function Navbar() {
                 <Link
                   href="/tree"
                   aria-label="Search family tree"
-                  className="hidden h-9 items-center gap-2 rounded-lg border border-[#e5d9ce] bg-white px-3 text-xs text-[#7a6a61] shadow-sm transition hover:bg-[#fffaf6] lg:flex"
+                  className="hidden h-9 items-center gap-2 rounded-lg border border-[#e5d9ce] bg-white px-3 text-xs text-[#7a6a61] shadow-sm transition hover:bg-[#fffaf6] 2xl:flex"
                 >
                   <Search className="h-4 w-4" />
                   <span>Search people...</span>
@@ -217,7 +223,7 @@ export function Navbar() {
 
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="grid h-9 w-9 place-items-center rounded-lg text-[#76675f] transition hover:bg-[#f5efe9] md:hidden"
+              className="grid h-9 w-9 place-items-center rounded-lg text-[#76675f] transition hover:bg-[#f5efe9] xl:hidden"
               aria-label="Toggle navigation"
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -227,7 +233,7 @@ export function Navbar() {
       </div>
 
       {isMobileMenuOpen && (
-        <div className="border-t border-[#e8dfd6] bg-[#fffdf9] px-4 py-3 md:hidden">
+        <div className="border-t border-[#e8dfd6] bg-[#fffdf9] px-4 py-3 xl:hidden">
           <div className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
