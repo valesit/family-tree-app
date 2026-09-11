@@ -4,11 +4,7 @@ import { put } from '@vercel/blob';
 import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { SessionUser } from '@/types';
-import {
-  findPersonFamilyRoot,
-  isFamilyAdmin,
-  isSystemAdmin,
-} from '@/lib/family-membership';
+import { canManagePersonPhotos } from '@/lib/person-photos';
 
 function getBlobToken() {
   return process.env.BLOB_READ_WRITE_TOKEN || process.env.FAMILY_BLOB_READ_WRITE_TOKEN || null;
@@ -37,15 +33,20 @@ export async function POST(request: NextRequest) {
 
     const user = session.user as SessionUser;
     const formData = await request.formData();
-    const image = formData.get('image') as File | null;
-    const personId = formData.get('personId') as string | null;
+    const image = formData.get('image');
+    const personId = formData.get('personId');
     const isProfile = formData.get('isProfile') === 'true';
+    const captionValue = formData.get('caption');
+    const caption = typeof captionValue === 'string' ? captionValue.trim() : '';
 
-    if (!image) {
+    if (!(image instanceof File) || image.size === 0) {
       return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 });
     }
-    if (!personId) {
+    if (typeof personId !== 'string' || !personId) {
       return NextResponse.json({ success: false, error: 'Person ID is required' }, { status: 400 });
+    }
+    if (!isProfile && caption.length > 280) {
+      return NextResponse.json({ success: false, error: 'Caption must be 280 characters or fewer' }, { status: 400 });
     }
 
     const blobToken = getBlobToken();
@@ -72,15 +73,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
 
-    const rootId = await findPersonFamilyRoot(personId);
-    const [sysAdmin, familyAdmin] = await Promise.all([
-      isSystemAdmin(user.id),
-      rootId ? isFamilyAdmin(user.id, rootId) : Promise.resolve(false),
-    ]);
-    const ownsProfile = person.userId === user.id;
-    const justAddedPerson = person.addedById === user.id;
-
-    if (!sysAdmin && !familyAdmin && !ownsProfile && !justAddedPerson) {
+    if (!(await canManagePersonPhotos(user.id, person))) {
       return NextResponse.json(
         { success: false, error: 'You do not have permission to change this person’s photos' },
         { status: 403 }
@@ -100,7 +93,7 @@ export async function POST(request: NextRequest) {
       : mimeByExtension[extension];
 
     // Desktop file pickers can send an empty or generic MIME type. The file
-    // extension is a safe fallback because the client only accepts image files.
+    // extension provides a fallback for those file pickers.
     if (!contentType) {
       return NextResponse.json(
         { success: false, error: 'Invalid image type. Allowed: JPEG, PNG, GIF, WebP' },
@@ -108,10 +101,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const maxSize = 5 * 1024 * 1024;
+    // Personal photos use the same 4MB limit as the family gallery, leaving
+    // room for multipart fields within Vercel's request body limit.
+    const maxSizeMB = isProfile ? 5 : 4;
+    const maxSize = maxSizeMB * 1024 * 1024;
     if (image.size > maxSize) {
       return NextResponse.json(
-        { success: false, error: 'Image size must be less than 5MB' },
+        { success: false, error: `Image size must be ${maxSizeMB}MB or less` },
         { status: 400 }
       );
     }
@@ -130,10 +126,33 @@ export async function POST(request: NextRequest) {
       );
       url = blob.url;
     } catch (error) {
-      console.error('Vercel Blob profile upload failed:', error);
+      console.error('Vercel Blob image upload failed:', error);
       return NextResponse.json(
         { success: false, error: uploadErrorMessage(error) },
         { status: 502 }
+      );
+    }
+
+    if (!isProfile) {
+      // Save the image and its purpose together so a successful upload is
+      // always discoverable in the person's photo section after reloading.
+      const personImage = await prisma.$transaction(async (tx) => {
+        const photo = await tx.personImage.create({
+          data: { url, personId, isPrimary: false, caption: caption || null },
+        });
+        await tx.activity.create({
+          data: {
+            type: 'IMAGE_UPLOADED',
+            description: 'A personal photo was added',
+            userId: user.id,
+            data: { personId, imageId: photo.id, isProfile: false },
+          },
+        });
+        return photo;
+      });
+      return NextResponse.json(
+        { success: true, data: personImage, message: 'Photo added.' },
+        { headers: { 'Cache-Control': 'no-store, max-age=0' } }
       );
     }
 

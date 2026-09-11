@@ -41,6 +41,7 @@ export type {
 export type PersonWithRelations = Person & {
   profileImage?: PersonImage | null;
   images?: PersonImage[];
+  canManagePhotos?: boolean;
   parentRelations?: RelationshipWithPersons[];
   childRelations?: RelationshipWithPersons[];
   spouseRelations1?: RelationshipWithPersons[];
@@ -337,4 +338,3 @@ export interface ExpandedTreeViewData {
     oldestRecord?: string;
   };
 }
-

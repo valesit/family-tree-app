@@ -26,7 +26,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Test photo uploads and focus refresh
+        run: npm test
+
       - name: Build
         run: npm run build
-
 
