@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
+import { canManagePersonPhotos, getPersonalPhotoIds } from '@/lib/person-photos';
 import {
   findPersonFamilyRoot,
   getFamilyMembership,
@@ -55,6 +56,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
 
+    const [personalPhotoIds, canManagePhotos] = await Promise.all([
+      getPersonalPhotoIds(id),
+      sessionUser ? canManagePersonPhotos(sessionUser.id, person) : Promise.resolve(false),
+    ]);
+
     // Only members of the same family can receive the optional WhatsApp deep
     // link. Anonymous viewers and unrelated accounts never receive the phone.
     let isSameFamily = false;
@@ -78,7 +84,16 @@ export async function GET(
     }
 
     return NextResponse.json(
-      { success: true, data: safePerson },
+      {
+        success: true,
+        data: {
+          ...safePerson,
+          canManagePhotos,
+          images: person.images.filter((image) =>
+            personalPhotoIds.has(image.id) && !image.isPrimary && image.id !== person.profileImageId
+          ),
+        },
+      },
       { headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' } }
     );
   } catch (error) {

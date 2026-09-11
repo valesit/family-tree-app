@@ -709,20 +709,20 @@ function ProfilePanel({
             <section>
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-serif text-[17px] font-semibold text-[#3a2b24]">Photos</h3>
-                <Link href="/gallery" className="text-xs font-semibold text-maroon-600 hover:text-maroon-700">View gallery →</Link>
+                <Link href={`/person/${person.id}#photos`} className="text-xs font-semibold text-maroon-600 hover:text-maroon-700">View all photos →</Link>
               </div>
               {photos.length > 0 ? (
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   {photos.map((photo) => (
                     <div key={photo.id} className="aspect-[4/3] overflow-hidden rounded-xl border border-[#eaded4] bg-[#f3eae2]">
-                      <img src={photo.url} alt="" className="h-full w-full object-cover" />
+                      <img src={photo.url} alt={photo.caption || `${person.firstName}’s photo`} className="h-full w-full object-cover" />
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="mt-4 rounded-xl border border-dashed border-[#d9c7b9] bg-[#f8f0e9] p-5 text-center">
                   <Images className="mx-auto h-6 w-6 text-[#9a6b56]" />
-                  <p className="mt-2 text-sm text-[#756961]">No photos have been linked to this person yet.</p>
+                  <p className="mt-2 text-sm text-[#756961]">No photos have been added yet.</p>
                 </div>
               )}
             </section>

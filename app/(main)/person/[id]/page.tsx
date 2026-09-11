@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { format } from 'date-fns';
 import { Avatar, Button, Card } from '@/components/ui';
+import { PersonPhotos } from '@/components/person/PersonPhotos';
 import { PersonWithRelations, SessionUser } from '@/types';
 import {
   AlertCircle,
@@ -14,7 +15,6 @@ import {
   Award,
   Briefcase,
   CalendarDays,
-  Camera,
   ChevronRight,
   Edit,
   Heart,
@@ -271,25 +271,19 @@ export default function PersonDetailPage({ params }: PageProps) {
               )}
             </Card>
 
-            {person.images && person.images.length > 0 && (
-              <Card className="border-[#e3d7cd] bg-[#fffdf9]">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#9a735f]">Photo archive</p>
-                    <h2 className="mt-1 font-serif text-2xl font-semibold text-[#382a24]">Photos</h2>
-                  </div>
-                  {isAuthenticated && <Link href={`/person/${id}/edit`} className="text-xs font-semibold text-[#742825] hover:underline"><Camera className="mr-1 inline h-3.5 w-3.5" />Manage photo</Link>}
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {person.images.map((image: { id: string; url: string; caption?: string | null }) => (
-                    <figure key={image.id} className="overflow-hidden rounded-xl border border-[#eadfd6] bg-[#f7f1ec]">
-                      <img src={image.url} alt={image.caption || `${person.firstName} family photo`} className="aspect-square w-full object-cover" />
-                      {image.caption && <figcaption className="p-2 text-xs text-[#7f6e65]">{image.caption}</figcaption>}
-                    </figure>
-                  ))}
-                </div>
-              </Card>
-            )}
+            <PersonPhotos
+              key={id}
+              personId={id}
+              firstName={person.firstName}
+              photos={person.images ?? []}
+              canManage={isAuthenticated && !!person.canManagePhotos}
+              onUploaded={(photo) => {
+                void mutate((current) => current ? {
+                  ...current,
+                  data: { ...current.data, images: [photo, ...(current.data.images ?? [])] },
+                } : current, { revalidate: true });
+              }}
+            />
 
             <Card id="tributes" className="border-[#e3d7cd] bg-[#fffdf9]">
               <div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
@@ -48,6 +48,105 @@ type VisualPartner = {
   spouseCard: boolean;
   marriageOrder?: number;
 };
+
+type LineageGeometry = {
+  startX: number;
+  elbowY: number;
+  targetX: number;
+  targetY: number;
+};
+
+/**
+ * Draw the incoming parent-child line to the canonical child card, not to the
+ * visual centre of a married couple. The branch wrapper remains centred on the
+ * sibling rail, while the measured endpoint follows the actual child even when
+ * spouse ordering places that child on the left or right side of the couple.
+ */
+function ChildLineageConnector({ personId }: { personId: string }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [geometry, setGeometry] = useState<LineageGeometry | null>(null);
+
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    const container = svg?.parentElement;
+    if (!svg || !container) return;
+
+    let resizeObserver: ResizeObserver | null = null;
+
+    const update = () => {
+      const target = container.querySelector<HTMLElement>(`[data-lineage-person="${personId}"]`);
+      if (!target) {
+        setGeometry(null);
+        return;
+      }
+
+      resizeObserver?.observe(target);
+
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const naturalWidth = container.offsetWidth;
+      const naturalHeight = container.offsetHeight;
+      if (!naturalWidth || !naturalHeight || !containerRect.width || !containerRect.height) return;
+
+      // FamilyTree can be zoomed with a CSS transform, so convert measured
+      // viewport pixels back into this SVG's unscaled local coordinates.
+      const scaleX = containerRect.width / naturalWidth || 1;
+      const scaleY = containerRect.height / naturalHeight || scaleX || 1;
+      const startX = naturalWidth / 2;
+      const targetX = (targetRect.left - containerRect.left) / scaleX + targetRect.width / (2 * scaleX);
+      const targetY = (targetRect.top - containerRect.top) / scaleY;
+      const elbowY = Math.max(8, Math.min(15, targetY * 0.55));
+
+      setGeometry((current) => {
+        const next = { startX, elbowY, targetX, targetY };
+        if (
+          current &&
+          Math.abs(current.startX - next.startX) < 0.25 &&
+          Math.abs(current.elbowY - next.elbowY) < 0.25 &&
+          Math.abs(current.targetX - next.targetX) < 0.25 &&
+          Math.abs(current.targetY - next.targetY) < 0.25
+        ) {
+          return current;
+        }
+        return next;
+      });
+    };
+
+    resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(container);
+
+    const mutationObserver = new MutationObserver(update);
+    mutationObserver.observe(container, { childList: true, subtree: true });
+
+    update();
+    window.addEventListener('resize', update);
+
+    return () => {
+      resizeObserver?.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [personId]);
+
+  return (
+    <svg
+      ref={svgRef}
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible"
+      aria-hidden="true"
+    >
+      {geometry && (
+        <path
+          d={`M ${geometry.startX} 0 V ${geometry.elbowY} H ${geometry.targetX} V ${geometry.targetY}`}
+          fill="none"
+          stroke="#b58b6a"
+          strokeWidth="1"
+          strokeLinecap="square"
+          strokeLinejoin="miter"
+        />
+      )}
+    </svg>
+  );
+}
 
 export function TreeNode({
   node,
@@ -185,7 +284,7 @@ export function TreeNode({
     };
 
     return (
-      <div className="relative">
+      <div className="relative" data-lineage-person={person.id}>
         <div
           role="button"
           tabIndex={0}
@@ -384,24 +483,29 @@ export function TreeNode({
                     {childCount > 1 && index < childCount - 1 && (
                       <span className="absolute right-0 top-0 h-px w-1/2 bg-[#b58b6a]" aria-hidden />
                     )}
-                    <span className="h-7 w-px bg-[#b58b6a]" aria-hidden />
-                    <TreeNode
-                      node={child}
-                      onNodeClick={onNodeClick}
-                      onAddChild={onAddChild}
-                      onAddSpouse={onAddSpouse}
-                      onAddParent={onAddParent}
-                      onSetRoot={effectiveSetRoot}
-                      rootPersonId={effectiveRootPersonId}
-                      onViewBirthFamily={onViewBirthFamily}
-                      expandedNodes={expandedNodes}
-                      toggleExpanded={toggleExpanded}
-                      level={level + 1}
-                      readOnly={readOnly}
-                      exportMode={exportMode}
-                      exportFields={exportFields}
-                      maxLevels={maxLevels}
-                    />
+
+                    <ChildLineageConnector personId={child.id} />
+                    <span className="h-7 w-px shrink-0" aria-hidden />
+
+                    <div className="relative z-10">
+                      <TreeNode
+                        node={child}
+                        onNodeClick={onNodeClick}
+                        onAddChild={onAddChild}
+                        onAddSpouse={onAddSpouse}
+                        onAddParent={onAddParent}
+                        onSetRoot={effectiveSetRoot}
+                        rootPersonId={effectiveRootPersonId}
+                        onViewBirthFamily={onViewBirthFamily}
+                        expandedNodes={expandedNodes}
+                        toggleExpanded={toggleExpanded}
+                        level={level + 1}
+                        readOnly={readOnly}
+                        exportMode={exportMode}
+                        exportFields={exportFields}
+                        maxLevels={maxLevels}
+                      />
+                    </div>
                   </div>
                 );
               })}
