@@ -13,7 +13,8 @@ interface PersonPhotosProps {
   onUploaded: (photo: PersonImage) => void;
 }
 
-export function PersonPhotos({ personId, firstName, photos, canManage, onUploaded }: PersonPhotosProps) {
+export function PersonPhotos({ personId, firstName: rawFirstName, photos, canManage, onUploaded }: PersonPhotosProps) {
+  const firstName = rawFirstName.trim();
   const fileInput = useRef<HTMLInputElement>(null);
   const lightbox = useRef<HTMLDialogElement>(null);
   const uploadInProgress = useRef(false);
