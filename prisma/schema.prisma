@@ -58,6 +58,10 @@ model User {
   // Family gallery uploads (scoped by founding person / family root)
   galleryPhotosUploaded GalleryPhoto[] @relation("GalleryUploader")
 
+  forumPosts ForumPost[]
+  forumComments ForumComment[]
+  businessListings BusinessListing[]
+
   @@index([email])
   @@index([phone])
 }
@@ -382,6 +386,9 @@ model Family {
   createdById  String?
   createdBy    User?   @relation("FamilyCreator", fields: [createdById], references: [id])
 
+  forumPosts ForumPost[]
+  businessListings BusinessListing[]
+
   memberships  FamilyMembership[]
   people       FamilyPerson[]
   relationships FamilyRelationship[]
@@ -574,4 +581,81 @@ model GalleryPhoto {
   @@index([rootPersonId])
   @@index([uploadedById])
   @@index([category])
+}
+
+// Public family community. These tables are independent of genealogy and profile photos.
+model ForumPost {
+  id          String   @id @default(cuid())
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  authorId    String?
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName  String
+  isGuest     Boolean  @default(false)
+  guestKey    String?
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  images      ForumImage[]
+  comments    ForumComment[]
+
+  @@index([familyId, createdAt, id])
+  @@index([authorId])
+}
+
+model ForumImage {
+  id             String @id @default(cuid())
+  postId         String
+  post           ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  url            String @db.Text
+  galleryPhotoId String @unique
+  displayOrder   Int @default(0)
+
+  @@index([postId])
+}
+
+model ForumComment {
+  id         String @id @default(cuid())
+  postId     String
+  post       ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+  isGuest    Boolean @default(false)
+  guestKey   String?
+  content    String @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([postId, createdAt, id])
+  @@index([authorId])
+}
+
+model BusinessListing {
+  id           String @id @default(cuid())
+  familyId     String
+  family       Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  ownerId      String
+  owner        User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  kind         String
+  name         String
+  description  String @db.Text
+  location     String @default("")
+  contactName  String
+  email        String @default("")
+  phone        String @default("")
+  website      String @default("")
+  supportDetails String @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([familyId, createdAt, id])
+  @@index([ownerId])
+}
+
+// A shared database bucket also works across separate serverless invocations.
+model CommunityRateLimit {
+  id        String @id
+  count     Int @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
