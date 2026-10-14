@@ -89,6 +89,8 @@ export interface TreeNode {
   isLiving: boolean;
   isVerified?: boolean;  // Shows "Unverified" badge if false
   children?: TreeNode[];
+  /** Parent branches missing from the root-down descendant tree (not a replacement for children). */
+  parents?: TreeNode[];
   spouse?: TreeNode;  // Legacy single spouse (for backward compatibility)
   spouses?: SpouseNode[];  // Multiple spouses support
   attributes?: {
