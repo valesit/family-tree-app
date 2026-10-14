@@ -113,10 +113,10 @@ test('accidental parent loops cannot recurse forever', () => {
 
 test('signed-in additions publish directly without a pending verification queue', () => {
   const source = fs.readFileSync('app/api/persons/route.ts','utf8');
-  assert.match(source,/isVerified:\\s*true/);
-  assert.match(source,/verifiedById:\\s*user\\.id/);
-  assert.doesNotMatch(source,/notifyVerifiedMembers\\(/);
+  assert.match(source,/isVerified:\s*true/);
+  assert.match(source,/verifiedById:\s*user\.id/);
+  assert.doesNotMatch(source,/notifyVerifiedMembers\(/);
   const edit = fs.readFileSync('app/api/persons/[id]/route.ts','utf8');
-  assert.match(edit,/user\\.role === 'VIEWER'/);
+  assert.match(edit,/user\.role === 'VIEWER'/);
   assert.doesNotMatch(edit,/Only the profile owner or a Family Admin can edit/);
 });
