@@ -14,6 +14,7 @@ export function collectTreeNodeIds(tree: TreeNode | null): Set<string> {
     ids.add(n.id);
     n.spouses?.forEach((s) => addNode(s));
     addNode(n.spouse);
+    n.parents?.forEach((p) => addNode(p));
     n.children?.forEach((c) => addNode(c));
   };
 
@@ -446,6 +447,25 @@ export function flattenTree(tree: TreeNode | null): PersonFlat[] {
     return rec;
   };
 
+  // Include ancestor-only branches in List/Directory and their relationship
+  // summaries, without trying to infer parents from the first spouse.
+  const indexMissingParents = (
+    child: TreeNode,
+    generation: number,
+    path: Set<string>
+  ) => {
+    const childRec = byId.get(child.id);
+    if (!childRec) return;
+
+    for (const parent of child.parents ?? []) {
+      if (path.has(parent.id)) continue;
+      const parentRec = ensure(parent, generation - 1, [], []);
+      if (!childRec.parentIds.includes(parent.id)) childRec.parentIds.push(parent.id);
+      if (!parentRec.childIds.includes(child.id)) parentRec.childIds.push(child.id);
+      indexMissingParents(parent, generation - 1, new Set([...path, parent.id]));
+    }
+  };
+
   const walk = (n: TreeNode, generation: number, parentIds: string[]) => {
     const me = ensure(n, generation, parentIds, parentIds);
 
@@ -460,6 +480,11 @@ export function flattenTree(tree: TreeNode | null): PersonFlat[] {
       const spouseRec = ensure(s, generation, [], []);
       if (!me.spouseIds.includes(s.id)) me.spouseIds.push(s.id);
       if (!spouseRec.spouseIds.includes(n.id)) spouseRec.spouseIds.push(n.id);
+    }
+
+    indexMissingParents(n, generation, new Set([n.id]));
+    for (const spouse of allSpouses) {
+      indexMissingParents(spouse, generation, new Set([spouse.id]));
     }
 
     const children = n.children ?? [];
