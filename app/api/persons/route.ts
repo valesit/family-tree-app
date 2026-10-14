@@ -5,10 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
 import {
-  isSystemAdmin,
-  isFamilyAdmin,
   findPersonFamilyRoot,
-  notifyVerifiedMembers,
   addUserToFamily,
 } from '@/lib/family-membership';
 import {
@@ -124,10 +121,6 @@ export async function POST(request: NextRequest) {
       targetFamilyId = await findPersonFamilyRoot(relatedPersonId);
     }
 
-    const isSysAdmin = await isSystemAdmin(user.id);
-    const isFamAdmin = targetFamilyId ? await isFamilyAdmin(user.id, targetFamilyId) : false;
-    const shouldAutoVerify = isSysAdmin || isFamAdmin;
-
     const person = await prisma.person.create({
       data: {
         ...validationResult.data,
@@ -136,9 +129,10 @@ export async function POST(request: NextRequest) {
         facts: validationResult.data.facts ? JSON.stringify(validationResult.data.facts) : null,
         createdById: user.id,
         addedById: user.id,
-        isVerified: shouldAutoVerify,
-        verifiedAt: shouldAutoVerify ? new Date() : null,
-        verifiedById: shouldAutoVerify ? user.id : null,
+        // Authenticated contributors publish immediately; no approval queue.
+        isVerified: true,
+        verifiedAt: new Date(),
+        verifiedById: user.id,
       },
       include: { profileImage: true },
     });
@@ -152,24 +146,11 @@ export async function POST(request: NextRequest) {
     await prisma.activity.create({
       data: {
         type: 'PERSON_ADDED',
-        description: `${person.firstName} ${person.lastName} was added to the family tree${!shouldAutoVerify ? ' (pending verification)' : ''}`,
+        description: `${person.firstName} ${person.lastName} was added to the family tree`,
         userId: user.id,
         data: { personId: person.id, familyId: targetFamilyId },
       },
     });
-
-    if (!shouldAutoVerify && targetFamilyId) {
-      await notifyVerifiedMembers(
-        targetFamilyId,
-        {
-          type: 'NEW_PERSON_PENDING',
-          title: 'New family member needs verification',
-          message: `${person.firstName} ${person.lastName} was added to the family tree and needs verification.`,
-          data: { personId: person.id, familyId: targetFamilyId },
-        },
-        user.id
-      );
-    }
 
     if (targetFamilyId) {
       await addUserToFamily(user.id, targetFamilyId, 'MEMBER');
@@ -182,9 +163,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: person,
       familyRootId: targetFamilyId,
-      message: shouldAutoVerify
-        ? 'Person added successfully.'
-        : 'Person added with unverified status. Family members can verify this addition.',
+      message: 'Person added successfully. Changes are now visible on the family tree.',
     });
   } catch (error) {
     console.error('Error creating person:', error);
