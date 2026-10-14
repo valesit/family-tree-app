@@ -106,7 +106,7 @@ export async function GET(
 }
 
 // PUT /api/persons/[id] - Update a person.
-// Direct edits are limited to the claimed profile owner, Family Admins and System Admins.
+// Registered contributors can publish factual edits immediately; deletion stays admin-only.
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -128,20 +128,11 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
 
-    const ownsProfile = existingPerson.userId === user.id;
-    const sysAdmin = await isSystemAdmin(user.id);
-    let famAdmin = false;
-    if (!sysAdmin && !ownsProfile) {
-      const familyRoot = await findPersonFamilyRoot(id);
-      famAdmin = !!familyRoot && (await isFamilyAdmin(user.id, familyRoot));
-    }
-
-    if (!ownsProfile && !sysAdmin && !famAdmin) {
+    // Any signed-in contributor can correct family information without routing
+    // the change through an admin. VIEWER accounts remain read-only.
+    if (user.role === 'VIEWER') {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Only the profile owner or a Family Admin can edit this family member directly',
-        },
+        { success: false, error: 'Your account does not have permission to edit family information' },
         { status: 403 }
       );
     }
