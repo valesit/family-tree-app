@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import useSWR from 'swr';
+import useSWR, { mutate as mutateSWR } from 'swr';
 import Link from 'next/link';
 import { clsx } from 'clsx';
 import {
@@ -282,6 +282,13 @@ function AddPersonContent() {
         }
       }
 
+      // Invalidate any previously viewed tree so newly submitted branches appear
+      // immediately when the contributor returns, even if SWR cached a tree.
+      await mutateSWR(
+        (key) => typeof key === 'string' && key.startsWith('/api/tree'),
+        undefined,
+        { revalidate: false }
+      );
       router.push(canonicalRootId ? `/tree?rootId=${encodeURIComponent(canonicalRootId)}` : '/tree');
       router.refresh();
     } catch (submissionError) {

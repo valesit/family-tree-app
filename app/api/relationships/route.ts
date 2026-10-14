@@ -7,8 +7,6 @@ import { SessionUser } from '@/types';
 import {
   addUserToFamily,
   findPersonFamilyRoot,
-  isFamilyAdmin,
-  isSystemAdmin,
   reconcileConnectedFamilies,
 } from '@/lib/family-membership';
 import {
@@ -101,9 +99,6 @@ export async function POST(request: NextRequest) {
     const familyBefore =
       (await findPersonFamilyRoot(person1Id)) ||
       (await findPersonFamilyRoot(person2Id));
-
-    const isSysAdmin = await isSystemAdmin(user.id);
-    const isFamAdmin = familyBefore ? await isFamilyAdmin(user.id, familyBefore) : false;
 
     // Contributions are idempotent. Double taps, retries, and the UI's
     // co-parent mirroring must never create duplicate relationship rows.
@@ -225,7 +220,7 @@ export async function POST(request: NextRequest) {
     await prisma.activity.create({
       data: {
         type: 'RELATIONSHIP_ADDED',
-        description: `A ${type.toLowerCase().replace('_', '-')} relationship was added between ${person1.firstName} and ${person2.firstName}${!isSysAdmin && !isFamAdmin ? ' (persons may need verification)' : ''}`,
+        description: `A ${type.toLowerCase().replace('_', '-')} relationship was added between ${person1.firstName} and ${person2.firstName}`,
         userId: user.id,
         data: {
           relationshipId: relationship.id,
