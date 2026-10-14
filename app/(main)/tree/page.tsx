@@ -163,7 +163,8 @@ export default function TreePage() {
       foundingAncestor: FoundingAncestor | null;
     };
   }>(treeApiUrl, fetcher, {
-    revalidateOnFocus: false,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
   });
 
   // Fetch notable persons
