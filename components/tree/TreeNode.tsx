@@ -149,58 +149,26 @@ function ChildLineageConnector({ personId }: { personId: string }) {
 }
 
 /**
- * Ancestors outside the permanent root-down tree must remain visible above
- * their own child, including both partners' independent parental families.
+ * Display ancestors outside the root-down descendant hierarchy using the
+ * exact same interactive card as every other family member. Ancestors can
+ * therefore open profiles, edit details and add new relationships.
  */
-function AncestorLineage({
-  person,
-  onNodeClick,
-}: {
-  person: TreeNodeType;
-  onNodeClick: (node: TreeNodeType) => void;
-}) {
-  return (
-    <div className="flex flex-col items-center">
-      {!!person.parents?.length && (
-        <div className="flex flex-col items-center">
-          <div className="flex items-end gap-3">
-            {person.parents.map((parent) => (
-              <AncestorLineage key={parent.id} person={parent} onNodeClick={onNodeClick} />
-            ))}
-          </div>
-          <span className="h-5 w-px bg-[#b58b6a]" aria-hidden />
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => onNodeClick(person)}
-        className="min-w-32 max-w-48 rounded-xl border border-[#d9c4b3] bg-[#fffdf9] px-3 py-2 text-center shadow-sm transition hover:border-maroon-500 hover:bg-[#fff8f3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-maroon-500"
-        title={`View ${person.name}'s family profile`}
-      >
-        <span className="block text-xs font-semibold text-[#503a30]">{person.name}</span>
-        {(person.attributes?.birthYear || person.attributes?.deathYear) && (
-          <span className="block text-[10px] text-[#9b8271]">
-            {person.attributes?.birthYear || '?'}–{person.attributes?.deathYear || ''}
-          </span>
-        )}
-      </button>
-    </div>
-  );
-}
-
 function MissingAncestors({
   person,
-  onNodeClick,
-}: {
-  person: TreeNodeType;
-  onNodeClick: (node: TreeNodeType) => void;
-}) {
+  ...nodeProps
+}: { person: TreeNodeType } & Omit<TreeNodeProps, 'node' | 'isRoot'>) {
   if (!person.parents?.length) return null;
+
   return (
     <div className="flex flex-col items-center" aria-label={`Parents of ${person.name}`}>
       <div className="flex items-end gap-3">
         {person.parents.map((parent) => (
-          <AncestorLineage key={parent.id} person={parent} onNodeClick={onNodeClick} />
+          <TreeNode
+            key={parent.id}
+            {...nodeProps}
+            node={parent}
+            level={nodeProps.level - 1}
+          />
         ))}
       </div>
       <span className="h-6 w-px bg-[#b58b6a]" aria-hidden />
@@ -485,17 +453,34 @@ export function TreeNode({
     );
   };
 
+  const ancestorProps = {
+    onNodeClick,
+    onAddChild,
+    onAddSpouse,
+    onAddParent,
+    onSetRoot: effectiveSetRoot,
+    rootPersonId: effectiveRootPersonId,
+    onViewBirthFamily,
+    expandedNodes,
+    toggleExpanded,
+    level,
+    readOnly,
+    exportMode,
+    exportFields,
+    maxLevels,
+  };
+
   return (
     <div className="group/tree flex flex-col items-center">
-      <div className="flex items-center gap-3">
+      <div className="flex items-end gap-3">
         <div className="flex flex-col items-center">
-          <MissingAncestors person={visualAnchor} onNodeClick={onNodeClick} />
+          <MissingAncestors person={visualAnchor} {...ancestorProps} />
           <PersonCard person={visualAnchor} />
         </div>
 
         {visualPartners.map(({ person, spouseCard, marriageOrder }, index) => (
-          <div key={person.id} className="flex items-center">
-            <div className="flex items-center" aria-hidden>
+          <div key={person.id} className="flex items-end">
+            <div className="mb-[42px] flex items-center" aria-hidden>
               <span className="h-px w-8 bg-[#c8ae98]" />
               <span className="mx-1.5 grid h-7 w-7 place-items-center rounded-full bg-[#fffdf9] text-maroon-500 ring-1 ring-[#ddcfc4] shadow-[0_2px_8px_rgba(89,53,36,0.08)]">
                 <Heart className="h-3.5 w-3.5" fill="currentColor" />
@@ -504,12 +489,12 @@ export function TreeNode({
               <span className="h-px w-8 bg-[#c8ae98]" />
             </div>
             <div className="flex flex-col items-center">
-              <MissingAncestors person={person} onNodeClick={onNodeClick} />
+              <MissingAncestors person={person} {...ancestorProps} />
               <PersonCard
-              person={person}
-              spouse={spouseCard}
-              marriageOrder={marriageOrder}
-              totalSpouses={allSpouses.length}
+                person={person}
+                spouse={spouseCard}
+                marriageOrder={marriageOrder}
+                totalSpouses={allSpouses.length}
               />
             </div>
           </div>

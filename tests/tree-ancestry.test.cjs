@@ -120,3 +120,17 @@ test('signed-in additions publish directly without a pending verification queue'
   assert.match(edit,/user\.role === 'VIEWER'/);
   assert.doesNotMatch(edit,/Only the profile owner or a Family Admin can edit/);
 });
+
+test('missing ancestors are rendered as full interactive people, not bare label buttons', () => {
+  const source = fs.readFileSync('components/tree/TreeNode.tsx', 'utf8');
+  const ancestorSection = source.slice(
+    source.indexOf('function MissingAncestors('),
+    source.indexOf('export function TreeNode(')
+  );
+  assert.match(ancestorSection, /<TreeNode/);
+  assert.match(ancestorSection, /\.\.\.nodeProps/);
+  assert.doesNotMatch(ancestorSection, /<button/);
+  assert.match(source, /onSetRoot: effectiveSetRoot/);
+  assert.match(source, /<MissingAncestors person=\{visualAnchor\} \{\.\.\.ancestorProps\}/);
+  assert.match(source, /<MissingAncestors person=\{person\} \{\.\.\.ancestorProps\}/);
+});
