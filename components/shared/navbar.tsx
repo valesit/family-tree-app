@@ -59,6 +59,7 @@ export function Navbar() {
   const brandName = primaryFamily?.familyName || 'Family';
 
   const authNavItems = [
+    { href: '/', label: 'Home', icon: Home },
     { href: '/tree', label: 'Tree', icon: TreePine },
     { href: '/wiki', label: 'Stories', icon: BookOpen },
     { href: '/gallery', label: 'Gallery', icon: Images },
@@ -89,13 +90,13 @@ export function Navbar() {
               <span className="block truncate font-serif text-sm font-bold uppercase tracking-[0.16em] text-[#3a2722]">
                 {brandName}
               </span>
-              <span className="block text-[9px] uppercase tracking-[0.18em] text-[#9a897f]">
+              <span className="block text-[9px] uppercase tracking-[0.18em] text-[#66574f]">
                 Family Archive
               </span>
             </span>
           </Link>
 
-          <div className="hidden h-full items-stretch xl:flex">
+          <div className="hidden h-full items-stretch xl:flex" aria-label="Main navigation">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -103,15 +104,16 @@ export function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-label={item.label}
                   className={clsx(
-                    'relative flex h-full items-center gap-2 px-3 font-serif text-sm transition-colors',
+                    'relative flex h-full items-center gap-1.5 px-2.5 font-serif text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-maroon-500',
                     isActive
                       ? 'font-semibold text-maroon-700'
                       : 'text-[#6e6058] hover:text-[#332720]'
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span className="max-w-36 leading-tight">{item.label}</span>
+                  <span className="whitespace-nowrap leading-tight">{item.href === '/support' ? 'Family Support' : item.label}</span>
                   {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-maroon-500" />}
                 </Link>
               );
@@ -125,11 +127,11 @@ export function Navbar() {
               <>
                 <Link
                   href="/tree"
-                  aria-label="Search family tree"
+                  aria-label="Explore people in the family tree"
                   className="hidden h-9 items-center gap-2 rounded-lg border border-[#e5d9ce] bg-white px-3 text-xs text-[#7a6a61] shadow-sm transition hover:bg-[#fffaf6] 2xl:flex"
                 >
                   <Search className="h-4 w-4" />
-                  <span>Search people...</span>
+                  <span>Explore people</span>
                 </Link>
 
                 <Link
@@ -141,7 +143,7 @@ export function Navbar() {
                 </Link>
 
                 <button
-                  className="relative grid h-9 w-9 place-items-center rounded-lg text-[#76675f] transition hover:bg-[#f5efe9] hover:text-[#3e3029]"
+                  className="relative grid h-11 w-11 place-items-center rounded-lg text-[#65554d] transition hover:bg-[#f5efe9] hover:text-[#3e3029] focus-visible:outline focus-visible:outline-2 focus-visible:outline-maroon-500"
                   aria-label="Notifications"
                 >
                   <Bell className="h-5 w-5" />
@@ -151,7 +153,7 @@ export function Navbar() {
                 <div className="relative">
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="flex items-center rounded-lg p-1 transition hover:bg-[#f5efe9]"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-1 transition hover:bg-[#f5efe9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-maroon-500"
                     aria-label="Open profile menu"
                   >
                     <Avatar src={user?.image} name={user?.name || 'User'} size="sm" />
@@ -206,14 +208,14 @@ export function Navbar() {
               <>
                 <Link
                   href="/login"
-                  className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-[#66574f] transition hover:bg-[#f5efe9] hover:text-[#332720]"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-[#66574f] transition hover:bg-[#f5efe9] hover:text-[#332720] focus-visible:outline focus-visible:outline-2 focus-visible:outline-maroon-500"
                 >
                   <LogIn className="h-4 w-4" />
                   <span className="hidden sm:inline">Sign In</span>
                 </Link>
                 <Link
                   href="/register"
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-maroon-600"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-maroon-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-maroon-500"
                 >
                   <UserPlus className="h-4 w-4" />
                   <span className="hidden sm:inline">Join</span>
@@ -223,8 +225,10 @@ export function Navbar() {
 
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="grid h-9 w-9 place-items-center rounded-lg text-[#76675f] transition hover:bg-[#f5efe9] xl:hidden"
-              aria-label="Toggle navigation"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#65554d] transition hover:bg-[#f5efe9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-maroon-500 xl:hidden"
+              aria-label={isMobileMenuOpen ? 'Close navigation' : 'Open navigation'}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="family-mobile-nav"
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -233,8 +237,8 @@ export function Navbar() {
       </div>
 
       {isMobileMenuOpen && (
-        <div className="border-t border-[#e8dfd6] bg-[#fffdf9] px-4 py-3 xl:hidden">
-          <div className="space-y-1">
+        <div id="family-mobile-nav" className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-[#e8dfd6] bg-[#fffdf9] px-4 py-3 shadow-lg xl:hidden">
+          <div className="space-y-1" aria-label="Mobile navigation">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -244,7 +248,7 @@ export function Navbar() {
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={clsx(
-                    'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium',
+                    'flex min-h-11 items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-maroon-500',
                     isActive
                       ? 'bg-[#f5efe9] text-maroon-700'
                       : 'text-[#66574f] hover:bg-[#f7f1eb]'
