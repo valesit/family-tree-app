@@ -14,18 +14,15 @@ import {
   Contact,
   Heart,
   Images,
-  LayoutGrid,
   List as ListIcon,
   Loader2,
   MapPin,
   Maximize2,
   MoreHorizontal,
   Plus,
-  Search,
   Share2,
   TreePine,
   User,
-  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -34,6 +31,7 @@ import { FamilyTree } from '@/components/tree';
 import { CanonicalRootPrompt } from '@/components/tree/CanonicalRootPrompt';
 import { FamilyGallerySection } from '@/components/gallery';
 import { PageScrollNav } from '@/components/shared';
+import { Navbar } from '@/components/shared/navbar';
 import { PeopleDirectoryView, PeopleListView, type PersonExtras } from '@/components/people';
 import { flattenTree } from '@/lib/tree-utils';
 import type { PersonWithImage, PersonWithRelations, TreeNode } from '@/types';
@@ -242,52 +240,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#fbf9f5] text-[#2a211d]">
-      <nav className="fixed inset-x-0 top-0 z-50 border-b border-[#e8dfd6] bg-[#fffdf9]/95 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px_10px_14px_14px] bg-maroon-500 text-white shadow-sm">
-              <TreePine className="h-5 w-5" />
-            </span>
-            <span className="hidden truncate font-serif text-sm font-bold tracking-[0.16em] text-[#3a2722] sm:block">
-              {familyName.toUpperCase()}
-            </span>
-          </Link>
-
-          <div className="hidden h-full items-stretch md:flex">
-            <TopNavLink href="#family-tree" active icon={<TreePine className="h-4 w-4" />}>Tree</TopNavLink>
-            <TopNavLink href="/wiki" icon={<BookOpen className="h-4 w-4" />}>Stories</TopNavLink>
-            <TopNavLink href="/gallery" icon={<Images className="h-4 w-4" />}>Gallery</TopNavLink>
-            <TopNavLink href="/wiki" icon={<BookOpen className="h-4 w-4" />}>Family History</TopNavLink>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href={treeExploreHref}
-              className="hidden h-9 items-center gap-2 rounded-lg border border-[#e5d9ce] bg-white px-3 text-xs text-[#7a6a61] shadow-sm lg:flex"
-            >
-              <Search className="h-4 w-4" />
-              Search people...
-            </Link>
-            {isAuthenticated ? (
-              <Link
-                href="/add-person"
-                className="inline-flex h-9 items-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-maroon-600 sm:text-sm"
-              >
-                <Plus className="h-4 w-4" />
-                Add Person
-              </Link>
-            ) : (
-              <Link
-                href="/register"
-                className="inline-flex h-9 items-center gap-2 rounded-lg bg-maroon-500 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-maroon-600 sm:text-sm"
-              >
-                <UserPlus className="h-4 w-4" />
-                Join
-              </Link>
-            )}
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <main className="pt-16">
         <section className="relative overflow-hidden border-b border-[#eadfd6] bg-[#fbf8f3]">
@@ -320,8 +273,8 @@ export default function HomePage() {
                 <span className="h-px w-5 bg-[#9b5b4b]" />
                 Family Heritage
               </p>
-              <h1 className="font-serif text-3xl font-medium tracking-[-0.035em] text-[#2d231f] sm:text-4xl lg:text-5xl">
-                The <span className="font-semibold text-maroon-600">{familyName}</span> Family Tree
+              <h1 className="font-serif text-3xl font-medium tracking-[-0.025em] text-[#2d231f] sm:text-4xl lg:text-5xl">
+                The <span className="text-maroon-600">{familyName}</span> Family Tree
               </h1>
               <p className="mt-2 max-w-xl font-serif text-sm text-[#796c64] sm:text-base">
                 Preserving our family story across generations.
@@ -337,13 +290,25 @@ export default function HomePage() {
                   last
                 />
               </div>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link href="#family-tree" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-maroon-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-maroon-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+                  Explore Family Tree <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link href="/forum" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#d5c6ba] bg-[#fffdf9] px-4 py-2.5 text-sm font-semibold text-[#56352f] transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+                  <BookOpen className="h-4 w-4 text-[#63775f]" /> Share a Memory
+                </Link>
+                <Link href={isAuthenticated ? '/add-person' : '/register'} className="inline-flex min-h-11 items-center gap-2 px-2 py-2.5 text-sm font-medium text-maroon-700 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+                  <Plus className="h-4 w-4" /> {isAuthenticated ? 'Add a Relative' : 'Join to Add a Relative'}
+                </Link>
+              </div>
             </div>
 
             <div className="relative z-10 mt-6 flex flex-wrap items-center gap-2 lg:absolute lg:bottom-8 lg:right-8 lg:mt-0">
               <button
                 type="button"
                 onClick={handleShare}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm backdrop-blur-sm transition hover:bg-white"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm backdrop-blur-sm transition hover:bg-white"
               >
                 <Share2 className="h-4 w-4" />
                 {shareComplete ? 'Link copied' : 'Share Tree'}
@@ -351,7 +316,7 @@ export default function HomePage() {
               <Link
                 href={treeExploreHref}
                 aria-label="Open full family tree"
-                className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 text-[#6f5d54] shadow-sm backdrop-blur-sm transition hover:bg-white"
+                className="grid h-11 w-11 place-items-center rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 text-[#6f5d54] shadow-sm backdrop-blur-sm transition hover:bg-white"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Link>
@@ -363,7 +328,7 @@ export default function HomePage() {
           <CanonicalRootPrompt />
         </div>
 
-        <section id="family-tree" className="mx-auto max-w-[1600px] px-3 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <section id="family-tree" className="scroll-mt-20 mx-auto max-w-[1600px] px-3 py-5 sm:px-6 lg:px-8 lg:py-7">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-full border border-[#e8ded4] bg-[#f3eee8] p-1 shadow-sm">
               <ViewTab active={activeView === 'tree'} onClick={() => setActiveView('tree')} icon={<TreePine className="h-3.5 w-3.5" />} label="Tree" />
@@ -426,6 +391,35 @@ export default function HomePage() {
           <FamilyGallerySection rootPersonId={primaryId ?? null} compact />
         </section>
 
+        <section className="border-t border-[#e6dcd3] bg-[#fffdf9] px-4 py-10 sm:py-14">
+          <div className="mx-auto grid max-w-6xl gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] lg:gap-12">
+            <div>
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-[#332720] sm:text-3xl">More than a family tree</h2>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-[#66574f]">Our family history grows through the moments we share today. Join the conversation and help keep our memories connected.</p>
+              <Link href="/forum" className="group mt-6 flex items-start gap-4 rounded-2xl bg-[#f1f4ef] p-5 transition hover:bg-[#e9efe7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#63775f] sm:p-6">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#63775f] text-white"><Users className="h-5 w-5" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-serif text-xl font-medium text-[#314231]">Family conversations</span>
+                  <span className="mt-1 block text-sm leading-6 text-[#465c45]">Share an update, a photograph, or a memory. Everyone can participate, even without an account.</span>
+                  <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#314231]">Visit the forum <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+                </span>
+              </Link>
+            </div>
+            <div className="flex flex-col justify-end divide-y divide-[#e6dcd3]">
+              <Link href="/wiki" className="group flex items-start gap-4 py-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+                <BookOpen className="mt-1 h-6 w-6 shrink-0 text-[#986b4e]" />
+                <span className="flex-1"><span className="block font-serif text-lg font-medium text-[#332720]">Stories that stay with us</span><span className="mt-1 block text-sm leading-6 text-[#66574f]">Read and preserve the stories behind the names.</span></span>
+                <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-maroon-600 transition-transform group-hover:translate-x-1" />
+              </Link>
+              <Link href="/support" className="group flex items-start gap-4 py-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+                <Heart className="mt-1 h-6 w-6 shrink-0 text-[#986b4e]" />
+                <span className="flex-1"><span className="block font-serif text-lg font-medium text-[#332720]">Support our family</span><span className="mt-1 block text-sm leading-6 text-[#66574f]">Discover family-run businesses and causes worth supporting.</span></span>
+                <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-maroon-600 transition-transform group-hover:translate-x-1" />
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {!isAuthenticated && !hasNoData && (
           <section className="border-t border-[#ebe2da] bg-[#f7f2ed] px-4 py-12">
             <div className="mx-auto max-w-3xl text-center">
@@ -477,29 +471,13 @@ export default function HomePage() {
   );
 }
 
-function TopNavLink({ href, active, icon, children }: { href: string; active?: boolean; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={clsx(
-        'relative flex h-full items-center gap-2 px-4 font-serif text-sm transition',
-        active ? 'font-semibold text-maroon-700' : 'text-[#6e6058] hover:text-[#332720]'
-      )}
-    >
-      {icon}
-      {children}
-      {active && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-maroon-500" />}
-    </Link>
-  );
-}
-
 function HeroStat({ icon, value, label, last }: { icon: React.ReactNode; value: string; label: string; last?: boolean }) {
   return (
     <div className={clsx('flex min-w-[145px] items-center gap-3 pr-7', !last && 'mr-7 border-r border-[#e4d9cf]')}>
       <span className="text-[#985a47]">{icon}</span>
       <span>
         <strong className="block font-serif text-base font-semibold text-[#3b2b24]">{value}</strong>
-        <span className="mt-0.5 block text-[10px] text-[#8e8178]">{label}</span>
+        <span className="mt-0.5 block text-xs text-[#67574e]">{label}</span>
       </span>
     </div>
   );
