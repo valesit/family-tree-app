@@ -100,15 +100,15 @@ function RegisterForm() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-4">
-        <Card className="w-full max-w-md text-center">
+      <div className="heritage-auth-shell flex items-center justify-center px-4 py-10">
+        <Card className="w-full max-w-md border border-[#e6dcd3] text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">
+          <h2 className="font-serif text-3xl font-medium tracking-tight text-[#332720] mb-2">
             {claimPersonId ? 'Welcome to the Family!' : 'Account Created!'}
           </h2>
-          <p className="text-slate-500">
+          <p className="text-[#66574f]">
             {claimPersonId 
               ? `Your account has been created and linked to ${claimPersonName || 'your profile'}. Redirecting...`
               : 'Your account has been created successfully. Redirecting you to login...'
@@ -120,18 +120,18 @@ function RegisterForm() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      <Card className="w-full max-w-md relative z-10 shadow-xl border border-slate-100">
+    <div className="heritage-auth-shell flex items-center justify-center px-4 py-10">
+      <Card className="w-full max-w-md relative z-10 border border-[#e6dcd3] bg-[#fffdf9] shadow-[0_20px_60px_-34px_rgba(74,46,32,0.3)]">
         {/* Claiming profile banner */}
         {claimPersonId && (
-          <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-xl">
+          <div className="mb-6 p-4 bg-[#f5ece7] border border-[#e3ccc6] rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                <LinkIcon className="w-5 h-5 text-purple-600" />
+              <div className="w-10 h-10 bg-[#ead9ce] rounded-full flex items-center justify-center">
+                <LinkIcon className="w-5 h-5 text-maroon-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-purple-900">Claiming Profile</p>
-                <p className="text-xs text-purple-600">
+                <p className="text-sm font-medium text-maroon-700">Claiming Profile</p>
+                <p className="text-xs text-maroon-600">
                   Creating account for <strong>{claimPersonName || 'family member'}</strong>
                 </p>
               </div>
@@ -144,10 +144,10 @@ function RegisterForm() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-maroon-500 rounded-xl mb-4 shadow-sm">
             <TreePine className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="font-serif text-3xl font-medium tracking-tight text-[#332720]">
             {claimPersonId ? 'Create Your Account' : 'Join Your Family Tree'}
           </h1>
-          <p className="text-slate-500 mt-1">
+          <p className="text-[#66574f] mt-1">
             {claimPersonId 
               ? 'Sign up to connect with your family'
               : 'Create an account to get started'
@@ -156,14 +156,14 @@ function RegisterForm() {
         </div>
 
         {/* Register method toggle */}
-        <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
+        <div className="flex bg-[#f5efe9] rounded-xl p-1 mb-6">
           <button
             type="button"
             onClick={() => setRegisterMethod('email')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+            className={`flex-1 min-h-11 py-2 px-4 rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500 ${
               registerMethod === 'email'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-[#332720] shadow-sm'
+                : 'text-[#66574f] hover:text-[#4b3d36]'
             }`}
           >
             <Mail className="w-4 h-4 inline-block mr-2" />
@@ -172,10 +172,10 @@ function RegisterForm() {
           <button
             type="button"
             onClick={() => setRegisterMethod('phone')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+            className={`flex-1 min-h-11 py-2 px-4 rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500 ${
               registerMethod === 'phone'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-[#332720] shadow-sm'
+                : 'text-[#66574f] hover:text-[#4b3d36]'
             }`}
           >
             <Phone className="w-4 h-4 inline-block mr-2" />
@@ -184,7 +184,7 @@ function RegisterForm() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-[#fbf7f2] border border-[#e5d9ce] rounded-xl text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -241,10 +241,10 @@ function RegisterForm() {
           <div className="flex items-start">
             <input
               type="checkbox"
-              className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500 mt-0.5"
+              className="w-4 h-4 rounded border-[#d8c8bc] text-maroon-600 focus:ring-maroon-500 mt-0.5"
               required
             />
-            <span className="ml-2 text-sm text-slate-600">
+            <span className="ml-2 text-sm text-[#66574f]">
               I agree to the{' '}
               <Link href="/terms" className="text-maroon-600 hover:text-maroon-700">
                 Terms of Service
@@ -261,7 +261,7 @@ function RegisterForm() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-6 text-center text-sm text-[#66574f]">
           Already have an account?{' '}
           <Link 
             href={claimPersonId ? `/login?callbackUrl=/person/${claimPersonId}` : '/login'} 
@@ -278,7 +278,7 @@ function RegisterForm() {
 export default function RegisterPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+      <div className="heritage-auth-shell flex items-center justify-center px-4 py-10">
         <Card className="w-full max-w-md text-center">
           <div className="animate-pulse">Loading...</div>
         </Card>
