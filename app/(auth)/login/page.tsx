@@ -57,25 +57,25 @@ function LoginForm() {
   };
 
   return (
-    <Card className="w-full max-w-md relative z-10 shadow-xl border border-slate-100">
+    <Card className="w-full max-w-md relative z-10 border border-[#e6dcd3] bg-[#fffdf9] shadow-[0_20px_60px_-34px_rgba(74,46,32,0.3)]">
       {/* Logo */}
-      <div className="text-center mb-8">
+      <div className="mb-8 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-maroon-500 rounded-xl mb-4 shadow-sm">
           <TreePine className="w-8 h-8 text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
-        <p className="text-slate-500 mt-1">Sign in to your family tree</p>
+        <h1 className="font-serif text-3xl font-medium tracking-tight text-[#332720]">Welcome Back</h1>
+        <p className="text-[#66574f] mt-1">Sign in to your family tree</p>
       </div>
 
       {/* Login method toggle */}
-      <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
+      <div className="flex bg-[#f5efe9] rounded-xl p-1 mb-6">
         <button
           type="button"
           onClick={() => setLoginMethod('email')}
-          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+          className={`flex-1 min-h-11 py-2 px-4 rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500 ${
             loginMethod === 'email'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-[#332720] shadow-sm'
+              : 'text-[#66574f] hover:text-[#4b3d36]'
           }`}
         >
           <Mail className="w-4 h-4 inline-block mr-2" />
@@ -84,10 +84,10 @@ function LoginForm() {
         <button
           type="button"
           onClick={() => setLoginMethod('phone')}
-          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+          className={`flex-1 min-h-11 py-2 px-4 rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500 ${
             loginMethod === 'phone'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-[#332720] shadow-sm'
+              : 'text-[#66574f] hover:text-[#4b3d36]'
           }`}
         >
           <Phone className="w-4 h-4 inline-block mr-2" />
@@ -96,7 +96,7 @@ function LoginForm() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-[#fbf7f2] border border-[#e5d9ce] rounded-xl text-red-700 text-sm">
           {error}
         </div>
       )}
@@ -135,9 +135,9 @@ function LoginForm() {
           <label className="flex items-center">
             <input
               type="checkbox"
-              className="w-4 h-4 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
+              className="w-4 h-4 rounded border-[#d8c8bc] text-maroon-600 focus:ring-maroon-500"
             />
-            <span className="ml-2 text-slate-600">Remember me</span>
+            <span className="ml-2 text-[#66574f]">Remember me</span>
           </label>
           <Link href="/forgot-password" className="text-maroon-600 hover:text-maroon-700 font-medium">
             Forgot password?
@@ -149,7 +149,7 @@ function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-[#66574f]">
         Don&apos;t have an account?{' '}
         <Link href="/register" className="text-maroon-600 hover:text-maroon-700 font-medium">
           Create one
@@ -161,7 +161,7 @@ function LoginForm() {
 
 function LoginFallback() {
   return (
-    <Card className="w-full max-w-md flex items-center justify-center py-20 border border-slate-100 shadow-xl">
+    <Card className="w-full max-w-md flex items-center justify-center border border-[#e6dcd3] py-20">
       <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
     </Card>
   );
@@ -169,7 +169,7 @@ function LoginFallback() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
+    <div className="heritage-auth-shell flex items-center justify-center px-4 py-10">
       <Suspense fallback={<LoginFallback />}>
         <LoginForm />
       </Suspense>
