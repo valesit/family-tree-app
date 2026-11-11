@@ -70,6 +70,7 @@ export function Navbar() {
 
   const guestNavItems = [
     { href: '/', label: 'Home', icon: Home },
+    { href: '/tree', label: 'Tree', icon: TreePine },
     { href: '/wiki', label: 'Stories', icon: BookOpen },
     { href: '/gallery', label: 'Gallery', icon: Images },
     { href: '/forum', label: 'Forum', icon: MessagesSquare },
@@ -90,7 +91,7 @@ export function Navbar() {
               <span className="block truncate font-serif text-sm font-bold uppercase tracking-[0.16em] text-[#3a2722]">
                 {brandName}
               </span>
-              <span className="block text-[9px] uppercase tracking-[0.18em] text-[#66574f]">
+              <span className="block text-[11px] uppercase tracking-[0.12em] text-[#66574f]">
                 Family Archive
               </span>
             </span>
