@@ -308,7 +308,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={handleShare}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm backdrop-blur-sm transition hover:bg-white"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm backdrop-blur-sm transition hover:bg-white"
               >
                 <Share2 className="h-4 w-4" />
                 {shareComplete ? 'Link copied' : 'Share Tree'}
@@ -316,7 +316,7 @@ export default function HomePage() {
               <Link
                 href={treeExploreHref}
                 aria-label="Open full family tree"
-                className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 text-[#6f5d54] shadow-sm backdrop-blur-sm transition hover:bg-white"
+                className="grid h-11 w-11 place-items-center rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 text-[#6f5d54] shadow-sm backdrop-blur-sm transition hover:bg-white"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Link>
@@ -328,7 +328,7 @@ export default function HomePage() {
           <CanonicalRootPrompt />
         </div>
 
-        <section id="family-tree" className="mx-auto max-w-[1600px] px-3 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <section id="family-tree" className="scroll-mt-20 mx-auto max-w-[1600px] px-3 py-5 sm:px-6 lg:px-8 lg:py-7">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-full border border-[#e8ded4] bg-[#f3eee8] p-1 shadow-sm">
               <ViewTab active={activeView === 'tree'} onClick={() => setActiveView('tree')} icon={<TreePine className="h-3.5 w-3.5" />} label="Tree" />
