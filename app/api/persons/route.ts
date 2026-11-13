@@ -7,6 +7,7 @@ import { SessionUser } from '@/types';
 import {
   findPersonFamilyRoot,
   addUserToFamily,
+  getConnectedPersonIds,
 } from '@/lib/family-membership';
 import {
   ensureFamilyPersonAssociation,
@@ -20,16 +21,26 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('query');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
+    const showRecent = searchParams.get('sort') === 'recent';
+    const rootId = searchParams.get('rootId');
 
-    const where = query
-      ? {
-          OR: [
-            { firstName: { contains: query, mode: 'insensitive' as const } },
-            { lastName: { contains: query, mode: 'insensitive' as const } },
-            { nickname: { contains: query, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
+    // Optional homepage-only scope: recent additions must belong to the
+    // family being viewed, never a different connected family branch.
+    const familyPersonIds = rootId
+      ? Array.from(await getConnectedPersonIds(rootId))
+      : null;
+    const where = {
+      ...(familyPersonIds ? { id: { in: familyPersonIds } } : {}),
+      ...(query
+        ? {
+            OR: [
+              { firstName: { contains: query, mode: 'insensitive' as const } },
+              { lastName: { contains: query, mode: 'insensitive' as const } },
+              { nickname: { contains: query, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
 
     const [persons, total] = await Promise.all([
       prisma.person.findMany({
@@ -67,7 +78,7 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        orderBy: { firstName: 'asc' },
+        orderBy: showRecent ? { createdAt: 'desc' } : { firstName: 'asc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
