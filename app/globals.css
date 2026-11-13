@@ -6,27 +6,27 @@
   --font-playfair: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
   /* Shared heritage design tokens */
-  --heritage-bg: #fbf9f5;
-  --heritage-surface: #fffdf9;
+  --heritage-bg: #ffffff;
+  --heritage-surface: #ffffff;
   --heritage-surface-strong: #ffffff;
-  --heritage-soft: #f5efe9;
+  --heritage-soft: #f1f7f4;
   --heritage-text: #2f2521;
-  --heritage-muted: #66574f;
-  --heritage-border: #e6dcd3;
-  --heritage-border-strong: #d8c8bc;
+  --heritage-muted: #52615c;
+  --heritage-border: #e2e9e5;
+  --heritage-border-strong: #cad9d2;
   --heritage-brand: #651a1a;
   --heritage-brand-dark: #4a1313;
-  --heritage-brand-soft: #f4ece7;
-  --heritage-accent: #9a6b56;
-  --heritage-leaf: #63775f;
-  --heritage-leaf-soft: #f1f4ef;
-  --heritage-gold: #c48f4a;
+  --heritage-brand-soft: #f8edf0;
+  --heritage-accent: #14635b;
+  --heritage-leaf: #14635b;
+  --heritage-leaf-soft: #e7f3ef;
+  --heritage-gold: #c99b43;
   --heritage-shadow: 0 18px 45px -28px rgba(74, 46, 32, 0.24);
   --heritage-shadow-soft: 0 8px 24px rgba(74, 46, 32, 0.08);
 }
 
 @theme inline {
-  --color-background: #fbf9f5;
+  --color-background: #ffffff;
   --color-foreground: #2f2521;
   --font-sans: var(--font-inter);
   --font-serif: var(--font-playfair);
@@ -51,8 +51,8 @@ body {
 }
 
 ::selection {
-  background: #e9d7cb;
-  color: #3a2722;
+  background: #d5ebe2;
+  color: #194b43;
 }
 
 /* Shared visual surface for the existing login and registration flows. */
@@ -86,15 +86,15 @@ body {
 }
 
 .heritage-app .bg-slate-200 {
-  background-color: #ebe3dc !important;
+  background-color: #e8efeb !important;
 }
 
 .heritage-app .bg-slate-700 {
-  background-color: #4b3d36 !important;
+  background-color: #1e5b53 !important;
 }
 
 .heritage-app .bg-slate-800 {
-  background-color: #3b302b !important;
+  background-color: #164941 !important;
 }
 
 .heritage-app .border-slate-100,
@@ -110,7 +110,7 @@ body {
 
 .heritage-app .text-slate-700,
 .heritage-app .text-slate-600 {
-  color: #66574f !important;
+  color: #425850 !important;
 }
 
 .heritage-app .text-slate-500,
