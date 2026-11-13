@@ -26,6 +26,7 @@ import {
   Share2,
   TreePine,
   User,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -42,7 +43,7 @@ import type { PersonWithImage, PersonWithRelations, TreeNode } from '@/types';
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // Free Unsplash photograph by Luis Martinez. Kept as a CSS background so the
-// hero can fade it smoothly into the archival cream surface without requiring
+// hero can blend into the white Modern Heritage surface without requiring
 // Next/Image remote-domain configuration.
 const HERITAGE_ACACIA_IMAGE =
   'https://images.unsplash.com/photo-1759767119537-3ea0e5ff75de?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=82&w=2200';
