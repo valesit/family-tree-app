@@ -8,6 +8,7 @@ import useSWR from 'swr';
 import { clsx } from 'clsx';
 import {
   TreePine,
+  TreeDeciduous,
   MessageSquare,
   Bell,
   Settings,
@@ -80,19 +81,19 @@ export function Navbar() {
   const navItems = isAuthenticated ? authNavItems : guestNavItems;
 
   return (
-    <nav className="fixed inset-x-0 top-0 z-50 border-b border-[#e8dfd6] bg-[#fffdf9]/95 shadow-[0_1px_0_rgba(84,57,43,0.03)] backdrop-blur-xl">
+    <nav className="fixed inset-x-0 top-0 z-50 border-b border-[#e2e9e5] bg-white/95 shadow-[0_2px_16px_-13px_rgba(23,73,65,0.22)] backdrop-blur-xl">
       <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between gap-4">
           <Link href="/" className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px_10px_14px_14px] bg-maroon-500 text-white shadow-sm">
-              <TreePine className="h-5 w-5" />
+            <span className="grid h-10 w-10 shrink-0 place-items-center text-[#651a1a]">
+              <TreeDeciduous className="h-9 w-9" strokeWidth={1.8} aria-hidden="true" />
             </span>
             <span className="hidden min-w-0 sm:block">
-              <span className="block truncate font-serif text-sm font-bold uppercase tracking-[0.16em] text-[#3a2722]">
+              <span className="block truncate font-serif text-base font-semibold tracking-[-0.01em] text-[#651a1a]">
                 {brandName}
               </span>
-              <span className="block text-[11px] uppercase tracking-[0.12em] text-[#66574f]">
-                Family Archive
+              <span className="block text-[11px] tracking-[0.06em] text-[#425850]">
+                Family Tree
               </span>
             </span>
           </Link>

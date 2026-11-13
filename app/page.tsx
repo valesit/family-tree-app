@@ -19,10 +19,14 @@ import {
   MapPin,
   Maximize2,
   MoreHorizontal,
+  Network,
+  MessageCircle,
+  TreeDeciduous,
   Plus,
   Share2,
   TreePine,
   User,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -39,7 +43,7 @@ import type { PersonWithImage, PersonWithRelations, TreeNode } from '@/types';
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // Free Unsplash photograph by Luis Martinez. Kept as a CSS background so the
-// hero can fade it smoothly into the archival cream surface without requiring
+// hero can blend into the white Modern Heritage surface without requiring
 // Next/Image remote-domain configuration.
 const HERITAGE_ACACIA_IMAGE =
   'https://images.unsplash.com/photo-1759767119537-3ea0e5ff75de?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=82&w=2200';
@@ -170,6 +174,18 @@ export default function HomePage() {
     data: { items: PersonWithImage[] };
   }>(shouldLoadExtras ? '/api/persons?limit=500' : null, fetcher, { revalidateOnFocus: false });
 
+  // The four latest contributors' additions are drawn from this family only.
+  // This is read-only presentation data and does not change the tree model.
+  const { data: recentPeopleData } = useSWR<{
+    success: boolean;
+    data: { items: PersonWithImage[] };
+  }>(
+    primaryId ? '/api/persons?sort=recent&limit=4&rootId=' + encodeURIComponent(primaryId) : null,
+    fetcher,
+    { revalidateOnFocus: true }
+  );
+  const recentPeople = recentPeopleData?.data?.items ?? [];
+
   const flatPeople = useMemo(() => flattenTree(tree), [tree]);
   const extrasMap = useMemo(() => {
     const map = new Map<string, PersonExtras>();
@@ -239,88 +255,121 @@ export default function HomePage() {
   const relationships = selectedPerson ? relationshipsFor(selectedPerson) : [];
 
   return (
-    <div className="min-h-screen bg-[#fbf9f5] text-[#2a211d]">
+    <div className="heritage-home min-h-screen bg-white text-[#2f2521]">
       <Navbar />
 
       <main className="pt-16">
-        <section className="relative overflow-hidden border-b border-[#eadfd6] bg-[#fbf8f3]">
-          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[60%] overflow-hidden lg:block" aria-hidden>
+        {/* Living heritage: natural acacia photography, generous white space and
+            burgundy actions. The existing family data and navigation are preserved. */}
+        <section className="relative isolate overflow-hidden bg-white">
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
             <div
-              className="absolute inset-0 bg-cover bg-center opacity-[0.48] mix-blend-multiply"
+              className="absolute inset-0 bg-cover bg-center"
               style={{
-                backgroundImage: `url('${HERITAGE_ACACIA_IMAGE}')`,
-                filter: 'sepia(0.34) saturate(0.62) contrast(0.9) brightness(1.04)',
-                WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,.28) 20%, black 48%, black 100%)',
-                maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,.28) 20%, black 48%, black 100%)',
+                backgroundImage: 'url("' + HERITAGE_ACACIA_IMAGE + '")',
+                filter: 'saturate(1.18) contrast(1.04)',
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#fbf8f3] via-[#fbf8f3]/55 to-[#e9d7c8]/10" />
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#fbf8f3]/95 to-transparent" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.96)_31%,rgba(255,255,255,0.68)_47%,rgba(255,255,255,0.03)_75%)]" />
+            <div className="absolute inset-0 bg-white/55 md:hidden" />
           </div>
-          <div
-            className="pointer-events-none absolute inset-y-0 right-[2%] hidden w-[50%] opacity-[0.055] lg:block"
-            aria-hidden
-            style={{
-              backgroundImage:
-                'repeating-linear-gradient(-8deg, transparent 0 18px, rgba(101,26,26,.28) 18px 19px, transparent 19px 35px)',
-              WebkitMaskImage: 'linear-gradient(to right, transparent, black 35%, black)',
-              maskImage: 'linear-gradient(to right, transparent, black 35%, black)',
-            }}
-          />
-          <div className="mx-auto min-h-[252px] max-w-[1600px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-11">
-            <div className="relative z-10 max-w-4xl">
-              <p className="mb-2 flex items-center gap-2 font-serif text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8b4b3e] sm:text-xs">
-                <span className="h-px w-5 bg-[#9b5b4b]" />
-                Family Heritage
-              </p>
-              <h1 className="font-serif text-3xl font-medium tracking-[-0.025em] text-[#2d231f] sm:text-4xl lg:text-5xl">
-                The <span className="text-maroon-600">{familyName}</span> Family Tree
+
+          <div className="relative z-10 mx-auto flex min-h-[410px] max-w-[1600px] items-center px-5 pb-16 pt-11 sm:px-8 md:min-h-[440px] lg:px-12">
+            <div className="max-w-[640px]">
+              <h1 className="font-serif text-[clamp(2.8rem,5vw,5.2rem)] font-medium leading-[1.06] tracking-[-0.035em] text-[#651a1a]">
+                Our Family,<span className="block">Our Heritage</span>
               </h1>
-              <p className="mt-2 max-w-xl font-serif text-sm text-[#796c64] sm:text-base">
-                Preserving our family story across generations.
+              <span className="mt-5 block h-[2px] w-20 bg-[#b88631]" aria-hidden="true" />
+              <p className="mt-4 max-w-[530px] text-base leading-7 text-[#37433d] sm:text-lg">
+                Explore our family tree, share stories, and help preserve the {familyName} legacy for future generations.
               </p>
-
-              <div className="mt-6 flex flex-wrap items-center gap-y-4">
-                <HeroStat icon={<Users className="h-5 w-5" />} value={String(primaryFamily?.memberCount ?? stats?.totalMembers ?? 0)} label="Family Members" />
-                <HeroStat icon={<TreePine className="h-5 w-5" />} value={String(primaryFamily?.generationCount ?? 0)} label="Generations" />
-                <HeroStat
-                  icon={<Heart className="h-5 w-5" />}
-                  value={ancestor?.birthYear ? `Est. ${ancestor.birthYear}` : 'Family record'}
-                  label="Earliest Record"
-                  last
-                />
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                <Link href="#family-tree" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-maroon-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_-12px_rgba(101,26,26,0.65)] transition hover:bg-maroon-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500 sm:text-base">
+                  <Network className="h-5 w-5" aria-hidden="true" /> Explore Family Tree
+                </Link>
+                <Link href={isAuthenticated ? '/add-person' : '/register'} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border-2 border-[#14635b] bg-white/95 px-5 py-3 text-sm font-semibold text-[#14564f] transition hover:bg-[#edf7f3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b] sm:text-base">
+                  <Users className="h-5 w-5" aria-hidden="true" />
+                  {isAuthenticated ? 'Add a Family Member' : 'Join the Family'}
+                </Link>
               </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link href="#family-tree" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-maroon-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-maroon-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
-                  Explore Family Tree <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link href="/forum" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#d5c6ba] bg-[#fffdf9] px-4 py-2.5 text-sm font-semibold text-[#56352f] transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
-                  <BookOpen className="h-4 w-4 text-[#63775f]" /> Share a Memory
-                </Link>
-                <Link href={isAuthenticated ? '/add-person' : '/register'} className="inline-flex min-h-11 items-center gap-2 px-2 py-2.5 text-sm font-medium text-maroon-700 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
-                  <Plus className="h-4 w-4" /> {isAuthenticated ? 'Add a Relative' : 'Join to Add a Relative'}
+              <div className="mt-5 flex flex-wrap items-center gap-4 text-sm">
+                <button type="button" onClick={handleShare} className="inline-flex min-h-10 items-center gap-2 text-[#651a1a] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+                  <Share2 className="h-4 w-4" aria-hidden="true" /> {shareComplete ? 'Link copied' : 'Share tree'}
+                </button>
+                <Link href="/forum" className="inline-flex min-h-10 items-center gap-2 text-[#14564f] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b]">
+                  <BookOpen className="h-4 w-4" aria-hidden="true" /> Share a memory
                 </Link>
               </div>
             </div>
+          </div>
 
-            <div className="relative z-10 mt-6 flex flex-wrap items-center gap-2 lg:absolute lg:bottom-8 lg:right-8 lg:mt-0">
-              <button
-                type="button"
-                onClick={handleShare}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 px-3.5 font-serif text-xs font-medium text-[#55372e] shadow-sm backdrop-blur-sm transition hover:bg-white"
-              >
-                <Share2 className="h-4 w-4" />
-                {shareComplete ? 'Link copied' : 'Share Tree'}
-              </button>
-              <Link
-                href={treeExploreHref}
-                aria-label="Open full family tree"
-                className="grid h-11 w-11 place-items-center rounded-lg border border-[#dfd1c5] bg-[#fffdf9]/92 text-[#6f5d54] shadow-sm backdrop-blur-sm transition hover:bg-white"
-              >
-                <MoreHorizontal className="h-4 w-4" />
+          <svg viewBox="0 0 1440 48" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-[-1px] z-20 h-9 w-full sm:h-12" aria-hidden="true">
+            <path d="M0 30C220-17 425 64 686 31C968-2 1145 72 1440 18V48H0Z" fill="white" stroke="#cfad6c" strokeWidth="1.5" />
+          </svg>
+        </section>
+
+        <section aria-label="Explore family spaces" className="mx-auto max-w-[1600px] px-4 pb-4 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+            <Link href="#family-tree" className="group flex min-h-[130px] items-center gap-4 rounded-2xl border border-[#e9e4dd] bg-white px-5 py-5 shadow-[0_9px_24px_-18px_rgba(42,39,35,0.45)] transition hover:-translate-y-0.5 hover:border-[#d7b7b4] hover:shadow-[0_14px_30px_-20px_rgba(42,39,35,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-[#f9e9eb] text-[#651a1a]"><Network className="h-8 w-8" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1"><strong className="block font-serif text-xl font-medium text-[#651a1a]">Family Tree</strong><span className="mt-1 block text-sm leading-5 text-[#52615c]">Explore our family connections</span></span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-[#a87627] transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
+            <Link href="/gallery" className="group flex min-h-[130px] items-center gap-4 rounded-2xl border border-[#e2e9e5] bg-white px-5 py-5 shadow-[0_9px_24px_-18px_rgba(42,39,35,0.45)] transition hover:-translate-y-0.5 hover:border-[#a4ccc1] hover:shadow-[0_14px_30px_-20px_rgba(42,39,35,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b]">
+              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-[#e7f3ef] text-[#14635b]"><Images className="h-8 w-8" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1"><strong className="block font-serif text-xl font-medium text-[#14564f]">Gallery</strong><span className="mt-1 block text-sm leading-5 text-[#52615c]">Photos, memories and milestones</span></span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-[#a87627] transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
+            <Link href="/wiki" className="group flex min-h-[130px] items-center gap-4 rounded-2xl border border-[#e9e4dd] bg-white px-5 py-5 shadow-[0_9px_24px_-18px_rgba(42,39,35,0.45)] transition hover:-translate-y-0.5 hover:border-[#dbc18c] hover:shadow-[0_14px_30px_-20px_rgba(42,39,35,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#a87627]">
+              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-[#fff5e1] text-[#96641b]"><BookOpen className="h-8 w-8" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1"><strong className="block font-serif text-xl font-medium text-[#651a1a]">Stories</strong><span className="mt-1 block text-sm leading-5 text-[#52615c]">Share and discover family stories</span></span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-[#a87627] transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
+            <Link href="/forum" className="group flex min-h-[130px] items-center gap-4 rounded-2xl border border-[#e2e9e5] bg-white px-5 py-5 shadow-[0_9px_24px_-18px_rgba(42,39,35,0.45)] transition hover:-translate-y-0.5 hover:border-[#a4ccc1] hover:shadow-[0_14px_30px_-20px_rgba(42,39,35,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#14635b]">
+              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-[#e7f3ef] text-[#14635b]"><MessageCircle className="h-8 w-8" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1"><strong className="block font-serif text-xl font-medium text-[#14564f]">Forum</strong><span className="mt-1 block text-sm leading-5 text-[#52615c]">Connect, discuss and stay in touch</span></span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-[#a87627] transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
+          </div>
+        </section>
+
+        {recentPeople.length > 0 && (
+          <section className="mx-auto max-w-[1600px] px-4 pb-4 pt-6 sm:px-6 lg:px-8">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-[#651a1a] sm:text-3xl">Recent Additions</h2>
+              <Link href={treeExploreHref} className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-[#651a1a] underline-offset-4 hover:underline">
+                View all <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+              {recentPeople.map((person) => (
+                <Link key={person.id} href={'/person/' + person.id} className="group flex min-h-[106px] items-center gap-3 rounded-2xl border border-[#e6e9e6] bg-white px-4 py-4 transition hover:border-[#b6d4ca] hover:shadow-[0_12px_26px_-20px_rgba(21,73,66,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b]">
+                  {person.profileImage?.url ? (
+                    <img src={person.profileImage.url} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-[#edf2ee]" />
+                  ) : (
+                    <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[#e7f3ef] font-serif text-xl text-[#14564f]" aria-hidden="true">{person.firstName[0]}{person.lastName[0]}</span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate font-serif text-base font-medium text-[#312c29] group-hover:text-[#651a1a]">{person.firstName} {person.lastName}</strong>
+                    <span className="mt-1 block text-xs text-[#52615c]">Added {new Date(person.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8">
+          <div className="relative flex flex-col gap-5 overflow-hidden rounded-[22px] border border-[#f0e6d7] bg-[linear-gradient(100deg,#fff8ef_0%,#ffffff_47%,#eff7f3_100%)] px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-9">
+            <TreeDeciduous className="pointer-events-none absolute -bottom-8 left-3 h-40 w-40 text-[#c99b43]/15" strokeWidth={1} aria-hidden="true" />
+            <div className="relative z-10 sm:pl-24">
+              <h2 className="font-serif text-2xl font-medium text-[#651a1a] sm:text-[28px]">Help Grow Our Family Story</h2>
+              <p className="mt-1.5 max-w-xl text-sm leading-6 text-[#475b53]">Add relatives, photographs and stories to keep our history alive.</p>
+            </div>
+            <Link href={isAuthenticated ? '/add-person' : '/register'} className="relative z-10 inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-maroon-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-maroon-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500">
+              <UserPlus className="h-5 w-5" aria-hidden="true" />
+              {isAuthenticated ? 'Add a Family Member' : 'Join the Family'}
+            </Link>
           </div>
         </section>
 
@@ -329,6 +378,16 @@ export default function HomePage() {
         </div>
 
         <section id="family-tree" className="scroll-mt-20 mx-auto max-w-[1600px] px-3 py-5 sm:px-6 lg:px-8 lg:py-7">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="font-serif text-2xl font-medium text-[#651a1a] sm:text-3xl">Explore the Family Tree</h2>
+              <p className="mt-1.5 text-sm text-[#52615c]">Discover the connections between generations.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <HeroStat icon={<Users className="h-5 w-5" />} value={String(primaryFamily?.memberCount ?? stats?.totalMembers ?? 0)} label="Family Members" />
+              <HeroStat icon={<TreePine className="h-5 w-5" />} value={String(primaryFamily?.generationCount ?? 0)} label="Generations" />
+            </div>
+          </div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-full border border-[#e8ded4] bg-[#f3eee8] p-1 shadow-sm">
               <ViewTab active={activeView === 'tree'} onClick={() => setActiveView('tree')} icon={<TreePine className="h-3.5 w-3.5" />} label="Tree" />
@@ -473,11 +532,11 @@ export default function HomePage() {
 
 function HeroStat({ icon, value, label, last }: { icon: React.ReactNode; value: string; label: string; last?: boolean }) {
   return (
-    <div className={clsx('flex min-w-[145px] items-center gap-3 pr-7', !last && 'mr-7 border-r border-[#e4d9cf]')}>
-      <span className="text-[#985a47]">{icon}</span>
+    <div className={clsx('flex min-w-[125px] items-center gap-2.5', !last && 'pr-3')}>
+      <span className="text-[#14635b]">{icon}</span>
       <span>
-        <strong className="block font-serif text-base font-semibold text-[#3b2b24]">{value}</strong>
-        <span className="mt-0.5 block text-xs text-[#67574e]">{label}</span>
+        <strong className="block font-serif text-base font-medium text-[#651a1a]">{value}</strong>
+        <span className="block text-[11px] text-[#52615c]">{label}</span>
       </span>
     </div>
   );
