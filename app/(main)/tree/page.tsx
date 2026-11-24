@@ -502,6 +502,17 @@ export default function TreePage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
         {/* Family tree — first in DOM: left on desktop, full-width focus on mobile */}
         <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
+          {/* Optional V2 viewer link — legacy tree rendering and editing remain untouched. */}
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#e2e9e5] bg-[#f1f7f4] px-3 py-2 sm:px-6">
+            <p className="text-xs font-medium text-[#496059] sm:text-sm">Explore your family one connection at a time.</p>
+            <Link
+              href={rootIdParam ? `/tree-v2?rootId=${encodeURIComponent(rootIdParam)}` : '/tree-v2'}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-[#cad9d2] bg-white px-3 text-xs font-semibold text-[#651a1a] transition-colors hover:bg-[#fdf7f7] focus-visible:outline-2 focus-visible:outline-[#651a1a] sm:text-sm"
+            >
+              Try Family Explorer 2.0 <ChevronRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+
           {/* View tabs — only visible to signed-in users. */}
           {isAuthenticated && (
             <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 sm:px-6">
