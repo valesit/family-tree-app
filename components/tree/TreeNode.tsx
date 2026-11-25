@@ -138,7 +138,7 @@ function ChildLineageConnector({ personId }: { personId: string }) {
         <path
           d={`M ${geometry.startX} 0 V ${geometry.elbowY} H ${geometry.targetX} V ${geometry.targetY}`}
           fill="none"
-          stroke="#b58b6a"
+          stroke="#8eafa4"
           strokeWidth="1"
           strokeLinecap="square"
           strokeLinejoin="miter"
@@ -161,7 +161,12 @@ function MissingAncestors({
 
   return (
     <div className="flex flex-col items-center" aria-label={`Parents of ${person.name}`}>
-      <div className="flex items-end gap-3">
+      {nodeProps.level >= 0 && (
+        <span className="mb-3 rounded-full border border-[#c6ddd3] bg-[#f2f9f5] px-3 py-1 font-sans text-xs font-medium text-[#14564f]">
+          {person.firstName}&apos;s ancestors
+        </span>
+      )}
+      <div className="flex items-end gap-4">
         {person.parents.map((parent) => (
           <TreeNode
             key={parent.id}
@@ -171,7 +176,7 @@ function MissingAncestors({
           />
         ))}
       </div>
-      <span className="h-6 w-px bg-[#b58b6a]" aria-hidden />
+      <span className="h-7 w-px bg-[#8eafa4]" aria-hidden />
     </div>
   );
 }
@@ -328,14 +333,14 @@ export function TreeNode({
             }
           }}
           className={clsx(
-            'relative flex min-h-[112px] min-w-[210px] cursor-pointer items-center gap-3 rounded-xl border bg-gradient-to-br from-[#fffefa] to-[#fffaf5] px-4 py-3 text-left shadow-[0_8px_22px_-14px_rgba(67,43,31,0.32)] transition-all duration-200',
-            'hover:-translate-y-0.5 hover:border-[#caa995] hover:shadow-[0_12px_28px_-14px_rgba(67,43,31,0.38)]',
-            personIsRoot ? 'border-maroon-500/70 ring-1 ring-maroon-500/10' : 'border-[#dfd2c6]'
+            'relative flex min-h-[126px] min-w-[232px] cursor-pointer items-center gap-3.5 rounded-xl border bg-white px-4 py-3.5 text-left shadow-[0_10px_26px_-18px_rgba(20,86,79,0.30)] transition-all duration-200',
+            'hover:-translate-y-0.5 hover:border-[#14635b] hover:shadow-[0_12px_28px_-18px_rgba(20,86,79,0.40)]',
+            personIsRoot ? 'border-maroon-500/70 ring-1 ring-maroon-500/10' : 'border-[#d5e3dc]'
           )}
         >
           {personIsRoot && (
             <span className="absolute -top-2.5 left-4 rounded-md bg-maroon-500 px-3 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-white shadow-sm">
-              Root
+              Tree origin
             </span>
           )}
 
@@ -361,7 +366,7 @@ export function TreeNode({
                 src={person.profileImage}
                 name={person.name}
                 size="lg"
-                className="ring-4 ring-[#f3ebe4] shadow-sm"
+                className="ring-[3px] ring-[#e7f3ef] shadow-sm"
               />
               {!exportMode && (
                 <span
@@ -378,8 +383,8 @@ export function TreeNode({
           <div className="min-w-0 flex-1">
             {exportMode ? (
               <>
-                <p className="font-serif text-[15px] font-semibold leading-tight text-[#382a24]">{person.firstName}</p>
-                <p className="mt-0.5 font-serif text-[13px] text-[#66564d]">{person.lastName}</p>
+                <p className="font-serif text-[17px] font-semibold leading-tight text-[#382a24]">{person.firstName}</p>
+                <p className="mt-0.5 font-serif text-[15px] text-[#52615c]">{person.lastName}</p>
               </>
             ) : (
               <Link
@@ -392,23 +397,23 @@ export function TreeNode({
                 className="group/name block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
                 title={`View ${person.firstName} ${person.lastName}'s profile`}
               >
-                <p className="font-serif text-[15px] font-semibold leading-tight text-[#382a24] underline-offset-2 group-hover/name:text-maroon-700 group-hover/name:underline">{person.firstName}</p>
-                <p className="mt-0.5 font-serif text-[13px] text-[#66564d] underline-offset-2 group-hover/name:text-maroon-700 group-hover/name:underline">{person.lastName}</p>
+                <p className="font-serif text-[17px] font-semibold leading-tight text-[#382a24] underline-offset-2 group-hover/name:text-maroon-700 group-hover/name:underline">{person.firstName}</p>
+                <p className="mt-0.5 font-serif text-[15px] text-[#52615c] underline-offset-2 group-hover/name:text-maroon-700 group-hover/name:underline">{person.lastName}</p>
               </Link>
             )}
             {showDates && birthYear && (
-              <p className="mt-1.5 text-[10px] text-[#95877e]">
+              <p className="mt-2 text-xs text-[#52615c]">
                 {birthYear}{deathYear ? ` – ${deathYear}` : ' –'}
               </p>
             )}
             {spouse && 'marriageDate' in person && person.marriageDate && (
-              <p className="mt-0.5 text-[9px] text-[#aa9d94]">m. {new Date(person.marriageDate).getFullYear()}</p>
+              <p className="mt-0.5 text-[11px] text-[#52615c]">m. {new Date(person.marriageDate).getFullYear()}</p>
             )}
             {maidenName && (
-              <p className="mt-1 truncate text-[9px] italic text-[#9c7868]">née {maidenName}</p>
+              <p className="mt-1 truncate text-[11px] italic text-[#52615c]">née {maidenName}</p>
             )}
             {exportMode && exportFields?.occupation && person.attributes?.occupation && (
-              <p className="mt-1 text-[9px] italic text-[#95877e]">{person.attributes.occupation}</p>
+              <p className="mt-1 text-[11px] italic text-[#52615c]">{person.attributes.occupation}</p>
             )}
           </div>
         </div>
@@ -472,7 +477,7 @@ export function TreeNode({
 
   return (
     <div className="group/tree flex flex-col items-center">
-      <div className="flex items-end gap-3">
+      <div className="flex items-end gap-4">
         <div className="flex flex-col items-center">
           <MissingAncestors person={visualAnchor} {...ancestorProps} />
           <PersonCard person={visualAnchor} />
@@ -480,13 +485,14 @@ export function TreeNode({
 
         {visualPartners.map(({ person, spouseCard, marriageOrder }, index) => (
           <div key={person.id} className="flex items-end">
-            <div className="mb-[42px] flex items-center" aria-hidden>
-              <span className="h-px w-8 bg-[#c8ae98]" />
-              <span className="mx-1.5 grid h-7 w-7 place-items-center rounded-full bg-[#fffdf9] text-maroon-500 ring-1 ring-[#ddcfc4] shadow-[0_2px_8px_rgba(89,53,36,0.08)]">
-                <Heart className="h-3.5 w-3.5" fill="currentColor" />
+            <div className="mb-[49px] flex items-center" aria-label="Spouse relationship">
+              <span className="h-px w-6 bg-[#c99b43]" aria-hidden />
+              <span className="mx-2 flex items-center gap-1.5 rounded-full border border-[#e4ca91] bg-[#fff8e8] px-2.5 py-1 text-[#651a1a]">
+                <Heart className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true" />
+                <span className="text-[11px] font-semibold">Spouses</span>
                 {hasMultipleSpouses && <span className="sr-only">Marriage {index + 1}</span>}
               </span>
-              <span className="h-px w-8 bg-[#c8ae98]" />
+              <span className="h-px w-6 bg-[#c99b43]" aria-hidden />
             </div>
             <div className="flex flex-col items-center">
               <MissingAncestors person={person} {...ancestorProps} />
@@ -504,7 +510,7 @@ export function TreeNode({
       {hasChildren && (
         <div className="flex flex-col items-center">
           <div className="relative h-10 w-10">
-            <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[#b58b6a]" aria-hidden />
+            <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[#8eafa4]" aria-hidden />
             {!exportMode && (
               <button
                 type="button"
@@ -512,7 +518,7 @@ export function TreeNode({
                   event.stopPropagation();
                   toggleExpanded(node.id);
                 }}
-                className="absolute left-1/2 top-1/2 ml-2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-[#ddcfc4] bg-[#fffdf9]/95 text-[#8b5f4c] shadow-sm opacity-60 transition hover:bg-white hover:opacity-100 md:opacity-0 md:group-hover/tree:opacity-100 focus:opacity-100"
+                className="absolute left-1/2 top-1/2 ml-2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-[#bed8ce] bg-white text-[#14564f] shadow-sm opacity-80 transition hover:border-[#14635b] hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#14635b]"
                 aria-expanded={isExpanded}
                 aria-label={isExpanded ? `Collapse ${node.firstName}'s descendants` : `Expand ${node.firstName}'s descendants`}
                 title={isExpanded ? 'Collapse branch' : 'Expand branch'}
@@ -529,10 +535,10 @@ export function TreeNode({
                 return (
                   <div key={child.id} className="relative flex flex-col items-center px-5">
                     {childCount > 1 && index > 0 && (
-                      <span className="absolute left-0 top-0 h-px w-1/2 bg-[#b58b6a]" aria-hidden />
+                      <span className="absolute left-0 top-0 h-px w-1/2 bg-[#8eafa4]" aria-hidden />
                     )}
                     {childCount > 1 && index < childCount - 1 && (
-                      <span className="absolute right-0 top-0 h-px w-1/2 bg-[#b58b6a]" aria-hidden />
+                      <span className="absolute right-0 top-0 h-px w-1/2 bg-[#8eafa4]" aria-hidden />
                     )}
 
                     <ChildLineageConnector personId={child.id} />
