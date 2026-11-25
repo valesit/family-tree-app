@@ -344,3 +344,49 @@ body {
 
 .animation-delay-2000 { animation-delay: 2000ms; }
 .animation-delay-4000 { animation-delay: 4000ms; }
+
+/* Modern Heritage skin for the interactive tree on both / and /tree.
+   This is intentionally presentation-only: relationship layout, edit actions,
+   photo rendering and export behavior remain owned by the tree components. */
+:is(.heritage-home, .modern-heritage-workspace) [data-lineage-person] > [role="button"] {
+  background: #ffffff;
+  border-color: #d5e3dc;
+  box-shadow: 0 10px 25px -17px rgba(20, 86, 79, 0.28);
+}
+
+:is(.heritage-home, .modern-heritage-workspace) [data-lineage-person] > [role="button"]:hover {
+  border-color: #14635b;
+  box-shadow: 0 14px 28px -17px rgba(20, 86, 79, 0.4);
+}
+
+:is(.heritage-home, .modern-heritage-workspace) [data-lineage-person] > [role="button"]:focus-visible {
+  outline: 2px solid #14635b;
+  outline-offset: 3px;
+}
+
+:is(.heritage-home, .modern-heritage-workspace) [data-lineage-person] a[href^="/person/"] p:first-child {
+  color: #651a1a;
+}
+
+:is(.heritage-home, .modern-heritage-workspace) [data-lineage-person] a[href^="/person/"] p + p {
+  color: #52615c;
+}
+
+:is(.heritage-home, .modern-heritage-workspace) [data-lineage-person] > [role="button"] p {
+  color: #52615c;
+}
+
+:is(.heritage-home, .modern-heritage-workspace) [data-lineage-person] a[href^="/person/"]:hover p:first-child {
+  color: #14635b;
+}
+
+.modern-heritage-workspace [aria-pressed="true"] {
+  background-color: #e7f3ef;
+  color: #14564f;
+  box-shadow: inset 0 0 0 1px #b7d8ca;
+}
+
+.modern-heritage-workspace [aria-pressed="true"]:focus-visible {
+  outline: 2px solid #14635b;
+  outline-offset: 2px;
+}
