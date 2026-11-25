@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import useSWR from 'swr';
 import { clsx } from 'clsx';
 import {
   TreePine,
@@ -28,13 +27,7 @@ import {
 } from 'lucide-react';
 import { Avatar } from '@/components/ui';
 import { SessionUser } from '@/types';
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
-type FamilyNavPreview = {
-  id: string;
-  familyName: string;
-};
+import { FAMILY_SITE_NAME } from '@/lib/family-brand';
 
 export function Navbar() {
   const { data: session, status } = useSession();
@@ -45,19 +38,6 @@ export function Navbar() {
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
-
-  const { data: familiesData } = useSWR<{
-    success: boolean;
-    data: {
-      families: FamilyNavPreview[];
-      primaryFamilyId: string | null;
-    };
-  }>('/api/families', fetcher, { revalidateOnFocus: false });
-
-  const primaryFamily = familiesData?.data?.families.find(
-    (family) => family.id === familiesData?.data?.primaryFamilyId
-  );
-  const brandName = primaryFamily?.familyName || 'Family';
 
   const authNavItems = [
     { href: '/', label: 'Home', icon: Home },
@@ -90,7 +70,7 @@ export function Navbar() {
             </span>
             <span className="hidden min-w-0 sm:block">
               <span className="block truncate font-serif text-base font-semibold tracking-[-0.01em] text-[#651a1a]">
-                {brandName}
+                {FAMILY_SITE_NAME}
               </span>
               <span className="block text-[11px] tracking-[0.06em] text-[#425850]">
                 Family Tree

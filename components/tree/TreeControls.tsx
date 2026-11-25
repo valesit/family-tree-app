@@ -37,10 +37,10 @@ export function TreeControls({ onZoomIn, onZoomOut, onReset, onFit, scale }: Tre
 
         <div className="mx-1 my-1 h-px bg-[#eadfd6]" aria-hidden />
 
-        <ControlButton onClick={fitHandler} ariaLabel="Fit tree to screen" title="Fit to screen">
+        <ControlButton onClick={fitHandler} ariaLabel="Fit entire tree to screen" title="Fit all members (smaller cards)">
           <Maximize2 className="h-4 w-4" aria-hidden />
         </ControlButton>
-        <ControlButton onClick={onReset} ariaLabel="Reset view" title="Reset view">
+        <ControlButton onClick={onReset} ariaLabel="Focus family at readable size" title="Focus family (readable size)">
           <RotateCcw className="h-4 w-4" aria-hidden />
         </ControlButton>
       </div>

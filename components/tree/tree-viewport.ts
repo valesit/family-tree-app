@@ -79,11 +79,15 @@ export function preferredTreeView(
   focus: TreeBounds | null
 ): TreeTransform {
   const fitted = fitWholeTree(viewport);
-  if (fitted.scale >= READABLE_THRESHOLD || !focus) return fitted;
+  if (fitted.scale >= READABLE_THRESHOLD) return fitted;
 
+  // Measuring the focused card can briefly fail on the first render while
+  // React expands branches. Never silently fall back to an unreadable 50%
+  // whole-tree view in that case: start at a readable size around the canvas
+  // center and let the user pan or choose Fit for the full overview.
   const scale = viewport.width < 520 ? 0.82 : viewport.width < 900 ? 0.86 : 0.94;
-  const focusX = focus.x + focus.width / 2;
-  const focusY = focus.y + focus.height / 2;
+  const focusX = focus ? focus.x + focus.width / 2 : viewport.contentWidth / 2;
+  const focusY = focus ? focus.y + focus.height / 2 : viewport.contentHeight / 2;
 
   return {
     scale,
