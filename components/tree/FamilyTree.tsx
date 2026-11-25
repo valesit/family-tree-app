@@ -6,6 +6,14 @@ import { TreeNode } from './TreeNode';
 import { TreeControls } from './TreeControls';
 import { TreeViewProvider, useTreeViewOptional } from './TreeViewContext';
 import { Move } from 'lucide-react';
+import {
+  chooseTreeFocusId,
+  fitWholeTree,
+  preferredTreeView,
+  zoomTreeAt,
+  clampTreeScale,
+  type TreeBounds,
+} from './tree-viewport';
 
 interface FamilyTreeProps {
   data: TreeNodeType | null;
@@ -17,10 +25,6 @@ interface FamilyTreeProps {
   onViewBirthFamily?: (personId: string, maidenName?: string) => void;
   readOnly?: boolean;
 }
-
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 2;
-const FIT_PADDING = 24; // px around bbox when fitting
 
 /** Open first two generations by default (depth 0–1 nodes with children). */
 function collectDefaultExpandedIds(node: TreeNodeType | null): Set<string> {
@@ -63,10 +67,6 @@ type PinchSession = {
   origTransform: Transform;
 };
 
-function clampScale(s: number) {
-  return Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
-}
-
 function FamilyTreeInner({
   data,
   onNodeClick,
@@ -99,6 +99,7 @@ function FamilyTreeInner({
   const activeRootIdRef = useRef<string | null>(null);
   const initialFitDoneRef = useRef(false);
   const userAdjustedViewRef = useRef(false);
+  const viewModeRef = useRef<'readable' | 'fit'>('readable');
   const lastContainerSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
@@ -117,34 +118,61 @@ function FamilyTreeInner({
     activeRootIdRef.current = data.id;
     initialFitDoneRef.current = false;
     userAdjustedViewRef.current = false;
+    viewModeRef.current = 'readable';
     setExpandedNodes(collectDefaultExpandedIds(data));
   }, [data]);
 
-  /** Fit the entire tree inside the visible container, with padding. */
+  /** Show the whole family on demand; it may be small at this scale. */
   const handleFit = useCallback(() => {
     const container = containerRef.current;
     const content = contentRef.current;
     if (!container || !content) return;
 
-    const cRect = container.getBoundingClientRect();
-    const naturalW = content.scrollWidth;
-    const naturalH = content.scrollHeight;
-    if (naturalW <= 0 || naturalH <= 0) return;
-
-    const availW = Math.max(1, cRect.width - FIT_PADDING * 2);
-    const availH = Math.max(1, cRect.height - FIT_PADDING * 2);
-    const nextScale = clampScale(Math.min(availW / naturalW, availH / naturalH));
-
-    const scaledW = naturalW * nextScale;
-    const scaledH = naturalH * nextScale;
-    const nextX = Math.max(FIT_PADDING, (cRect.width - scaledW) / 2);
-    const nextY =
-      scaledH + FIT_PADDING * 2 <= cRect.height
-        ? (cRect.height - scaledH) / 2
-        : FIT_PADDING;
-
-    setTransform({ x: nextX, y: nextY, scale: nextScale });
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const contentWidth = content.scrollWidth;
+    const contentHeight = content.scrollHeight;
+    if (width <= 0 || height <= 0 || contentWidth <= 0 || contentHeight <= 0) return;
+    setTransform(fitWholeTree({ width, height, contentWidth, contentHeight }));
   }, []);
+
+  /** Focus a readable family group while keeping every branch pannable. */
+  const handleReadableView = useCallback(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content || !data) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const contentWidth = content.scrollWidth;
+    const contentHeight = content.scrollHeight;
+    if (width <= 0 || height <= 0 || contentWidth <= 0 || contentHeight <= 0) return;
+
+    const selectedId = chooseTreeFocusId(data);
+    const focusElement = Array.from(
+      content.querySelectorAll<HTMLElement>('[data-lineage-person]')
+    ).find((element) => element.dataset.lineagePerson === selectedId);
+
+    let focus: TreeBounds | null = null;
+    if (focusElement) {
+      const contentRect = content.getBoundingClientRect();
+      const targetRect = focusElement.getBoundingClientRect();
+      const renderedScale = content.offsetWidth > 0
+        ? contentRect.width / content.offsetWidth
+        : transformRef.current.scale;
+
+      if (renderedScale > 0) {
+        focus = {
+          x: (targetRect.left - contentRect.left) / renderedScale,
+          y: (targetRect.top - contentRect.top) / renderedScale,
+          width: targetRect.width / renderedScale,
+          height: targetRect.height / renderedScale,
+        };
+      }
+    }
+
+    setTransform(preferredTreeView({ width, height, contentWidth, contentHeight }, focus));
+  }, [data]);
 
   /**
    * Auto-fit once for each family/root. Subsequent data updates deliberately
@@ -157,7 +185,7 @@ function FamilyTreeInner({
     let raf2 = 0;
     raf1 = window.requestAnimationFrame(() => {
       raf2 = window.requestAnimationFrame(() => {
-        handleFit();
+        handleReadableView();
         initialFitDoneRef.current = true;
       });
     });
@@ -166,7 +194,7 @@ function FamilyTreeInner({
       window.cancelAnimationFrame(raf1);
       window.cancelAnimationFrame(raf2);
     };
-  }, [data, handleFit]);
+  }, [data, handleReadableView]);
 
   /**
    * Keep the initial view responsive to a meaningful container resize, but
@@ -189,31 +217,38 @@ function FamilyTreeInner({
       if (!previous || userAdjustedViewRef.current) return;
       if (Math.abs(previous.width - width) < 2 && Math.abs(previous.height - height) < 2) return;
 
-      window.requestAnimationFrame(handleFit);
+      window.requestAnimationFrame(() => {
+        if (viewModeRef.current === 'fit') handleFit();
+        else handleReadableView();
+      });
     });
 
     ro.observe(el);
     return () => ro.disconnect();
-  }, [handleFit]);
+  }, [handleFit, handleReadableView]);
 
-  const handleZoomIn = useCallback(() => {
+  const zoomFromCenter = useCallback((increment: number) => {
+    const container = containerRef.current;
+    if (!container) return;
     userAdjustedViewRef.current = true;
-    setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + 0.15) }));
+    const point = { x: container.clientWidth / 2, y: container.clientHeight / 2 };
+    setTransform((current) => zoomTreeAt(current, current.scale + increment, point));
   }, []);
 
-  const handleZoomOut = useCallback(() => {
-    userAdjustedViewRef.current = true;
-    setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale - 0.15) }));
-  }, []);
+  const handleZoomIn = useCallback(() => zoomFromCenter(0.15), [zoomFromCenter]);
+  const handleZoomOut = useCallback(() => zoomFromCenter(-0.15), [zoomFromCenter]);
 
   const handleManualFit = useCallback(() => {
     userAdjustedViewRef.current = false;
+    viewModeRef.current = 'fit';
     handleFit();
   }, [handleFit]);
 
   const handleReset = useCallback(() => {
-    handleManualFit();
-  }, [handleManualFit]);
+    userAdjustedViewRef.current = false;
+    viewModeRef.current = 'readable';
+    handleReadableView();
+  }, [handleReadableView]);
 
   // Wheel zoom for desktop (mobile uses pinch). Attach once so data refreshes
   // never tear down/rebuild the gesture listener.
@@ -224,7 +259,9 @@ function FamilyTreeInner({
       e.preventDefault();
       userAdjustedViewRef.current = true;
       const delta = e.deltaY > 0 ? -0.08 : 0.08;
-      setTransform((prev) => ({ ...prev, scale: clampScale(prev.scale + delta) }));
+      const rect = el.getBoundingClientRect();
+      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      setTransform((current) => zoomTreeAt(current, current.scale + delta, point));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -294,7 +331,7 @@ function FamilyTreeInner({
 
       const orig = pinchRef.current.origTransform;
       const ratio = dist / pinchRef.current.startDistance;
-      const nextScale = clampScale(orig.scale * ratio);
+      const nextScale = clampTreeScale(orig.scale * ratio);
 
       const container = containerRef.current;
       if (!container) return;
