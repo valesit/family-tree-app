@@ -81,3 +81,12 @@ test('ancestor labels and spouse links remain explicit and editable', () => {
   assert.match(treeCardSource, /onAddParent=/);
   assert.match(treeCardSource, /data-lineage-person=/);
 });
+
+test('missing card measurement does not shrink an initial tree to fit-all size', () => {
+  const viewport = { width: 1100, height: 700, contentWidth: 2500, contentHeight: 900 };
+  const readable = preferredTreeView(viewport, null);
+  const fitted = fitWholeTree(viewport);
+  assert.equal(readable.scale, 0.94);
+  assert.ok(readable.scale > fitted.scale);
+  assert.ok(Number.isFinite(readable.x) && Number.isFinite(readable.y));
+});
