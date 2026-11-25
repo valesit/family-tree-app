@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { clsx } from 'clsx';
+import { FAMILY_SITE_NAME } from '@/lib/family-brand';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -195,7 +196,8 @@ export default function FamilyViewPage() {
     );
   }
 
-  const { tree, stats, familyName, foundingAncestor } = data.data;
+  const { tree, stats, foundingAncestor } = data.data;
+  const familyName = FAMILY_SITE_NAME;
   const monthIndex = new Date().getMonth();
   const monthName = new Date().toLocaleString(undefined, { month: 'long' });
   const birthdaysThisMonth = getBirthdaysInMonth(tree, monthIndex);
