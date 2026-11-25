@@ -961,7 +961,7 @@ export default function TreePage() {
         onClose={() => setIsExportOpen(false)}
         tree={tree}
         liveCanvasRef={liveCanvasRef}
-        familyName={familyName}
+        familyName={FAMILY_SITE_NAME}
       />
     </main>
   );
