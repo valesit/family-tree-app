@@ -395,9 +395,9 @@ export default function TreePage() {
   const hasMultipleFamilies = userFamilies.length > 1;
 
   return (
-    <main className="h-[calc(100dvh-4rem)] flex flex-col bg-slate-50" aria-label="Family tree page">
+    <main className="modern-heritage-workspace flex h-[calc(100dvh-4rem)] flex-col bg-white" aria-label="Family tree page">
       {/* Top Header Bar — compact on mobile to give the tree more room */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b-2 border-[#c99b43] bg-white px-3 py-2 sm:px-6 sm:py-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <button
             onClick={() => router.push('/')}
@@ -459,7 +459,7 @@ export default function TreePage() {
               </div>
             ) : (
               <div className="flex min-w-0 items-center gap-1.5">
-                <h1 className="truncate text-base font-bold text-slate-900 sm:text-2xl">
+                <h1 className="truncate font-serif text-lg font-medium text-[#651a1a] sm:text-2xl">
                   {familyName || 'Family'}
                 </h1>
                 {/* Only system admins see family-name editing. Regular contributors
@@ -477,7 +477,7 @@ export default function TreePage() {
                 )}
               </div>
             )}
-            <p className="truncate text-[11px] text-slate-500 sm:text-sm">
+            <p className="truncate text-[11px] text-[#52615c] sm:text-sm">
               {stats ? `${stats.totalMembers} members · ${stats.marriageCount} marriages` : 'Loading...'}
             </p>
           </div>
@@ -501,10 +501,10 @@ export default function TreePage() {
       {/* Main content: tree is primary (left on lg+, first on mobile); overview is collapsible on small screens. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
         {/* Family tree — first in DOM: left on desktop, full-width focus on mobile */}
-        <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-slate-200">
+        <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-[#d6e5de]">
           {/* View tabs — only visible to signed-in users. */}
           {isAuthenticated && (
-            <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 sm:px-6">
+            <div className="flex shrink-0 items-center gap-1 border-b border-[#d6e5de] bg-white px-3 py-2 sm:px-6">
               <ViewTab
                 active={activeView === 'tree'}
                 onClick={() => setActiveView('tree')}
@@ -607,7 +607,7 @@ export default function TreePage() {
         </div>
 
         {/* Family overview — right on desktop, below on mobile, collapsible on &lt;lg via mobileOverviewOpen */}
-        <div className="order-2 flex min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-slate-200 bg-white lg:order-2 lg:h-full lg:max-h-none lg:w-1/5 lg:shrink-0 lg:min-h-0 lg:min-w-[220px] lg:flex-col lg:border-t-0 lg:border-l lg:border-slate-200">
+        <div className="order-2 flex min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-[#d6e5de] bg-white lg:order-2 lg:h-full lg:max-h-none lg:w-1/5 lg:shrink-0 lg:min-h-0 lg:min-w-[220px] lg:flex-col lg:border-t-0 lg:border-l lg:border-[#d6e5de]">
           <button
             type="button"
             onClick={() => setMobileOverviewOpen((o) => !o)}
@@ -631,10 +631,10 @@ export default function TreePage() {
             )}
           </button>
 
-          <div className="hidden items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
+          <div className="hidden items-center justify-between border-b border-[#d6e5de] px-6 py-3 lg:flex">
             <div className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-slate-600" />
-              <span className="font-semibold text-slate-900">Family Overview</span>
+              <span className="font-serif font-medium text-[#14564f]">Family Overview</span>
             </div>
             <button
               onClick={() => setIsExpandedViewOpen(true)}
@@ -701,7 +701,7 @@ export default function TreePage() {
             {/* Family Statistics */}
             {stats && (
                 <div>
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-4">
+                <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#14564f]">
                   <Users className="w-5 h-5 text-slate-600" />
                   Family Statistics
                 </h3>
@@ -737,7 +737,7 @@ export default function TreePage() {
 
             {/* Birthdays this month */}
             <div>
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-3">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#14564f]">
                 <Cake className="w-5 h-5 text-pink-500" />
                 Birthdays in {monthName}
                 <span className="text-xs text-slate-400 font-normal">({birthdaysThisMonth.length})</span>
@@ -786,7 +786,7 @@ export default function TreePage() {
             {/* Notable Members - Cards */}
             {notablePersons.length > 0 && (
                 <div>
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-4">
+                <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#14564f]">
                   <Award className="w-5 h-5 text-amber-500" />
                   Notable Family Members
                   <span className="text-xs text-slate-400 font-normal">({notablePersons.length})</span>
