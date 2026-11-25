@@ -11,11 +11,12 @@ import { Modal, Button, Avatar } from '@/components/ui';
 import { PersonCard } from '@/components/person';
 import { TreeNode, PersonWithRelations, PersonWithImage, SessionUser } from '@/types';
 import { flattenTree } from '@/lib/tree-utils';
+import { FAMILY_SITE_NAME } from '@/lib/family-brand';
 import { PeopleListView, PeopleDirectoryView, type PersonExtras } from '@/components/people';
 import { 
   Loader2, AlertCircle, Users, TreePine, Calendar, Heart, Lock, 
   Maximize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
-  ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Pencil, Save, Cake,
+  ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Cake,
   LayoutGrid, List as ListIcon, Contact, Download,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -100,10 +101,6 @@ export default function TreePage() {
   const [isExpandedViewOpen, setIsExpandedViewOpen] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
   
-  // Family name edit state
-  const [isEditingFamilyName, setIsEditingFamilyName] = useState(false);
-  const [editedFamilyName, setEditedFamilyName] = useState('');
-  const [isSavingFamilyName, setIsSavingFamilyName] = useState(false);
   /** On small screens, overview is secondary — collapsed by default so the tree is primary. */
   const [mobileOverviewOpen, setMobileOverviewOpen] = useState(false);
 
@@ -238,72 +235,10 @@ export default function TreePage() {
     }
   };
 
-  // Handle saving edited family name
-  const handleSaveFamilyName = async () => {
-    if (!data?.data?.rootPersonId || !editedFamilyName.trim()) return;
-    
-    setIsSavingFamilyName(true);
-    try {
-      if (isAdmin) {
-        // Admin can save directly
-        const response = await fetch('/api/family', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rootPersonId: data.data.rootPersonId,
-            name: editedFamilyName.trim(),
-          }),
-        });
-        
-        if (response.ok) {
-          mutate();
-          setIsEditingFamilyName(false);
-        } else {
-          const result = await response.json();
-          alert(result.error || 'Failed to save family name');
-        }
-      } else {
-        // Regular user - submit for approval
-        const response = await fetch('/api/approvals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'UPDATE_FAMILY_NAME',
-            personId: data.data.rootPersonId, // Use root person as reference
-            currentData: { familyName: familyName },
-            proposedData: { familyName: editedFamilyName.trim() },
-            reason: `Proposed family name change: "${familyName}" → "${editedFamilyName.trim()}"`,
-            requiredApprovals: 2, // Requires 2 family member approvals or 1 admin
-          }),
-        });
-        
-        if (response.ok) {
-          setIsEditingFamilyName(false);
-          alert('Your family name change has been submitted for approval. It needs approval from 2 family members or an admin.');
-        } else {
-          const result = await response.json();
-          alert(result.error || 'Failed to submit family name change');
-        }
-      }
-    } catch (error) {
-      console.error('Error saving family name:', error);
-      alert('Failed to save family name');
-    } finally {
-      setIsSavingFamilyName(false);
-    }
-  };
-
-  // Start editing family name
-  const handleStartEditFamilyName = () => {
-    setEditedFamilyName(familyName || '');
-    setIsEditingFamilyName(true);
-  };
-
   // IMPORTANT: Hooks must run unconditionally on every render (avoid calling hooks after early returns).
-  const { tree, stats, familyName, foundingAncestor } = data?.data || { 
+  const { tree, stats, foundingAncestor } = data?.data || { 
     tree: null, 
     stats: null, 
-    familyName: null, 
     foundingAncestor: null 
   };
 
@@ -421,7 +356,7 @@ export default function TreePage() {
               >
                 {userFamilies.map((family) => (
                   <option key={family.id} value={family.id}>
-                    {family.name} {family.role === 'ADMIN' ? '(Admin)' : ''}
+                    {family.rootPerson ? `${family.rootPerson.firstName} ${family.rootPerson.lastName} branch` : 'Family branch'} {family.role === 'ADMIN' ? '(Admin)' : ''}
                   </option>
                 ))}
               </select>
@@ -430,53 +365,9 @@ export default function TreePage() {
           )}
 
           <div className="min-w-0">
-            {isEditingFamilyName ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={editedFamilyName}
-                  onChange={(e) => setEditedFamilyName(e.target.value)}
-                  className="min-w-0 rounded-lg border-2 border-maroon-300 px-2 py-1 text-base font-bold text-slate-900 focus:border-maroon-500 focus:outline-none sm:text-xl"
-                  placeholder="e.g., Sithole Family"
-                  autoFocus
-                />
-                <button
-                  onClick={handleSaveFamilyName}
-                  disabled={isSavingFamilyName || !editedFamilyName.trim()}
-                  className="flex items-center gap-1 rounded-lg bg-maroon-600 px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-maroon-700 disabled:opacity-50 sm:px-3 sm:text-sm"
-                  type="button"
-                >
-                  {isSavingFamilyName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  <span className="hidden sm:inline">{isAdmin ? 'Save' : 'Submit'}</span>
-                </button>
-                <button
-                  onClick={() => setIsEditingFamilyName(false)}
-                  className="rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition-colors hover:bg-slate-100 sm:px-3 sm:text-sm"
-                  type="button"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div className="flex min-w-0 items-center gap-1.5">
-                <h1 className="truncate font-serif text-lg font-medium text-[#651a1a] sm:text-2xl">
-                  {familyName || 'Family'}
-                </h1>
-                {/* Only system admins see family-name editing. Regular contributors
-                    shouldn't be shown a path that triggers an approvals workflow. */}
-                {isAdmin && (
-                  <button
-                    onClick={handleStartEditFamilyName}
-                    className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-maroon-50 hover:text-maroon-600 sm:p-1.5"
-                    title="Edit family name"
-                    aria-label="Edit family name"
-                    type="button"
-                  >
-                    <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
-                  </button>
-                )}
-              </div>
-            )}
+            <h1 className="truncate font-serif text-lg font-medium text-[#651a1a] sm:text-2xl">
+              {FAMILY_SITE_NAME}
+            </h1>
             <p className="truncate text-[11px] text-[#52615c] sm:text-sm">
               {stats ? `${stats.totalMembers} members · ${stats.marriageCount} marriages` : 'Loading...'}
             </p>
