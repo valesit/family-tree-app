@@ -38,6 +38,7 @@ import { PageScrollNav } from '@/components/shared';
 import { Navbar } from '@/components/shared/navbar';
 import { PeopleDirectoryView, PeopleListView, type PersonExtras } from '@/components/people';
 import { flattenTree } from '@/lib/tree-utils';
+import { FAMILY_SITE_NAME, FAMILY_SITE_HERITAGE_COPY } from '@/lib/family-brand';
 import type { PersonWithImage, PersonWithRelations, TreeNode } from '@/types';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -164,7 +165,7 @@ export default function HomePage() {
   }>(primaryId ? `/api/tree?rootId=${primaryId}` : null, fetcher, { revalidateOnFocus: false });
 
   const tree = treeData?.data?.tree ?? null;
-  const familyName = primaryFamily?.familyName || treeData?.data?.familyName || 'Family';
+  const familyName = FAMILY_SITE_NAME;
   const ancestor = treeData?.data?.foundingAncestor || primaryFamily?.foundingAncestor || null;
   const treeExploreHref = primaryId ? `/tree?rootId=${primaryId}` : '/tree';
 
@@ -281,7 +282,7 @@ export default function HomePage() {
               </h1>
               <span className="mt-5 block h-[2px] w-20 bg-[#b88631]" aria-hidden="true" />
               <p className="mt-4 max-w-[530px] text-base leading-7 text-[#37433d] sm:text-lg">
-                Explore our family tree, share stories, and help preserve the {familyName} legacy for future generations.
+                {FAMILY_SITE_HERITAGE_COPY}
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-3">
                 <Link href="#family-tree" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-maroon-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_-12px_rgba(101,26,26,0.65)] transition hover:bg-maroon-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-500 sm:text-base">
