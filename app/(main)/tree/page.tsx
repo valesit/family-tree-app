@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree, ExpandedTreeView } from '@/components/tree';
+import { SpouseAncestryPanel } from '@/components/tree/SpouseAncestryPanel';
+import type { AncestryDisplayMode } from '@/components/tree/spouse-ancestry';
 import { CanonicalRootPrompt } from '@/components/tree/CanonicalRootPrompt';
 import { TreeArchiveRestore } from '@/components/tree/TreeArchiveRestore';
 import { ExportTreeDialog } from '@/components/tree/ExportTreeDialog';
@@ -101,6 +103,8 @@ export default function TreePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isOverviewExpandedOpen, setIsOverviewExpandedOpen] = useState(false);
   const [isTreeExpanded, setIsTreeExpanded] = useState(false);
+  const [ancestryMode, setAncestryMode] = useState<AncestryDisplayMode>('primary');
+  const [selectedSpouseAncestry, setSelectedSpouseAncestry] = useState<TreeNode | null>(null);
   const [hasRedirected, setHasRedirected] = useState(false);
   
   /** On small screens, overview is secondary — collapsed by default so the tree is primary. */
@@ -139,6 +143,12 @@ export default function TreePage() {
   
   // Get rootId from URL params if specified
   const rootIdParam = searchParams.get('rootId');
+
+  // Changing family branches returns to the primary view; no tree data is modified.
+  useEffect(() => {
+    setSelectedSpouseAncestry(null);
+    setAncestryMode('primary');
+  }, [rootIdParam]);
 
   // Fetch user's families to determine their default tree
   const { data: userFamiliesData } = useSWR<{
@@ -223,6 +233,27 @@ export default function TreePage() {
       console.error('Error fetching person:', error);
     }
   }, []);
+
+  const backToPrimaryTree = () => {
+    setSelectedSpouseAncestry(null);
+    setAncestryMode('primary');
+  };
+
+  const showAllConnections = () => {
+    setSelectedSpouseAncestry(null);
+    setAncestryMode('all');
+  };
+
+  const openSpouseAncestry = (person: TreeNode) => {
+    // Reveal the contextual sidebar even when the tree was expanded.
+    setIsTreeExpanded(false);
+    setSelectedSpouseAncestry(person);
+  };
+
+  const openAncestryPerson = (personId: string) => {
+    setSelectedSpouseAncestry(null);
+    void openPersonModal(personId);
+  };
 
   const handleNodeClick = (node: TreeNode) => {
     // The person-detail modal lives outside the full-screen tree panel.
@@ -509,6 +540,38 @@ export default function TreePage() {
             </div>
           )}
 
+          {activeView === 'tree' && (
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#d6e5de] bg-white px-3 py-2 sm:px-6">
+              <div className="inline-flex rounded-lg border border-[#c7dcd1] bg-[#f3f8f5] p-0.5" role="group" aria-label="Family ancestry display">
+                <button
+                  type="button"
+                  aria-pressed={ancestryMode === 'primary'}
+                  onClick={backToPrimaryTree}
+                  className={clsx(
+                    'rounded-md px-3 py-1.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b] sm:text-sm',
+                    ancestryMode === 'primary' ? 'bg-white text-[#14564f] shadow-sm' : 'text-[#52615c] hover:text-[#14564f]'
+                  )}
+                >
+                  Primary Family
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={ancestryMode === 'all'}
+                  onClick={showAllConnections}
+                  className={clsx(
+                    'rounded-md px-3 py-1.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b] sm:text-sm',
+                    ancestryMode === 'all' ? 'bg-white text-[#14564f] shadow-sm' : 'text-[#52615c] hover:text-[#14564f]'
+                  )}
+                >
+                  All Connections
+                </button>
+              </div>
+              <span className="hidden text-xs text-[#52615c] xl:inline">
+                {ancestryMode === 'primary' ? 'Spouses’ older family branches are available on demand' : 'Showing all recorded ancestral branches'}
+              </span>
+            </div>
+          )}
+
           {/* Tree view (always rendered; hidden when not active so re-mount cost is avoided) */}
           <div
             ref={liveCanvasRef}
@@ -524,6 +587,8 @@ export default function TreePage() {
               onAddSpouse={handleAddSpouse}
               onAddParent={handleAddParent}
               onViewBirthFamily={handleViewBirthFamily}
+              ancestryMode={ancestryMode}
+              onOpenSpouseAncestry={openSpouseAncestry}
             />
           </div>
 
@@ -549,7 +614,19 @@ export default function TreePage() {
         </div>
 
         {/* Family overview — right on desktop, below on mobile, collapsible on &lt;lg via mobileOverviewOpen */}
-        <div className="order-2 flex min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-[#d6e5de] bg-white lg:order-2 lg:h-full lg:max-h-none lg:w-1/5 lg:shrink-0 lg:min-h-0 lg:min-w-[220px] lg:flex-col lg:border-t-0 lg:border-l lg:border-[#d6e5de]">
+        <div className={clsx(
+          'order-2 min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-[#d6e5de] bg-white lg:order-2 lg:h-full lg:max-h-none lg:shrink-0 lg:min-h-0 lg:min-w-[220px] lg:flex-col lg:border-t-0 lg:border-l lg:border-[#d6e5de]',
+          selectedSpouseAncestry ? 'hidden lg:flex lg:w-[min(34%,28rem)]' : 'flex lg:w-1/5'
+        )}>
+          {selectedSpouseAncestry ? (
+            <SpouseAncestryPanel
+              person={selectedSpouseAncestry}
+              onBack={backToPrimaryTree}
+              onPersonClick={openAncestryPerson}
+              onShowAllConnections={showAllConnections}
+            />
+          ) : (
+            <>
           <button
             type="button"
             onClick={() => setMobileOverviewOpen((o) => !o)}
@@ -778,8 +855,33 @@ export default function TreePage() {
             </div>
           </div>
         </div>
+            </>
+          )}
         </div>
       </div>
+
+      {selectedSpouseAncestry && (
+        <div
+          className="fixed inset-0 z-[110] flex items-end bg-[#16332b]/40 lg:hidden"
+          role="presentation"
+          onClick={backToPrimaryTree}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selectedSpouseAncestry.lastName} family ancestry`}
+            className="h-[min(86dvh,48rem)] w-full overflow-hidden rounded-t-2xl border-t border-[#c5dbd0] bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <SpouseAncestryPanel
+              person={selectedSpouseAncestry}
+              onBack={backToPrimaryTree}
+              onPersonClick={openAncestryPerson}
+              onShowAllConnections={showAllConnections}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Person Detail Modal */}
       <Modal

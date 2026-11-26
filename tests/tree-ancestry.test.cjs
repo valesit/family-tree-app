@@ -131,8 +131,11 @@ test('missing ancestors are rendered as full interactive people, not bare label 
   assert.match(ancestorSection, /\.\.\.nodeProps/);
   assert.doesNotMatch(ancestorSection, /<button/);
   assert.match(source, /onSetRoot: effectiveSetRoot/);
-  assert.match(source, /<MissingAncestors person=\{visualAnchor\} \{\.\.\.ancestorProps\}/);
-  assert.match(source, /<MissingAncestors person=\{person\} \{\.\.\.ancestorProps\}/);
+  // Expanded ancestors still use the full interactive TreeNode component.
+  // The new primary-view wrapper lets users explore in-law ancestry on demand.
+  assert.match(source, /<MissingAncestors person=\{person\} \{\.\.\.ancestorProps\} \/>/);
+  assert.match(source, /\{ancestryFor\(visualAnchor\)\}/);
+  assert.match(source, /\{ancestryFor\(person\)\}/);
 });
 
 
