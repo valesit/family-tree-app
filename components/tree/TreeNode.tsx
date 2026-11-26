@@ -6,6 +6,7 @@ import { TreeNode as TreeNodeType, SpouseNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { clsx } from 'clsx';
 import { useTreeViewOptional } from './TreeViewContext';
+import { shouldCollapseSpouseAncestors, type AncestryDisplayMode } from './spouse-ancestry';
 import {
   AlertCircle,
   ChevronDown,
@@ -41,6 +42,9 @@ interface TreeNodeProps {
   exportMode?: boolean;
   exportFields?: TreeNodeExportFields;
   maxLevels?: number;
+  ancestryMode?: AncestryDisplayMode;
+  primaryCoupleId?: string;
+  onOpenSpouseAncestry?: (person: TreeNodeType) => void;
 }
 
 type VisualPartner = {
@@ -198,6 +202,9 @@ export function TreeNode({
   exportMode = false,
   exportFields,
   maxLevels,
+  ancestryMode = 'all',
+  primaryCoupleId,
+  onOpenSpouseAncestry,
 }: TreeNodeProps) {
   const treeView = useTreeViewOptional();
   const [branchMenuFor, setBranchMenuFor] = useState<string | null>(null);
@@ -473,13 +480,45 @@ export function TreeNode({
     exportMode,
     exportFields,
     maxLevels,
+    ancestryMode,
+    primaryCoupleId,
+    onOpenSpouseAncestry,
+  };
+
+  // In-law ancestors remain in the tree data but are available on demand
+  // rather than inserted above every married-in partner in the primary view.
+  const ancestryFor = (person: TreeNodeType | SpouseNode) => {
+    const collapsed = !exportMode && Boolean(onOpenSpouseAncestry) &&
+      shouldCollapseSpouseAncestors(person, node.id, primaryCoupleId, ancestryMode);
+
+    if (collapsed) {
+      return (
+        <button
+          type="button"
+          data-clickable="true"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenSpouseAncestry?.(person);
+          }}
+          className="mb-2 inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#b5d6c8] bg-[#eef7f2] px-3 py-1 text-[11px] font-medium text-[#14564f] transition hover:border-[#14635b] hover:bg-[#dbefe4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b]"
+          aria-label={`View ${person.firstName} ${person.lastName}'s ancestral family`}
+          title={`View ${person.lastName} family ancestry`}
+        >
+          <Users className="h-3.5 w-3.5" aria-hidden />
+          View {person.lastName} ancestry
+          <ChevronRight className="h-3 w-3" aria-hidden />
+        </button>
+      );
+    }
+
+    return <MissingAncestors person={person} {...ancestorProps} />;
   };
 
   return (
     <div className="group/tree flex flex-col items-center">
       <div className="flex items-end gap-4">
         <div className="flex flex-col items-center">
-          <MissingAncestors person={visualAnchor} {...ancestorProps} />
+          {ancestryFor(visualAnchor)}
           <PersonCard person={visualAnchor} />
         </div>
 
@@ -495,7 +534,7 @@ export function TreeNode({
               <span className="h-px w-6 bg-[#c99b43]" aria-hidden />
             </div>
             <div className="flex flex-col items-center">
-              <MissingAncestors person={person} {...ancestorProps} />
+              {ancestryFor(person)}
               <PersonCard
                 person={person}
                 spouse={spouseCard}
@@ -554,6 +593,9 @@ export function TreeNode({
                         onSetRoot={effectiveSetRoot}
                         rootPersonId={effectiveRootPersonId}
                         onViewBirthFamily={onViewBirthFamily}
+                        ancestryMode={ancestryMode}
+                        primaryCoupleId={primaryCoupleId}
+                        onOpenSpouseAncestry={onOpenSpouseAncestry}
                         expandedNodes={expandedNodes}
                         toggleExpanded={toggleExpanded}
                         level={level + 1}
