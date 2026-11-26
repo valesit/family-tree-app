@@ -238,7 +238,7 @@ export default function WikiPage() {
               </div>
               <div className="flex flex-col justify-center px-6 py-8 sm:px-9 sm:py-10 lg:px-12 lg:py-12">
                 {(featuredArticle.tags?.length ?? 0) > 0 && (
-                  <p className="mb-3 text-xs font-semibold text-[#14635b]">{featuredArticle.tags[0].name}</p>
+                  <p className="mb-3 text-xs font-semibold text-[#14635b]">{featuredArticle.tags?.[0]?.name}</p>
                 )}
                 <h2 className="max-w-[18ch] font-serif text-[29px] font-semibold leading-[1.18] tracking-[-0.02em] text-[#4a1313] transition-colors group-hover:text-[#651a1a] sm:text-[38px]">
                   {featuredArticle.title}
@@ -366,7 +366,7 @@ function ArchiveArticleCard({ article }: { article: WikiArticleWithAuthor }) {
       </div>
       <div className="flex flex-1 flex-col p-5 sm:p-6">
         {(article.tags?.length ?? 0) > 0 && (
-          <p className="mb-2 text-xs font-semibold text-[#14635b]">{article.tags[0].name}</p>
+          <p className="mb-2 text-xs font-semibold text-[#14635b]">{article.tags?.[0]?.name}</p>
         )}
         <h3 className="font-serif text-[23px] font-semibold leading-[1.25] tracking-[-0.015em] text-[#342722] transition-colors group-hover:text-[#651a1a] sm:text-[25px]">
           {article.title}
