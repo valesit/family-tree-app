@@ -15,7 +15,7 @@ import { FAMILY_SITE_NAME } from '@/lib/family-brand';
 import { PeopleListView, PeopleDirectoryView, type PersonExtras } from '@/components/people';
 import { 
   Loader2, AlertCircle, Users, TreePine, Calendar, Heart, Lock, 
-  Maximize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
+  Maximize2, Minimize2, BookOpen, Award, MapPin, Briefcase, ChevronRight,
   ChevronUp, ChevronDown, ChevronLeft, X, UserPlus, Cake,
   LayoutGrid, List as ListIcon, Contact, Download,
 } from 'lucide-react';
@@ -98,7 +98,8 @@ export default function TreePage() {
   const { data: session, status } = useSession();
   const [selectedPerson, setSelectedPerson] = useState<PersonWithRelations | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isExpandedViewOpen, setIsExpandedViewOpen] = useState(false);
+  const [isOverviewExpandedOpen, setIsOverviewExpandedOpen] = useState(false);
+  const [isTreeExpanded, setIsTreeExpanded] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
   
   /** On small screens, overview is secondary — collapsed by default so the tree is primary. */
@@ -110,6 +111,26 @@ export default function TreePage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   /** Live capture target for "Match what's on screen" PNG/PDF export. */
   const liveCanvasRef = useRef<HTMLDivElement>(null);
+  const treePanelRef = useRef<HTMLDivElement>(null);
+
+  // Keep the existing tree mounted in full-screen mode so pan, zoom,
+  // expanded branches and edit actions retain their current state.
+  useEffect(() => {
+    if (!isTreeExpanded) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    treePanelRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsTreeExpanded(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isTreeExpanded]);
 
   const user = session?.user as SessionUser | undefined;
   const isAuthenticated = status === 'authenticated';
@@ -392,7 +413,17 @@ export default function TreePage() {
       {/* Main content: tree is primary (left on lg+, first on mobile); overview is collapsible on small screens. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
         {/* Family tree — first in DOM: left on desktop, full-width focus on mobile */}
-        <div className="order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white lg:min-w-0 lg:border-r lg:border-[#d6e5de]">
+        <div
+          ref={treePanelRef}
+          tabIndex={isTreeExpanded ? -1 : undefined}
+          aria-label={isTreeExpanded ? 'Full-screen family tree' : undefined}
+          className={clsx(
+            'order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white',
+            isTreeExpanded
+              ? 'fixed inset-0 z-[100] h-[100dvh] overflow-hidden'
+              : 'lg:min-w-0 lg:border-r lg:border-[#d6e5de]'
+          )}
+        >
           {/* View tabs — only visible to signed-in users. */}
           {isAuthenticated && (
             <div className="flex shrink-0 items-center gap-1 border-b border-[#d6e5de] bg-white px-3 py-2 sm:px-6">
@@ -404,13 +435,13 @@ export default function TreePage() {
               />
               <ViewTab
                 active={activeView === 'list'}
-                onClick={() => setActiveView('list')}
+                onClick={() => { setActiveView('list'); setIsTreeExpanded(false); }}
                 icon={<ListIcon className="h-4 w-4" aria-hidden />}
                 label="List"
               />
               <ViewTab
                 active={activeView === 'directory'}
-                onClick={() => setActiveView('directory')}
+                onClick={() => { setActiveView('directory'); setIsTreeExpanded(false); }}
                 icon={<Contact className="h-4 w-4" aria-hidden />}
                 label="Directory"
               />
@@ -426,34 +457,40 @@ export default function TreePage() {
                     Export
                   </Button>
                 )}
-                <button
-                  onClick={() => setIsExpandedViewOpen(true)}
-                  className="hidden rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 lg:inline-flex"
-                  title="Expand view"
-                  aria-label="Expand tree view"
-                  type="button"
-                >
-                  <Maximize2 className="h-4 w-4" aria-hidden />
-                </button>
+                {activeView === 'tree' && (
+                  <button
+                    onClick={() => setIsTreeExpanded((expanded) => !expanded)}
+                    className="inline-flex items-center gap-1.5 rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-[#e7f3ef] hover:text-[#14564f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#14635b]"
+                    title={isTreeExpanded ? 'Exit full-screen tree' : 'Expand family tree to full screen'}
+                    aria-label={isTreeExpanded ? 'Exit full-screen family tree' : 'Expand family tree to full screen'}
+                    aria-pressed={isTreeExpanded}
+                    type="button"
+                  >
+                    {isTreeExpanded ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
+                    {isTreeExpanded && <span className="hidden text-sm font-medium sm:inline">Exit full screen</span>}
+                  </button>
+                )}
               </div>
             </div>
           )}
 
           {/* Panel Header — only shown when no tab strip is present (signed-out users) */}
           {!isAuthenticated && (
-            <div className="hidden shrink-0 items-center justify-between border-b border-slate-100 px-6 py-3 lg:flex">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6">
               <div className="flex items-center gap-2">
                 <TreePine className="h-5 w-5 text-slate-600" />
                 <span className="font-semibold text-slate-900">Family Tree</span>
               </div>
               <button
-                onClick={() => setIsExpandedViewOpen(true)}
-                className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
-                title="Expand view"
-                aria-label="Expand tree view"
+                onClick={() => setIsTreeExpanded((expanded) => !expanded)}
+                className="inline-flex items-center gap-1.5 rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-[#e7f3ef] hover:text-[#14564f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#14635b]"
+                title={isTreeExpanded ? 'Exit full-screen tree' : 'Expand family tree to full screen'}
+                aria-label={isTreeExpanded ? 'Exit full-screen family tree' : 'Expand family tree to full screen'}
+                aria-pressed={isTreeExpanded}
                 type="button"
               >
-                <Maximize2 className="h-4 w-4" aria-hidden />
+                {isTreeExpanded ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
+                {isTreeExpanded && <span className="hidden text-sm font-medium sm:inline">Exit full screen</span>}
               </button>
             </div>
           )}
@@ -528,9 +565,9 @@ export default function TreePage() {
               <span className="font-serif font-medium text-[#14564f]">Family Overview</span>
             </div>
             <button
-              onClick={() => setIsExpandedViewOpen(true)}
+              onClick={() => setIsOverviewExpandedOpen(true)}
               className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
-              title="Expand view"
+              title="Expand family overview"
               aria-label="Expand family overview"
               type="button"
             >
@@ -950,8 +987,8 @@ export default function TreePage() {
 
       {/* Expanded Tree View */}
       <ExpandedTreeView
-        isOpen={isExpandedViewOpen}
-        onClose={() => setIsExpandedViewOpen(false)}
+        isOpen={isOverviewExpandedOpen}
+        onClose={() => setIsOverviewExpandedOpen(false)}
         currentUser={user || null}
       />
 
