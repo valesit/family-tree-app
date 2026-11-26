@@ -37,6 +37,7 @@ export default function RelationshipsPage({ params }: { params: Promise<{ id: st
     <Link className="text-sm text-maroon-700" href={'/person/' + id}>Back to profile</Link>
     <h1 className="mt-3 text-2xl font-semibold">Manage relationships</h1>
     <p className="mt-2 text-sm text-slate-600">Correct individual parents, children or spouses without deleting a person or changing their other connections.</p>
+    <div className="mt-4 flex flex-wrap gap-2">{[{label:'Add parent',param:'childId'},{label:'Add child',param:'parentId'},{label:'Add spouse',param:'spouseId'}].map(action => <Link key={action.param} href={'/add-person?' + action.param + '=' + encodeURIComponent(id)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-maroon-700">{action.label}</Link>)}</div>
     {error && <p role="alert" className="my-4 text-rose-700">{error}</p>}
     <div className="mt-5 space-y-3">
       {!data ? <p>Loading relationships…</p> : !data.success ? <p>Unable to load relationships.</p> : data.data.length === 0 ? <p>No existing connections. Use the family tree to add a relationship.</p> : data.data.map(rel => {

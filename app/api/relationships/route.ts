@@ -16,6 +16,9 @@ import {
   ensureMembershipStableReference,
 } from '@/lib/stable-family';
 
+import { wouldCreateAncestryCycle } from '@/lib/relationship-safety';
+class RelationshipConflict extends Error {}
+
 const PARENT_TYPES = ['PARENT_CHILD', 'ADOPTED', 'STEP_PARENT', 'STEP_CHILD', 'FOSTER'] as const;
 
 // GET /api/relationships - Get all relationships (public - no auth required)
@@ -65,6 +68,8 @@ export async function POST(request: NextRequest) {
 
     const user = session.user as SessionUser;
     if (user.role === 'VIEWER') return NextResponse.json({ success: false, error: 'Read-only account' }, { status: 403 });
+    const account = await prisma.user.findUnique({ where: { id: user.id }, select: { role: true } });
+    if (!account || account.role === 'VIEWER') return NextResponse.json({ success: false, error: 'Contributor access required' }, { status: 403 });
     const body = await request.json();
     const { approverIds: _unusedApprovers, ...relationshipData } = body;
     void _unusedApprovers;
@@ -173,15 +178,18 @@ export async function POST(request: NextRequest) {
       relationshipCreateData.spouse2Id = person2Id;
     }
 
-    const relationship = await prisma.relationship.create({
-      data: relationshipCreateData,
-      include: {
-        parent: true,
-        child: true,
-        spouse1: true,
-        spouse2: true,
-      },
-    });
+    const relationship = await prisma.$transaction(async tx => {
+      // Serialize validation and insertion so concurrent requests cannot bypass
+      // duplicate/cycle checks. Archived edges also matter because restoration
+      // must not introduce a cycle later.
+      const endpoints = await tx.person.count({ where: { id: { in: [person1Id, person2Id] }, deletedAt: null } });
+      if (endpoints !== 2) throw new RelationshipConflict('One or both profiles are no longer active');
+      const edges = await tx.relationship.findMany({ select: { id: true, type: true, parentId: true, childId: true, spouse1Id: true, spouse2Id: true } });
+      const duplicate = edges.find(r => type === 'SPOUSE' ? r.type === 'SPOUSE' && ((r.spouse1Id === person1Id && r.spouse2Id === person2Id) || (r.spouse2Id === person1Id && r.spouse1Id === person2Id)) : r.type === type && r.parentId === person1Id && r.childId === person2Id);
+      if (duplicate) throw new RelationshipConflict('Relationship already exists. Refresh the tree.');
+      if (PARENT_TYPES.includes(type as (typeof PARENT_TYPES)[number]) && wouldCreateAncestryCycle(person1Id, person2Id, edges)) throw new RelationshipConflict('This relationship would create circular ancestry.');
+      return tx.relationship.create({ data: relationshipCreateData, include: { parent: true, child: true, spouse1: true, spouse2: true } });
+    }, { isolationLevel: 'Serializable' });
 
     // Relationship creation can connect two branches that previously had stale
     // Family records. Collapse them immediately so every contributor sees the
@@ -238,6 +246,7 @@ export async function POST(request: NextRequest) {
       message: 'Relationship added successfully.',
     });
   } catch (error) {
+    if (error instanceof RelationshipConflict) return NextResponse.json({ success: false, error: error.message }, { status: 409 });
     console.error('Error creating relationship:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to create relationship' },
