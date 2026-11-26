@@ -6,63 +6,69 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { Avatar } from '@/components/ui';
-import { WikiArticleWithAuthor, SessionUser } from '@/types';
+import type { WikiArticleWithAuthor, SessionUser } from '@/types';
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   BookOpen,
   CalendarDays,
-  Clock3,
   Eye,
-  Heart,
-  History,
   Loader2,
   MessageSquare,
   PenLine,
   Search,
-  Sparkles,
-  Tag,
-  Users,
 } from 'lucide-react';
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-const HERITAGE_ACACIA_IMAGE =
-  'https://images.unsplash.com/photo-1759767119537-3ea0e5ff75de?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=82&w=2200';
+type WikiListResponse = {
+  success: boolean;
+  data: {
+    items: WikiArticleWithAuthor[];
+    total: number;
+    totalPages: number;
+  };
+};
+
+const fetcher = async (url: string): Promise<WikiListResponse> => {
+  const response = await fetch(url);
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Unable to load the family archive.');
+  }
+  return result as WikiListResponse;
+};
 
 export default function WikiPage() {
   const { data: session } = useSession();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const user = session?.user as SessionUser | undefined;
-  const isAuthenticated = !!user;
+  const isAuthenticated = Boolean(user);
+  const hasFilters = Boolean(searchQuery.trim() || selectedTag);
 
   const queryParams = new URLSearchParams();
-  if (searchQuery) queryParams.set('search', searchQuery);
+  queryParams.set('page', String(page));
+  if (searchQuery.trim()) queryParams.set('search', searchQuery.trim());
   if (selectedTag) queryParams.set('tag', selectedTag);
 
-  const { data, error, isLoading } = useSWR<{
-    success: boolean;
-    data: {
-      items: WikiArticleWithAuthor[];
-      total: number;
-      totalPages: number;
-    };
-  }>(`/api/wiki?${queryParams.toString()}`, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-  });
+  const { data, error, isLoading } = useSWR<WikiListResponse>(
+    '/api/wiki?' + queryParams.toString(),
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  );
 
-  const { data: archiveData } = useSWR<{
-    success: boolean;
-    data: { items: WikiArticleWithAuthor[] };
-  }>('/api/wiki?limit=50', fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-  });
+  // Keep the discovery controls independent of the current search and page.
+  const { data: archiveData } = useSWR<WikiListResponse>(
+    '/api/wiki?limit=50',
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  );
 
-  const archiveArticles = archiveData?.data?.items ?? [];
   const articles = data?.data?.items ?? [];
+  const archiveArticles = archiveData?.data?.items ?? articles;
+  const totalStories = archiveData?.data?.total ?? (hasFilters ? 0 : data?.data?.total ?? 0);
 
   const popularTags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -72,318 +78,273 @@ export default function WikiPage() {
         counts.set(tag.name, (counts.get(tag.name) ?? 0) + 1);
       }
     }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([name, count]) => ({ name, count }));
+    return Array.from(counts, ([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [archiveArticles]);
 
-  const contributorRows = useMemo(() => {
-    const map = new Map<string, {
-      id: string;
-      name: string;
-      image: string | null;
-      count: number;
-      latest: string;
-    }>();
-
-    for (const article of archiveArticles) {
-      const existing = map.get(article.author.id);
-      const createdAt = String(article.createdAt);
-      if (!existing) {
-        map.set(article.author.id, {
-          id: article.author.id,
-          name: article.author.name || 'Family member',
-          image: article.author.image || null,
-          count: 1,
-          latest: createdAt,
-        });
-        continue;
-      }
-      existing.count += 1;
-      if (new Date(createdAt) > new Date(existing.latest)) existing.latest = createdAt;
-    }
-
-    return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 4);
-  }, [archiveArticles]);
-
+  // Preserve the current automatic spotlight rule; the schema has no
+  // editorial 'featured' flag. A content-managed spotlight is a separate task.
   const featuredArticle = useMemo(() => {
-    if (archiveArticles.length === 0) return null;
+    if (!archiveArticles.length) return null;
     return [...archiveArticles].sort((a, b) => {
-      const coverDelta = Number(Boolean(b.coverImage)) - Number(Boolean(a.coverImage));
-      if (coverDelta !== 0) return coverDelta;
+      const hasImage = Number(Boolean(b.coverImage)) - Number(Boolean(a.coverImage));
+      if (hasImage !== 0) return hasImage;
       return (b.viewCount ?? 0) - (a.viewCount ?? 0);
     })[0];
   }, [archiveArticles]);
 
-  const recentActivity = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return archiveArticles.filter((article) => new Date(article.createdAt).getTime() >= cutoff).length;
-  }, [archiveArticles]);
+  const showFeatured = !hasFilters && page === 1 && Boolean(featuredArticle);
+  const displayedArticles = showFeatured
+    ? articles.filter((article) => article.id !== featuredArticle?.id)
+    : articles;
+  const totalPages = data?.data?.totalPages ?? 1;
 
-  const displayedArticles = articles.filter((article) => article.id !== featuredArticle?.id);
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedTag(null);
+    setPage(1);
+  };
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#fbf9f5]">
-        <div className="text-center">
-          <Loader2 className="mx-auto mb-4 h-9 w-9 animate-spin text-maroon-500" />
-          <p className="text-sm text-[#7e6e65]">Opening the family archive…</p>
-        </div>
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-white" role="status">
+        <Loader2 className="mr-3 h-6 w-6 animate-spin text-[#651a1a]" aria-hidden="true" />
+        <p className="text-base text-[#52615c]">Opening the family archive…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#fbf9f5]">
-        <div className="text-center">
-          <AlertCircle className="mx-auto mb-4 h-10 w-10 text-rose-500" />
-          <p className="text-[#75655d]">Failed to load family stories</p>
-        </div>
+      <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center px-6 text-center" role="alert">
+        <AlertCircle className="mb-4 h-9 w-9 text-[#651a1a]" aria-hidden="true" />
+        <h1 className="font-serif text-2xl font-semibold text-[#342722]">We couldn't load the family stories</h1>
+        <p className="mt-3 text-base text-[#52615c]">Please refresh the page to try again.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#fbf9f5] text-[#342722]">
-      <section className="relative overflow-hidden border-b border-[#eadfd6] bg-[#fbf8f3]">
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[57%] lg:block" aria-hidden>
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-[0.43] mix-blend-multiply"
-            style={{
-              backgroundImage: `url('${HERITAGE_ACACIA_IMAGE}')`,
-              filter: 'sepia(0.38) saturate(0.55) contrast(0.88) brightness(1.08)',
-              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,.26) 24%, black 52%, black 100%)',
-              maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,.26) 24%, black 52%, black 100%)',
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#fbf8f3] via-[#fbf8f3]/55 to-[#ead8c8]/10" />
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#fbf8f3] to-transparent" />
-        </div>
-
-        <div className="relative mx-auto max-w-[1440px] px-4 py-10 sm:px-6 sm:py-12 lg:px-8 lg:py-14">
-          <div className="relative z-10 max-w-3xl">
-            <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8b4b3e] sm:text-xs">
-              <span className="h-px w-5 bg-[#9b5b4b]" />
-              Family heritage
-            </p>
-            <h1 className="mt-3 font-serif text-4xl font-semibold tracking-tight text-[#34251f] sm:text-5xl lg:text-6xl">
-              Family Wiki
-            </h1>
-            <p className="mt-3 max-w-2xl font-serif text-base leading-7 text-[#75635a] sm:text-lg">
-              Discover and share stories, traditions, and history about our family. Preserve the details that make each generation memorable.
-            </p>
-
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative w-full max-w-xl">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9d887d]" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search family stories…"
-                  className="h-12 w-full rounded-xl border border-[#dfd1c5] bg-[#fffdf9]/90 pl-11 pr-4 text-sm text-[#44342d] shadow-sm outline-none transition focus:border-[#a87865] focus:ring-2 focus-[#a87865]/15"
-                />
-              </div>
-              {isAuthenticated && (
-                <Link
-                  href="/wiki/new"
-                  className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-maroon-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-maroon-600"
-                >
-                  <PenLine className="h-4 w-4" />
-                  Write Article
-                </Link>
-              )}
+    <div className="min-h-screen bg-white text-[#342722]">
+      <header className="border-b border-[#e5e9e5] bg-white">
+        <div className="mx-auto max-w-[1320px] px-4 pb-8 pt-10 sm:px-6 sm:pb-10 sm:pt-14 lg:px-8">
+          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+            <div className="max-w-3xl">
+              <h1 className="font-serif text-4xl font-semibold leading-[1.12] tracking-[-0.025em] text-[#651a1a] sm:text-5xl">
+                Family Stories &amp; History
+              </h1>
+              <p className="mt-4 max-w-[66ch] text-base leading-7 text-[#52615c] sm:text-lg sm:leading-8">
+                Discover and share stories, traditions, and history about our family.
+                Preserve the details that make each generation memorable.
+              </p>
+              <p className="mt-4 text-sm font-medium text-[#496059]">
+                {totalStories} {totalStories === 1 ? 'story' : 'stories'} preserved
+              </p>
             </div>
+            {isAuthenticated && (
+              <Link
+                href="/wiki/new"
+                className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 self-start rounded-lg bg-[#651a1a] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#4a1313] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#651a1a] md:self-auto"
+              >
+                <PenLine className="h-4 w-4" aria-hidden="true" />
+                Write a Story
+              </Link>
+            )}
+          </div>
+
+          <div className="mt-8">
+            <label htmlFor="family-story-search" className="sr-only">Search family stories</label>
+            <div className="relative max-w-[650px]">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#52615c]" aria-hidden="true" />
+              <input
+                id="family-story-search"
+                type="search"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search family stories"
+                className="h-12 w-full rounded-xl border border-[#cad9d2] bg-white pl-12 pr-4 text-base text-[#342722] outline-none placeholder:text-[#63736a] focus:border-[#14635b] focus:ring-2 focus:ring-[#14635b]/15"
+              />
+            </div>
+
+            {popularTags.length > 0 && (
+              <div className="mt-5 flex flex-wrap items-center gap-2" aria-label="Filter stories by topic">
+                <span className="mr-2 text-sm font-medium text-[#52615c]">Explore topics</span>
+                {popularTags.slice(0, 10).map(({ name, count }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    aria-pressed={selectedTag === name}
+                    onClick={() => {
+                      setSelectedTag(selectedTag === name ? null : name);
+                      setPage(1);
+                    }}
+                    className={
+                      'min-h-10 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14635b] ' +
+                      (selectedTag === name
+                        ? 'border-[#651a1a] bg-[#651a1a] text-white'
+                        : 'border-[#dce5df] bg-[#f8fbf9] text-[#344d44] hover:border-[#9fb9aa] hover:bg-[#eef6f1]')
+                    }
+                  >
+                    {name} <span className={selectedTag === name ? 'ml-1 text-white/80' : 'ml-1 text-[#63736a]'}>{count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-      </section>
+      </header>
 
-      <main className="mx-auto max-w-[1440px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard icon={<BookOpen className="h-5 w-5" />} label="Total articles" value={data?.data?.total ?? 0} detail="Published stories" />
-          <StatCard icon={<Tag className="h-5 w-5" />} label="Topics" value={popularTags.length} detail="Active categories" />
-          <StatCard icon={<Users className="h-5 w-5" />} label="Contributors" value={contributorRows.length} detail="Family storytellers" />
-          <StatCard icon={<Clock3 className="h-5 w-5" />} label="Recent activity" value={recentActivity} detail="Articles this month" />
-        </section>
-
-        {(selectedTag || searchQuery) && (
-          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-xl border border-[#eadfd6] bg-[#fffdf9] px-4 py-3 text-sm text-[#7a6960]">
-            <span>Filtering archive:</span>
-            {selectedTag && <span className="rounded-full bg-[#f1e5dd] px-2.5 py-1 font-medium text-[#7a3732]">{selectedTag}</span>}
-            {searchQuery && <span className="rounded-full bg-[#f6efe9] px-2.5 py-1">“{searchQuery}”</span>}
+      <main className="mx-auto max-w-[1320px] px-4 pb-16 pt-9 sm:px-6 sm:pt-11 lg:px-8">
+        {hasFilters && (
+          <div className="mb-8 flex flex-wrap items-center gap-3 border-b border-[#e5e9e5] pb-4 text-sm text-[#52615c]">
+            <span>Showing matching family stories</span>
+            {selectedTag && <span className="rounded-full bg-[#eef6f1] px-3 py-1 font-semibold text-[#14635b]">{selectedTag}</span>}
+            {searchQuery.trim() && <span className="rounded-full bg-[#f7f1ed] px-3 py-1 text-[#651a1a]">{searchQuery.trim()}</span>}
             <button
               type="button"
-              onClick={() => {
-                setSelectedTag(null);
-                setSearchQuery('');
-              }}
-              className="ml-auto text-xs font-semibold text-maroon-600 hover:underline"
+              onClick={resetFilters}
+              className="ml-auto min-h-10 rounded-lg px-3 text-sm font-semibold text-[#651a1a] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-[#651a1a]"
             >
               Clear filters
             </button>
           </div>
         )}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(290px,.8fr)]">
-          <div className="space-y-6">
-            {!searchQuery && !selectedTag && featuredArticle && (
-              <Link
-                href={`/wiki/${featuredArticle.slug}`}
-                className="group grid overflow-hidden rounded-2xl border border-[#dfd2c6] bg-[#fffdf9] shadow-[0_14px_35px_-28px_rgba(75,46,33,.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_-26px_rgba(75,46,33,.55)] md:grid-cols-[260px_minmax(0,1fr)]"
-              >
-                <div className="relative min-h-[220px] overflow-hidden bg-[#eee4dc]">
-                  {featuredArticle.coverImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={featuredArticle.coverImage}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#ead9c9] to-[#f8f1ea]">
-                      <History className="h-14 w-14 text-[#9a6b57]/45" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col justify-center p-6 sm:p-7">
-                  <span className="mb-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-[#ead7c8] bg-[#fbf3ec] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8a5142]">
-                    <Sparkles className="h-3 w-3" /> Featured story
-                  </span>
-                  <h2 className="font-serif text-2xl font-semibold text-[#382a24] transition group-hover:text-maroon-600 sm:text-3xl">
-                    {featuredArticle.title}
-                  </h2>
-                  {featuredArticle.excerpt && (
-                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-[#77675f]">{featuredArticle.excerpt}</p>
-                  )}
-                  <ArticleMeta article={featuredArticle} />
-                </div>
-              </Link>
-            )}
-
-            <section className="rounded-2xl border border-[#e3d7cd] bg-[#fffdf9] p-4 sm:p-5">
-              <div className="mb-4 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9a735f]">The archive</p>
-                  <h2 className="mt-1 font-serif text-2xl font-semibold text-[#382a24]">
-                    {searchQuery || selectedTag ? 'Matching stories' : 'Recent articles'}
-                  </h2>
-                </div>
-                <span className="text-xs text-[#9a8980]">{articles.length} shown</span>
+        {showFeatured && featuredArticle && (
+          <section aria-label="Featured family story">
+            <Link
+              href={'/wiki/' + featuredArticle.slug}
+              className="group grid overflow-hidden rounded-2xl border border-[#e0e5e0] bg-white transition-colors hover:border-[#c1d0c5] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#651a1a] lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]"
+            >
+              <div className="relative flex min-h-[250px] items-center justify-center overflow-hidden bg-[#f4f3ef] px-6 py-9 sm:min-h-[310px] lg:min-h-[420px] lg:px-9">
+                <span className="absolute left-5 top-5 rounded-full border border-[#d8ddd5] bg-white px-3 py-1.5 text-xs font-semibold text-[#651a1a] sm:left-7 sm:top-7">
+                  Featured story
+                </span>
+                {featuredArticle.coverImage ? (
+                  // Keep heritage artwork at its natural size when possible;
+                  // do not crop to fill the frame or enlarge small illustrations.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={featuredArticle.coverImage}
+                    alt=""
+                    className="max-h-[320px] max-w-full object-contain lg:max-h-[365px]"
+                  />
+                ) : (
+                  <BookOpen className="h-16 w-16 text-[#829287]" strokeWidth={1.3} aria-hidden="true" />
+                )}
               </div>
-
-              {articles.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[#dfd3c9] bg-[#fbf8f4] px-6 py-12 text-center">
-                  <BookOpen className="mx-auto h-10 w-10 text-[#c2afa3]" />
-                  <h3 className="mt-3 font-serif text-lg font-semibold text-[#5d4a41]">
-                    {searchQuery || selectedTag ? 'No matching stories' : 'No stories yet'}
-                  </h3>
-                  <p className="mt-1 text-sm text-[#8c7b72]">
-                    {searchQuery || selectedTag ? 'Try another search or topic.' : 'Start preserving a family memory.'}
+              <div className="flex flex-col justify-center px-6 py-8 sm:px-9 sm:py-10 lg:px-12 lg:py-12">
+                {featuredArticle.tags?.length > 0 && (
+                  <p className="mb-3 text-xs font-semibold text-[#14635b]">{featuredArticle.tags[0].name}</p>
+                )}
+                <h2 className="max-w-[18ch] font-serif text-[29px] font-semibold leading-[1.18] tracking-[-0.02em] text-[#4a1313] transition-colors group-hover:text-[#651a1a] sm:text-[38px]">
+                  {featuredArticle.title}
+                </h2>
+                {featuredArticle.excerpt && (
+                  <p className="mt-5 max-w-[58ch] text-base leading-7 text-[#52615c] line-clamp-4">
+                    {featuredArticle.excerpt}
                   </p>
-                </div>
-              ) : displayedArticles.length === 0 && featuredArticle ? (
-                <ArchiveArticleCard article={featuredArticle} />
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {displayedArticles.map((article) => (
-                    <ArchiveArticleCard key={article.id} article={article} />
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-
-          <aside className="space-y-6">
-            <section className="rounded-2xl border border-[#e3d7cd] bg-[#fffdf9] p-5">
-              <div className="flex items-center gap-2">
-                <Tag className="h-4 w-4 text-[#8d5848]" />
-                <h2 className="font-serif text-lg font-semibold text-[#382a24]">Browse by topic</h2>
+                )}
+                <ArticleMeta article={featuredArticle} />
+                <span className="mt-7 inline-flex items-center gap-2 self-start border-b border-[#651a1a] pb-1 text-sm font-semibold text-[#651a1a]">
+                  Read full story <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                </span>
               </div>
-              {popularTags.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {popularTags.slice(0, 10).map(({ name, count }) => (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => setSelectedTag(selectedTag === name ? null : name)}
-                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${selectedTag === name ? 'border-maroon-400 bg-maroon-50 text-maroon-700' : 'border-[#e7dbd1] bg-[#fdfaf7] text-[#765f54] hover:border-[#ceb8aa] hover:bg-white'}`}
-                    >
-                      {name} <span className="ml-1 text-[#aa978c]">{count}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-[#8c7b72]">Topics will appear as stories are tagged.</p>
-              )}
-              {selectedTag && (
-                <button type="button" onClick={() => setSelectedTag(null)} className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-maroon-600 hover:underline">
-                  View all topics <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </section>
+            </Link>
+          </section>
+        )}
 
-            <section className="rounded-2xl border border-[#e3d7cd] bg-[#fffdf9] p-5">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-[#8d5848]" />
-                <h2 className="font-serif text-lg font-semibold text-[#382a24]">Top contributors</h2>
+        {(displayedArticles.length > 0 || hasFilters || !featuredArticle) && (
+          <section className={showFeatured ? 'mt-14 sm:mt-16' : ''} aria-labelledby="archive-heading">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-[#e5e9e5] pb-5">
+              <div>
+                <h2 id="archive-heading" className="font-serif text-3xl font-semibold tracking-[-0.015em] text-[#342722]">
+                  {hasFilters ? 'Matching stories' : 'Explore our stories'}
+                </h2>
+                <p className="mt-1 text-sm text-[#52615c]">
+                  {hasFilters ? 'Stories that match your search or selected topic.' : 'Discover the voices, memories, and history of our families.'}
+                </p>
               </div>
-              {contributorRows.length > 0 ? (
-                <div className="mt-4 divide-y divide-[#eee4dc]">
-                  {contributorRows.map((contributor) => (
-                    <div key={contributor.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                      <Avatar src={contributor.image} name={contributor.name} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-[#4d3a32]">{contributor.name}</p>
-                        <p className="text-xs text-[#99877d]">{contributor.count} {contributor.count === 1 ? 'article' : 'articles'}</p>
-                      </div>
-                      <span className="text-[10px] text-[#ae9d93]">{format(new Date(contributor.latest), 'MMM yyyy')}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-[#8c7b72]">Contributors will appear here.</p>
-              )}
-            </section>
+              <span className="text-sm font-medium text-[#52615c]">
+                {displayedArticles.length} {displayedArticles.length === 1 ? 'story' : 'stories'} shown
+              </span>
+            </div>
 
-            {!isAuthenticated && (
-              <section className="rounded-2xl border border-[#e1cfc2] bg-gradient-to-br from-[#f7ece5] to-[#fffaf6] p-5">
-                <Heart className="h-5 w-5 text-maroon-500" />
-                <h2 className="mt-3 font-serif text-xl font-semibold text-[#49352d]">Preserve a family story</h2>
-                <p className="mt-2 text-sm leading-6 text-[#806e64]">Sign in to document memories, traditions, and family history for future generations.</p>
-                <Link href="/login?callbackUrl=/wiki/new" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-maroon-600 hover:underline">
-                  Sign in to contribute <ArrowRight className="h-4 w-4" />
-                </Link>
-              </section>
+            {displayedArticles.length === 0 ? (
+              <div className="rounded-xl bg-[#f8fbf9] px-6 py-12 text-center">
+                <BookOpen className="mx-auto h-10 w-10 text-[#8da69a]" strokeWidth={1.4} aria-hidden="true" />
+                <h3 className="mt-4 font-serif text-xl font-semibold text-[#342722]">
+                  {hasFilters ? 'No matching stories' : 'No additional stories yet'}
+                </h3>
+                <p className="mt-2 text-base text-[#52615c]">
+                  {hasFilters ? 'Try a different search or clear your topic filter.' : 'More family memories will appear here as they are shared.'}
+                </p>
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="mt-5 min-h-11 rounded-lg border border-[#cad9d2] bg-white px-5 text-sm font-semibold text-[#14635b] hover:bg-[#eef6f1] focus-visible:outline-2 focus-visible:outline-[#14635b]"
+                  >
+                    View all stories
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid items-stretch gap-6 md:grid-cols-2 lg:gap-8">
+                {displayedArticles.map((article) => (
+                  <ArchiveArticleCard key={article.id} article={article} />
+                ))}
+              </div>
             )}
-          </aside>
-        </div>
-      </main>
-    </div>
-  );
-}
 
-function StatCard({
-  icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  detail: string;
-}) {
-  return (
-    <div className="flex items-center gap-4 rounded-2xl border border-[#e4d8cf] bg-[#fffdf9] p-4 shadow-[0_10px_28px_-24px_rgba(74,46,32,.45)]">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#f4ebe4] text-[#895648]">{icon}</div>
-      <div>
-        <p className="text-xs font-medium text-[#76645a]">{label}</p>
-        <div className="mt-0.5 flex items-baseline gap-2">
-          <span className="font-serif text-2xl font-semibold text-[#3d2d26]">{value}</span>
-          <span className="text-[10px] text-[#a08e84]">{detail}</span>
-        </div>
-      </div>
+            {totalPages > 1 && (
+              <nav aria-label="Story archive pagination" className="mt-9 flex items-center justify-between border-t border-[#e5e9e5] pt-5">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#651a1a] hover:bg-[#f7f1ed] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-[#651a1a]"
+                >
+                  <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Previous
+                </button>
+                <span className="text-sm text-[#52615c]">Page {page} of {totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page >= totalPages}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#651a1a] hover:bg-[#f7f1ed] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-[#651a1a]"
+                >
+                  Next <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </nav>
+            )}
+          </section>
+        )}
+
+        {!hasFilters && (
+          <section className="mt-14 flex flex-col justify-between gap-6 border-t border-[#e5e9e5] pt-10 sm:mt-16 sm:flex-row sm:items-center" aria-label="Share a family story">
+            <div className="max-w-2xl">
+              <h2 className="font-serif text-2xl font-semibold text-[#651a1a] sm:text-3xl">
+                Every family has a story worth preserving.
+              </h2>
+              <p className="mt-3 text-base leading-7 text-[#52615c]">
+                Share a memory, tradition, or important moment so future generations can discover it.
+              </p>
+            </div>
+            <Link
+              href={isAuthenticated ? '/wiki/new' : '/login?callbackUrl=/wiki/new'}
+              className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-[#651a1a] px-5 text-sm font-semibold text-[#651a1a] transition-colors hover:bg-[#f9f1f1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#651a1a] sm:self-auto"
+            >
+              <PenLine className="h-4 w-4" aria-hidden="true" />
+              {isAuthenticated ? 'Contribute a story' : 'Sign in to contribute'}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </section>
+        )}
+      </main>
     </div>
   );
 }
@@ -391,22 +352,32 @@ function StatCard({
 function ArchiveArticleCard({ article }: { article: WikiArticleWithAuthor }) {
   return (
     <Link
-      href={`/wiki/${article.slug}`}
-      className="group overflow-hidden rounded-xl border border-[#e4d8cf] bg-[#fffdf9] transition hover:-translate-y-0.5 hover:border-[#d4c0b3] hover:shadow-[0_14px_28px_-24px_rgba(74,46,32,.5)]"
+      href={'/wiki/' + article.slug}
+      className="group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-[#e0e5e0] bg-white transition-colors hover:border-[#b6cabb] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#651a1a]"
     >
-      {article.coverImage && (
-        <div className="h-32 overflow-hidden bg-[#eee6df]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={article.coverImage} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
-        </div>
-      )}
-      <div className="p-4">
-        {article.tags?.[0] && (
-          <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#9a6856]">{article.tags[0].name}</span>
+      <div className="flex h-[220px] shrink-0 items-center justify-center overflow-hidden bg-[#f4f3ef] p-5 sm:h-[245px]">
+        {article.coverImage ? (
+          // Preserve the full totem or heritage illustration; avoid cropping.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={article.coverImage} alt="" className="max-h-full max-w-full object-contain" />
+        ) : (
+          <BookOpen className="h-12 w-12 text-[#829287]" strokeWidth={1.35} aria-hidden="true" />
         )}
-        <h3 className="mt-1 line-clamp-2 font-serif text-lg font-semibold leading-6 text-[#44322b] transition group-hover:text-maroon-600">{article.title}</h3>
-        {article.excerpt && <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#827168]">{article.excerpt}</p>}
-        <ArticleMeta article={article} compact />
+      </div>
+      <div className="flex flex-1 flex-col p-5 sm:p-6">
+        {article.tags?.length > 0 && (
+          <p className="mb-2 text-xs font-semibold text-[#14635b]">{article.tags[0].name}</p>
+        )}
+        <h3 className="font-serif text-[23px] font-semibold leading-[1.25] tracking-[-0.015em] text-[#342722] transition-colors group-hover:text-[#651a1a] sm:text-[25px]">
+          {article.title}
+        </h3>
+        {article.excerpt && <p className="mt-3 line-clamp-3 text-base leading-7 text-[#52615c]">{article.excerpt}</p>}
+        <div className="mt-auto pt-5">
+          <ArticleMeta article={article} compact />
+        </div>
+        <span className="mt-4 inline-flex items-center gap-2 self-start text-sm font-semibold text-[#651a1a]">
+          Read story <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+        </span>
       </div>
     </Link>
   );
@@ -414,17 +385,28 @@ function ArchiveArticleCard({ article }: { article: WikiArticleWithAuthor }) {
 
 function ArticleMeta({ article, compact = false }: { article: WikiArticleWithAuthor; compact?: boolean }) {
   return (
-    <div className={`${compact ? 'mt-4' : 'mt-5'} flex items-center justify-between gap-3 border-t border-[#eee4dc] pt-3`}>
-      <div className="flex min-w-0 items-center gap-2">
-        <Avatar src={article.author.image} name={article.author.name || 'Author'} size="sm" />
+    <div className={'flex flex-wrap items-center justify-between gap-3 border-t border-[#e7ebe6] pt-4 ' + (compact ? '' : 'mt-6')}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <Avatar src={article.author.image} name={article.author.name || 'Family member'} size="sm" />
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-[#655148]">{article.author.name || 'Family member'}</p>
-          <p className="flex items-center gap-1 text-[10px] text-[#a08e84]"><CalendarDays className="h-3 w-3" />{format(new Date(article.createdAt), 'MMM d, yyyy')}</p>
+          <p className="truncate text-sm font-semibold text-[#51413b]">
+            Published by {article.author.name || 'Family member'}
+          </p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#52615c]">
+            <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+            <time dateTime={String(article.createdAt)}>{format(new Date(article.createdAt), 'MMM d, yyyy')}</time>
+          </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3 text-[10px] text-[#99877d]">
-        <span className="flex items-center gap-1"><Eye className="h-3.5 w-3.5" />{article.viewCount ?? 0}</span>
-        <span className="flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" />{article._count?.comments ?? 0}</span>
+      <div className="flex shrink-0 items-center gap-3 text-xs text-[#52615c]" aria-label="Article engagement">
+        <span className="inline-flex items-center gap-1" title="Views">
+          <Eye className="h-4 w-4" aria-hidden="true" /> {article.viewCount ?? 0}
+          <span className="sr-only">views</span>
+        </span>
+        <span className="inline-flex items-center gap-1" title="Comments">
+          <MessageSquare className="h-4 w-4" aria-hidden="true" /> {article._count?.comments ?? 0}
+          <span className="sr-only">comments</span>
+        </span>
       </div>
     </div>
   );
