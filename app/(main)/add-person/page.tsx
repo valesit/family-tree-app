@@ -83,6 +83,10 @@ function AddPersonContent() {
       : 'child_of';
   const initialPersonId = parentIdParam || spouseIdParam || childIdParam || '';
 
+  const [entryMode, setEntryMode] = useState<'existing' | 'new'>(initialPersonId ? 'existing' : 'new');
+  const [existingSearch, setExistingSearch] = useState('');
+  const [existingPage, setExistingPage] = useState(1);
+  const [existingPerson, setExistingPerson] = useState<PersonChoice | null>(null);
   const [relationshipMode, setRelationshipMode] = useState<RelationshipMode>(initialMode);
   const [selectedPersonId, setSelectedPersonId] = useState(initialPersonId);
   const [search, setSearch] = useState('');
@@ -103,6 +107,8 @@ function AddPersonContent() {
     revalidateOnFocus: false,
   });
 
+  const { data: linkChoices, isLoading: linkLoading } = useSWR<{ success: boolean; data: { items: PersonChoice[]; totalPages: number } }>(
+    entryMode === 'existing' ? '/api/persons/link-candidates?page=' + existingPage + '&query=' + encodeURIComponent(existingSearch.trim()) : null, fetcher);
   const prefillPerson = prefillRes?.success ? prefillRes.data : undefined;
   const allPersons = personsData?.data?.items ?? [];
   const isEmptyTree = !personsLoading && allPersons.length === 0;
@@ -194,6 +200,35 @@ function AddPersonContent() {
     setSecondParentId('');
     setSecondParentSearch('');
   }, [relationshipMode, selectedPersonId]);
+
+  const handleLink = async () => {
+    if (isSubmitting || !existingPerson || !selectedPerson || existingPerson.id === selectedPersonId) return;
+    const childMode = relationshipMode === 'child_of';
+    if (childMode && secondParentId === existingPerson.id) { setError('A child cannot be their own parent.'); return; }
+    const label = relationshipMode === 'parent_of' ? 'parent' : relationshipMode === 'spouse_of' ? 'spouse' : 'child';
+    if (!window.confirm('Link ' + displayName(existingPerson) + ' as ' + label + ' of ' + displayName(selectedPerson) + (childMode && secondParent ? ' (also child of ' + displayName(secondParent) + ')' : '') + '? No profiles will be created.')) return;
+    setIsSubmitting(true); setError(null);
+    try {
+      const payload = relationshipMode === 'parent_of'
+        ? { type: 'PARENT_CHILD' as const, person1Id: existingPerson.id, person2Id: selectedPersonId }
+        : { type: relationshipMode === 'spouse_of' ? 'SPOUSE' as const : 'PARENT_CHILD' as const, person1Id: selectedPersonId, person2Id: existingPerson.id };
+      const result = await createRelationship(payload);
+      let rootId = result.familyRootId;
+      if (childMode && secondParentId) {
+        try {
+          const secondary = await createRelationship({ type: 'PARENT_CHILD', person1Id: secondParentId, person2Id: existingPerson.id });
+          rootId = secondary.familyRootId || rootId;
+        } catch (e) {
+          await mutateSWR(key => typeof key === 'string' && key.startsWith('/api/tree'));
+          throw new Error('The first parent link was saved, but the second was not: ' + (e instanceof Error ? e.message : 'Unable to save second parent'));
+        }
+      }
+      await mutateSWR(key => typeof key === 'string' && (key.startsWith('/api/tree') || key.startsWith('/api/persons') || key.startsWith('/api/relationships')), undefined, { revalidate: true });
+      router.push(rootId ? '/tree?rootId=' + encodeURIComponent(rootId) : '/tree');
+      router.refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to link person'); }
+    finally { setIsSubmitting(false); }
+  };
 
   const handleSubmit = async (data: PersonInput, profileImage?: File) => {
     if (!isEmptyTree && !selectedPersonId) {
@@ -311,7 +346,7 @@ function AddPersonContent() {
 
   const relationshipExplainer =
     relationshipMode === 'parent_of'
-      ? 'Choose the family member who will be this new person’s child.'
+      ? 'Choose the family member who will be this person’s child.'
       : relationshipMode === 'spouse_of'
         ? 'Choose the family member who will be this new person’s spouse.'
         : 'Choose Parent 1, then explicitly decide whether the child also belongs to Parent 2.';
@@ -332,7 +367,7 @@ function AddPersonContent() {
         <p className="mt-1 text-sm text-slate-600 sm:text-base">
           {isEmptyTree
             ? 'This will be the first person in the family tree.'
-            : 'Define the relationship first, then add the person’s details.'}
+            : 'Define the relationship, then link an existing person or create a new profile.'}
         </p>
       </div>
 
@@ -345,6 +380,11 @@ function AddPersonContent() {
         </Card>
       )}
 
+      {!isEmptyTree && <div className="mb-6 grid gap-3 sm:grid-cols-2">
+        {([{ id: 'existing', title: 'Link existing person', description: 'Reconnect a family member who already has a profile.' }, { id: 'new', title: 'Create new person', description: 'Add a family member who does not yet have a profile.' }] as const).map(option => <button key={option.id} type="button" disabled={isSubmitting} aria-pressed={entryMode === option.id} onClick={() => { setEntryMode(option.id); setError(null); }} className={clsx('rounded-xl border-2 bg-white p-4 text-left', entryMode === option.id ? 'border-maroon-500 ring-1 ring-maroon-200' : 'border-slate-200')}>
+          <span className="block font-semibold text-slate-900">{option.title}</span><span className="mt-1 block text-sm text-slate-600">{option.description}</span>
+        </button>)}
+      </div>}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:gap-8">
         {!isEmptyTree && (
           <div className="lg:order-1 lg:col-span-2">
@@ -532,17 +572,27 @@ function AddPersonContent() {
             </p>
             <h2 className="mt-0.5 flex items-center gap-2 font-semibold text-slate-900">
               <UserPlus className="h-5 w-5 text-maroon-500" aria-hidden />
-              Their details
+              {entryMode === 'existing' && !isEmptyTree ? 'Select existing person' : 'Their details'}
             </h2>
           </div>
 
-          <PersonForm
+          {entryMode === 'existing' && !isEmptyTree ? <Card>
+            <label htmlFor="existing-person-search" className="block text-sm font-medium text-slate-700">Search existing family members</label>
+            <input id="existing-person-search" type="search" value={existingSearch} onChange={e => { setExistingSearch(e.target.value); setExistingPage(1); }} placeholder="First name, last name or full name" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <div className="mt-3">
+              {linkLoading ? <p className="text-sm text-slate-500">Searching…</p> : !linkChoices?.success ? <p className="text-sm text-rose-700">Unable to load existing people.</p> : <PersonChoiceList people={linkChoices.data.items.filter(p => p.id !== selectedPersonId && (relationshipMode !== 'child_of' || p.id !== secondParentId))} selectedId={existingPerson?.id || ''} onSelect={id => setExistingPerson(linkChoices.data.items.find(p => p.id === id) || null)} />}
+            </div>
+            {linkChoices?.success && linkChoices.data.totalPages > 1 && <div className="mt-2 flex items-center justify-between text-xs"><button type="button" disabled={existingPage <= 1} onClick={() => setExistingPage(p => p-1)}>Previous</button><span>Page {existingPage} of {linkChoices.data.totalPages}</span><button type="button" disabled={existingPage >= linkChoices.data.totalPages} onClick={() => setExistingPage(p => p+1)}>Next</button></div>}
+            {existingPerson && <div className="mt-4"><SelectedPersonCard person={existingPerson} label="Person to link" /></div>}
+            {selectedPerson && existingPerson && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">Link {displayName(existingPerson)} as {relationshipMode === 'parent_of' ? 'parent' : relationshipMode === 'spouse_of' ? 'spouse' : 'child'} of {displayName(selectedPerson)}{relationshipMode === 'child_of' && secondParent ? ' and child of ' + displayName(secondParent) : ''}. Existing profiles and other relationships are preserved.</p>}
+            <button type="button" disabled={isSubmitting || !existingPerson || !selectedPerson || existingPerson.id === selectedPersonId || (relationshipMode === 'child_of' && existingPerson.id === secondParentId)} onClick={handleLink} className="mt-4 w-full rounded-lg bg-maroon-700 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{isSubmitting ? 'Linking…' : 'Link selected person'}</button>
+          </Card> : <PersonForm
             onSubmit={handleSubmit}
             onCancel={() => router.back()}
             isLoading={isSubmitting}
             title="New family member"
             submitLabel={pageTitle.replace('Add ', 'Save ')}
-          />
+          />}
 
           {!isEmptyTree && !selectedPersonId && (
             <p className="mt-3 text-xs text-amber-700">

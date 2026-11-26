@@ -1,0 +1,12 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const ts = require('typescript');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const exportsObject = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/relationship-safety.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:exportsObject});
+const {wouldCreateAncestryCycle} = exportsObject;
+const edge = (parentId,childId) => ({parentId,childId});
+test('existing disconnected child can be linked to a parent without changing its descendants',()=>assert.equal(wouldCreateAncestryCycle('parent','child',[edge('child','grandchild')]),false));
+test('rejects self and indirect ancestry cycles including retained archive relationships',()=>{assert.equal(wouldCreateAncestryCycle('a','a',[]),true);assert.equal(wouldCreateAncestryCycle('c','a',[edge('a','b'),edge('b','c')]),true);});
+test('existing malformed cycles terminate safely',()=>assert.equal(wouldCreateAncestryCycle('outside','a',[edge('a','b'),edge('b','a')]),false));
