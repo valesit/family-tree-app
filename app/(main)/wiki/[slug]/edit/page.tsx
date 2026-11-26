@@ -1,0 +1,363 @@
+'use client';
+
+import { use, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import useSWR, { useSWRConfig } from 'swr';
+import Link from 'next/link';
+import { WikiEditor } from '@/components/wiki';
+import { Button, Input, Card, Select } from '@/components/ui';
+import { PersonWithImage, SessionUser, WikiArticleWithDetails } from '@/types';
+import { 
+  ArrowLeft, 
+  Save, 
+  Eye, 
+  Loader2,
+  Image as ImageIcon,
+  Upload,
+  X,
+  Plus,
+  BookOpen,
+} from 'lucide-react';
+
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+export default function EditWikiArticlePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
+  const { data: session, status } = useSession();
+  const user = session?.user as SessionUser | undefined;
+  const { data, error, isLoading } = useSWR<{ success: boolean; data: WikiArticleWithDetails }>(
+    status === 'authenticated' ? '/api/wiki/' + encodeURIComponent(slug) : null, fetcher
+  );
+  if (status === 'loading' || (status === 'authenticated' && isLoading)) {
+    return <div className="p-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-maroon-500" /></div>;
+  }
+  if (status === 'unauthenticated') {
+    return <div className="p-12 text-center"><Link href={'/login?callbackUrl=' + encodeURIComponent('/wiki/' + slug + '/edit')}>Sign in to edit this article</Link></div>;
+  }
+  if (error || !data?.success || !data.data) {
+    return <div className="p-12 text-center">Unable to load article. <Link href="/wiki">Back to Wiki</Link></div>;
+  }
+  if (user?.id !== data.data.authorId && user?.role !== 'ADMIN') {
+    return <div className="p-12 text-center">You can only edit your own articles. <Link href={'/wiki/' + slug}>Back to article</Link></div>;
+  }
+  return <EditArticleForm key={data.data.id} article={data.data} />;
+}
+
+function EditArticleForm({ article }: { article: WikiArticleWithDetails }) {
+  const router = useRouter();
+  const { mutate } = useSWRConfig();
+
+  const [title, setTitle] = useState(article.title);
+  const [content, setContent] = useState(article.content);
+  const [excerpt, setExcerpt] = useState(article.excerpt || '');
+  const [coverImage, setCoverImage] = useState(article.coverImage || '');
+  const [aboutPersonId, setAboutPersonId] = useState(article.aboutPerson?.id || '');
+  const [tags, setTags] = useState<string[]>((article.tags || []).map(tag => tag.name));
+  const [newTag, setNewTag] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [coverUploadError, setCoverUploadError] = useState('');
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setIsUploadingCover(true);
+    setCoverUploadError('');
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch('/api/wiki/upload', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.success) {
+        setCoverUploadError(json.error || 'Upload failed');
+        return;
+      }
+      setCoverImage(json.data.url);
+    } catch {
+      setCoverUploadError('Upload failed. Please try again.');
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
+  // Fetch persons for "about" dropdown
+  const { data: personsData } = useSWR<{
+    success: boolean;
+    data: { items: PersonWithImage[] };
+  }>('/api/persons?limit=100', fetcher);
+
+  const persons = personsData?.data?.items || [];
+
+  const handleAddTag = () => {
+    if (newTag.trim() && !tags.includes(newTag.trim())) {
+      setTags([...tags, newTag.trim()]);
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleSubmit = async () => {
+    if (!title.trim()) {
+      setError('Title is required');
+      return;
+    }
+    if (!content.trim()) {
+      setError('Content is required');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/wiki/' + article.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          content: content.trim(),
+          excerpt: excerpt.trim() || article.excerpt || undefined,
+          coverImage: coverImage.trim() || null,
+          aboutPersonId: aboutPersonId || null,
+          tags,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        await mutate(key => typeof key === 'string' && (key === '/api/wiki' || key.startsWith('/api/wiki?') || key === '/api/wiki/' + article.slug || key === '/api/wiki/' + result.data.slug), undefined, { revalidate: false });
+        router.push(`/wiki/${result.data.slug}`);
+      } else {
+        setError(result.error || 'Failed to update article');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 py-8">
+      <div className="max-w-4xl mx-auto px-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <Link
+              href={'/wiki/' + article.slug}
+              className="inline-flex items-center text-slate-600 hover:text-slate-900 mb-2"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Article
+            </Link>
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <BookOpen className="w-7 h-7 text-maroon-500" />
+              Edit Article
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || isUploadingCover}
+            >
+              {isSubmitting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Save Changes
+            </Button>
+          </div>
+        </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main editor */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Title */}
+            <Input
+              label="Title"
+              placeholder="Enter a compelling title..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="text-xl font-semibold"
+            />
+
+            {/* Content editor */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Content
+              </label>
+              <WikiEditor
+                value={content}
+                onChange={setContent}
+                placeholder="Share your story, knowledge, or family history..."
+              />
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Cover image */}
+            <Card>
+              <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-slate-400" />
+                Cover Image
+              </h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => coverInputRef.current?.click()}
+                disabled={isUploadingCover}
+                className="w-full mb-3"
+              >
+                {isUploadingCover ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4 mr-2" />
+                )}
+                {isUploadingCover ? 'Uploading...' : 'Upload Image'}
+              </Button>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleCoverFile}
+                className="hidden"
+              />
+              <Input
+                placeholder="...or paste image URL"
+                value={coverImage}
+                onChange={(e) => setCoverImage(e.target.value)}
+              />
+              {coverUploadError && (
+                <p className="mt-2 text-sm text-rose-700">{coverUploadError}</p>
+              )}
+              {coverImage && (
+                <div className="mt-3 relative rounded-lg overflow-hidden">
+                  <img
+                    src={coverImage}
+                    alt="Cover preview"
+                    className="w-full h-32 object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCoverImage('')}
+                    className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80"
+                    aria-label="Remove cover image"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </Card>
+
+            {/* Excerpt */}
+            <Card>
+              <h3 className="font-semibold text-slate-900 mb-4">Excerpt</h3>
+              <textarea
+                placeholder="Brief summary (optional)..."
+                value={excerpt}
+                onChange={(e) => setExcerpt(e.target.value)}
+                rows={3}
+                className="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-maroon-500"
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                Optional summary
+              </p>
+            </Card>
+
+            {/* About person */}
+            <Card>
+              <h3 className="font-semibold text-slate-900 mb-4">About Person</h3>
+              <Select
+                value={aboutPersonId}
+                onChange={(e) => setAboutPersonId(e.target.value)}
+                placeholder="Select a person (optional)"
+                options={[
+                  { value: '', label: 'None' },
+                  ...persons.map((person) => ({
+                    value: person.id,
+                    label: `${person.firstName} ${person.lastName}`,
+                  })),
+                ]}
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                Link this article to a family member
+              </p>
+            </Card>
+
+            {/* Tags */}
+            <Card>
+              <h3 className="font-semibold text-slate-900 mb-4">Tags</h3>
+              <div className="flex gap-2 mb-3">
+                <Input
+                  placeholder="Add a tag..."
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAddTag}
+                  disabled={!newTag.trim()}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-maroon-100 text-maroon-700 rounded-full text-sm"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        className="hover:text-maroon-900"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-slate-400 mt-2">
+                Suggested: History, Traditions, Stories, Recipes, Places
+              </p>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
