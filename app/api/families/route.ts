@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { activeRelationshipWhere } from '@/lib/person-archive';
-import { buildCollaborativeFamilyTree } from '@/lib/collaborative-tree';
+import { buildFamilyTreeWithDisconnectedBranches } from '@/lib/collaborative-tree';
 import { collectTreeNodeIds } from '@/lib/tree-utils';
 import { findPersonFamilyRoot } from '@/lib/family-membership';
 import type { PersonWithRelations, TreeNode } from '@/types';
@@ -67,10 +67,12 @@ function generationCount(tree: TreeNode | null): number {
 
 export async function GET() {
   try {
-    const [persons, relationships, familyRecords] = await Promise.all([
+    const [persons, relationships, familyRecords, historicalRelationships, memberLinks] = await Promise.all([
       prisma.person.findMany({ where: { deletedAt: null }, include: { profileImage: true } }),
       prisma.relationship.findMany({ where: activeRelationshipWhere }),
       prisma.family.findMany({ orderBy: { createdAt: 'asc' } }),
+      prisma.relationship.findMany(),
+      prisma.familyPerson.findMany({ select: { familyId: true, personId: true } }),
     ]);
 
     const personMap = new Map(persons.map((person) => [person.id, person]));
@@ -80,7 +82,9 @@ export async function GET() {
       const person = personMap.get(rootId);
       if (!person) return null;
 
-      const tree = buildCollaborativeFamilyTree(rootId, asTreePersons, relationships);
+      const family = familyRecords.find(f => f.rootPersonId === rootId);
+      const memberIds = family ? memberLinks.filter(link => link.familyId === family.id).map(link => link.personId) : [];
+      const tree = buildFamilyTreeWithDisconnectedBranches(rootId, asTreePersons, relationships, historicalRelationships, memberIds);
       const ids = collectTreeNodeIds(tree);
       const spouse = tree?.spouse || tree?.spouses?.[0];
       const inferredName =

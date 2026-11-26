@@ -26,7 +26,7 @@ function loadModule(path) {
   return mod.exports;
 }
 
-const { buildCollaborativeFamilyTree } = loadModule('lib/collaborative-tree.ts');
+const { buildCollaborativeFamilyTree, buildFamilyTreeWithDisconnectedBranches } = loadModule('lib/collaborative-tree.ts');
 const { collectTreeNodeIds, flattenTree } = loadModule('lib/tree-utils.ts');
 
 function person(id, firstName, lastName = 'Sithole') {
@@ -133,4 +133,33 @@ test('missing ancestors are rendered as full interactive people, not bare label 
   assert.match(source, /onSetRoot: effectiveSetRoot/);
   assert.match(source, /<MissingAncestors person=\{visualAnchor\} \{\.\.\.ancestorProps\}/);
   assert.match(source, /<MissingAncestors person=\{person\} \{\.\.\.ancestorProps\}/);
+});
+
+
+test('archiving an intermediate ancestor preserves descendants in a separate branch without inventing parentage', () => {
+  const people = [person('founder','Founder'),person('child','Child'),person('grandchild','Grandchild'),person('spouse','Spouse'),person('unrelated','Unrelated')];
+  const historical = [parent('founder','archived'),parent('archived','child'),spouse('child','spouse'),parent('child','grandchild')];
+  const active = historical.slice(2);
+  const tree = buildFamilyTreeWithDisconnectedBranches('founder',people,active,historical);
+  assert.equal(tree.children,undefined);
+  assert.equal(tree.disconnectedBranches.length,1);
+  assert.equal(tree.disconnectedBranches[0].id,'child');
+  assert.equal(tree.disconnectedBranches[0].children[0].id,'grandchild');
+  assert.deepEqual([...collectTreeNodeIds(tree)].sort(),['child','founder','grandchild','spouse']);
+  assert.deepEqual([...flattenTree(tree).find(p=>p.id==='child').parentNames],[]);
+  assert.equal(flattenTree(tree).length,4);
+});
+test('explicit family membership preserves an independently disconnected branch and excludes outsiders', () => {
+  const people = [person('founder','Founder'),person('child','Child'),person('grandchild','Grandchild'),person('unrelated','Unrelated')];
+  const active = [parent('child','grandchild')];
+  const tree = buildFamilyTreeWithDisconnectedBranches('founder',people,active,active,['child']);
+  assert.equal(tree.disconnectedBranches[0].id,'child');
+  assert.deepEqual([...collectTreeNodeIds(tree)].sort(),['child','founder','grandchild']);
+});
+test('restoring the archived ancestor reconnects the original family without detached branches', () => {
+  const people = [person('founder','Founder'),person('archived','Restored'),person('child','Child')];
+  const edges = [parent('founder','archived'),parent('archived','child')];
+  const tree = buildFamilyTreeWithDisconnectedBranches('founder',people,edges,edges);
+  assert.equal(tree.disconnectedBranches,undefined);
+  assert.equal(tree.children[0].children[0].id,'child');
 });

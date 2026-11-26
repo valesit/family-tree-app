@@ -40,6 +40,7 @@ function collectDefaultExpandedIds(node: TreeNodeType | null): Set<string> {
     }
   }
   walk(node, 0);
+  for (const branch of node.disconnectedBranches ?? []) walk(branch, 0);
   return ids;
 }
 
@@ -467,6 +468,7 @@ function FamilyTreeInner({
             transition: isDragging || pinchRef.current ? 'none' : 'transform 0.15s ease-out',
           }}
         >
+          <div className="flex flex-col items-center gap-12">
           <TreeNode
             node={data}
             onNodeClick={onNodeClick}
@@ -480,9 +482,33 @@ function FamilyTreeInner({
             isRoot={true}
             readOnly={readOnly}
           />
+            {!!data.disconnectedBranches?.length && <section className="w-full min-w-[420px] rounded-2xl border border-dashed border-amber-300 bg-amber-50/30 p-6" aria-label="Disconnected family branches">
+              <h2 className="mb-1 text-center text-lg font-semibold text-slate-800">Branches requiring reconnection</h2>
+              <p className="mb-6 text-center text-sm text-slate-600">These family members are preserved. No parental connection to the main tree is implied.</p>
+              <div className="flex items-start justify-center gap-12">
+                {data.disconnectedBranches.map(branch => (
+          <TreeNode
+            key={branch.id}
+            node={branch}
+            onNodeClick={onNodeClick}
+            onAddChild={readOnly ? undefined : onAddChild}
+            onAddSpouse={readOnly ? undefined : onAddSpouse}
+            onAddParent={readOnly ? undefined : onAddParent}
+            onViewBirthFamily={onViewBirthFamily}
+            expandedNodes={expandedNodes}
+            toggleExpanded={toggleExpanded}
+            level={0}
+            isRoot={false}
+            readOnly={readOnly}
+          />
+                ))}
+              </div>
+            </section>}
+          </div>
         </div>
       </div>
 
+      {!!data.disconnectedBranches?.length && <div data-tree-controls className="absolute right-3 top-3 z-10 max-w-[240px] rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-sm"><p className="font-medium text-slate-800">{data.disconnectedBranches.length} disconnected branch(es) preserved</p><button type="button" className="mt-1 text-maroon-700 underline" onClick={handleManualFit}>Fit all branches on screen</button></div>}
       <TreeControls
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
