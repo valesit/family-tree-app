@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { FamilyTree, ExpandedTreeView } from '@/components/tree';
 import { CanonicalRootPrompt } from '@/components/tree/CanonicalRootPrompt';
+import { TreeArchiveRestore } from '@/components/tree/TreeArchiveRestore';
 import { ExportTreeDialog } from '@/components/tree/ExportTreeDialog';
 import { Modal, Button, Avatar } from '@/components/ui';
 import { PersonCard } from '@/components/person';
@@ -453,6 +454,7 @@ export default function TreePage() {
                 label="Directory"
               />
               <div className="ml-auto flex items-center gap-2">
+                <TreeArchiveRestore key={data?.data?.rootPersonId} rootId={data?.data?.rootPersonId} onRestored={async () => { await mutate(); }} />
                 {activeView === 'tree' && (
                   <Button
                     type="button"

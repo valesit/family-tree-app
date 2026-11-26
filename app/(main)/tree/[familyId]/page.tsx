@@ -4,6 +4,8 @@ import { useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
+import { TreeArchiveRestore } from '@/components/tree/TreeArchiveRestore';
+
 import { FamilyTree } from '@/components/tree';
 import { Modal, Button, Card, Avatar } from '@/components/ui';
 import { PersonCard } from '@/components/person';
@@ -223,6 +225,7 @@ export default function FamilyViewPage() {
               <Minimize2 className="w-4 h-4 mr-2" />
               Exit Full Screen
             </Button>
+            </div>
           </div>
         </div>
         
@@ -255,6 +258,8 @@ export default function FamilyViewPage() {
               </Link>
               <h1 className="text-2xl font-bold text-slate-900">{familyName} Family Tree</h1>
             </div>
+            <div className="flex items-center gap-2">
+            {isAuthenticated && <TreeArchiveRestore key={data?.data?.rootPersonId} rootId={data?.data?.rootPersonId} onRestored={async () => { await mutate(); }} />}
             <Button
               variant="outline"
               size="sm"
@@ -312,6 +317,7 @@ export default function FamilyViewPage() {
               </p>
             </div>
           </div>
+          {isAuthenticated && <TreeArchiveRestore key={data?.data?.rootPersonId} rootId={data?.data?.rootPersonId} onRestored={async () => { await mutate(); }} />}
           {!isAuthenticated && (
             <Link
               href="/login"
