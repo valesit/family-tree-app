@@ -3,38 +3,13 @@
 import type { TreeNode } from '@/types';
 import { Avatar } from '@/components/ui';
 import { ArrowLeft, ArrowUpRight, GitBranch, Users } from 'lucide-react';
+import { collectAncestorGenerations } from './spouse-ancestry';
 
 interface SpouseAncestryPanelProps {
   person: TreeNode;
   onBack: () => void;
   onPersonClick: (personId: string) => void;
   onShowAllConnections: () => void;
-}
-
-type GenerationGroup = { depth: number; people: TreeNode[] };
-
-/** Read the existing ancestry graph. Never infer a parent from the surname. */
-function collectAncestorGenerations(person: TreeNode): GenerationGroup[] {
-  const generations = new Map<number, TreeNode[]>();
-  const visited = new Set([person.id]);
-  let current: TreeNode[] = [person];
-
-  for (let depth = 1; depth <= 10; depth++) {
-    const parents: TreeNode[] = [];
-    for (const child of current) {
-      for (const parent of child.parents ?? []) {
-        if (visited.has(parent.id)) continue;
-        visited.add(parent.id);
-        parents.push(parent);
-      }
-    }
-    if (!parents.length) break;
-    generations.set(depth, parents);
-    current = parents;
-  }
-
-  return Array.from(generations, ([depth, people]) => ({ depth, people }))
-    .sort((a, b) => b.depth - a.depth);
 }
 
 function generationLabel(depth: number): string {
