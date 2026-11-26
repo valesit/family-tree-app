@@ -223,7 +223,12 @@ export default function TreePage() {
     }
   }, []);
 
-  const handleNodeClick = (node: TreeNode) => openPersonModal(node.id);
+  const handleNodeClick = (node: TreeNode) => {
+    // The person-detail modal lives outside the full-screen tree panel.
+    // Return to the split view first so its existing modal remains visible.
+    setIsTreeExpanded(false);
+    void openPersonModal(node.id);
+  };
 
   const handleAddChild = (parentId: string) => {
     if (!isAuthenticated) {
@@ -416,6 +421,7 @@ export default function TreePage() {
         <div
           ref={treePanelRef}
           tabIndex={isTreeExpanded ? -1 : undefined}
+          role={isTreeExpanded ? 'region' : undefined}
           aria-label={isTreeExpanded ? 'Full-screen family tree' : undefined}
           className={clsx(
             'order-1 flex w-full min-w-0 min-h-0 flex-1 flex-col bg-white',
@@ -451,7 +457,12 @@ export default function TreePage() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => setIsExportOpen(true)}
+                    onClick={() => {
+                      // Export uses the existing modal, which must not be hidden
+                      // beneath the full-screen tree.
+                      setIsTreeExpanded(false);
+                      setIsExportOpen(true);
+                    }}
                   >
                     <Download className="mr-1.5 h-4 w-4" aria-hidden />
                     Export
