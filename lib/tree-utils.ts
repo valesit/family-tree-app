@@ -16,6 +16,7 @@ export function collectTreeNodeIds(tree: TreeNode | null): Set<string> {
     addNode(n.spouse);
     n.parents?.forEach((p) => addNode(p));
     n.children?.forEach((c) => addNode(c));
+    n.disconnectedBranches?.forEach((branch) => addNode(branch));
   };
 
   addNode(tree);
@@ -502,6 +503,7 @@ export function flattenTree(tree: TreeNode | null): PersonFlat[] {
   };
 
   walk(tree, 0, []);
+  for (const branch of tree.disconnectedBranches ?? []) walk(branch, 0, []);
 
   // Derive sibling counts: for each person, find any sibling (another child of any same parent).
   const parentToChildren = new Map<string, Set<string>>();

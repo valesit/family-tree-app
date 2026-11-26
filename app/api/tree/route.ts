@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { activeRelationshipWhere } from '@/lib/person-archive';
 import { calculateTreeStats, collectTreeNodeIds } from '@/lib/tree-utils';
-import { buildCollaborativeFamilyTree } from '@/lib/collaborative-tree';
+import { buildFamilyTreeWithDisconnectedBranches } from '@/lib/collaborative-tree';
 import { findPersonFamilyRoot } from '@/lib/family-membership';
 import type { Relationship, Person } from '@prisma/client';
 
@@ -18,9 +18,10 @@ export async function GET(request: NextRequest) {
     const direction = (searchParams.get('direction') || 'both') as 'ancestors' | 'descendants' | 'both';
     const maxDepth = parseInt(searchParams.get('maxDepth') || '10');
 
-    const [persons, relationships] = await Promise.all([
+    const [persons, relationships, historicalRelationships] = await Promise.all([
       prisma.person.findMany({ where: { deletedAt: null }, include: { profileImage: true } }),
       prisma.relationship.findMany({ where: activeRelationshipWhere }),
+      prisma.relationship.findMany(),
     ]);
 
     if (persons.length === 0) {
@@ -107,6 +108,8 @@ export async function GET(request: NextRequest) {
       } else {
         rootId = persons[0].id;
       }
+      // A detached branch must not silently become the founding root.
+      if (rootId) rootId = (await findPersonFamilyRoot(rootId)) || rootId;
       didAutoDetectRoot = true;
     }
 
@@ -167,10 +170,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const tree = buildCollaborativeFamilyTree(
+    const memberLinks = familySettings ? await prisma.familyPerson.findMany({ where: { familyId: familySettings.id }, select: { personId: true } }) : [];
+    const tree = buildFamilyTreeWithDisconnectedBranches(
       rootId,
       persons,
       relationships,
+      historicalRelationships,
+      memberLinks.map(link => link.personId),
       direction,
       maxDepth
     );

@@ -89,6 +89,8 @@ export interface TreeNode {
   isLiving: boolean;
   isVerified?: boolean;  // Shows "Unverified" badge if false
   children?: TreeNode[];
+  /** Independent family branches with no active connection to the founding tree. */
+  disconnectedBranches?: TreeNode[];
   /** Parent branches missing from the root-down descendant tree (not a replacement for children). */
   parents?: TreeNode[];
   spouse?: TreeNode;  // Legacy single spouse (for backward compatibility)

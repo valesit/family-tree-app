@@ -246,3 +246,66 @@ export function buildCollaborativeFamilyTree(
 
   return tree;
 }
+
+
+/** Historical links establish family scope only; never render archived people or
+ * turn a disconnected branch into a child of the founder. */
+export function buildFamilyTreeWithDisconnectedBranches(
+  rootId: string,
+  persons: PersonWithRelations[],
+  activeRelationships: Relationship[],
+  historicalRelationships: Relationship[],
+  explicitMemberIds: readonly string[] = [],
+  direction: 'ancestors' | 'descendants' | 'both' = 'both',
+  maxDepth = 10
+): TreeNode | null {
+  const tree = buildCollaborativeFamilyTree(rootId, persons, activeRelationships, direction, maxDepth);
+  if (!tree || direction !== 'both') return tree;
+  const activeIds = new Set(persons.map(p => p.id));
+  function adjacency(relationships: Relationship[]) {
+    const map = new Map<string, Set<string>>();
+    for (const r of relationships) {
+      const a = r.type === 'PARENT_CHILD' ? r.parentId : r.type === 'SPOUSE' ? r.spouse1Id : null;
+      const b = r.type === 'PARENT_CHILD' ? r.childId : r.type === 'SPOUSE' ? r.spouse2Id : null;
+      if (!a || !b) continue;
+      if (!map.has(a)) map.set(a, new Set());
+      if (!map.has(b)) map.set(b, new Set());
+      map.get(a)!.add(b); map.get(b)!.add(a);
+    }
+    return map;
+  }
+  function reachable(seeds: readonly string[], map: Map<string, Set<string>>) {
+    const visited = new Set<string>();
+    const queue = [...seeds];
+    while (queue.length) {
+      const id = queue.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      for (const other of map.get(id) ?? []) if (!visited.has(other)) queue.push(other);
+    }
+    return visited;
+  }
+  const scope = reachable([rootId, ...explicitMemberIds], adjacency(historicalRelationships));
+  const activeGraph = adjacency(activeRelationships);
+  const connectedToRoot = reachable([rootId], activeGraph);
+  const remaining = new Set([...scope].filter(id => activeIds.has(id) && !connectedToRoot.has(id)));
+  const branches: TreeNode[] = [];
+  function markDisplayed(n: TreeNode) {
+    remaining.delete(n.id);
+    for (const s of n.spouses ?? (n.spouse ? [n.spouse] : [])) markDisplayed(s);
+    for (const p of n.parents ?? []) markDisplayed(p);
+    for (const c of n.children ?? []) markDisplayed(c);
+  }
+  while (remaining.size) {
+    const candidates = [...remaining].sort();
+    // Prefer the highest surviving ancestor rather than an arbitrary descendant.
+    const root = candidates.find(id => !activeRelationships.some(r => r.type === 'PARENT_CHILD' && r.childId === id && r.parentId && remaining.has(r.parentId))) ?? candidates[0];
+    const branchPeople = persons.filter(p => remaining.has(p.id));
+    const branch = buildCollaborativeFamilyTree(root, branchPeople, activeRelationships, 'both', maxDepth);
+    if (!branch) { remaining.delete(root); continue; }
+    branches.push(branch);
+    markDisplayed(branch);
+  }
+  if (branches.length) tree.disconnectedBranches = branches;
+  return tree;
+}
