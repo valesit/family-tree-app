@@ -297,7 +297,7 @@ export default function FamilyViewPage() {
   // Default: Split view
   return (
     <main className="h-[calc(100dvh-4rem)] flex flex-col" aria-label="Family tree page">
-      {isAuthenticated && <div className="shrink-0 border-b border-slate-200 px-4 py-1.5 text-right text-xs"><Link className="text-maroon-700 hover:underline" href={'/family-members?rootId=' + encodeURIComponent(data?.data?.rootPersonId || familyId)}>Manage family members</Link></div>
+      {isAuthenticated && <div className="shrink-0 border-b border-slate-200 px-4 py-1.5 text-right text-xs"><Link className="text-maroon-700 hover:underline" href={'/family-members?rootId=' + encodeURIComponent(data?.data?.rootPersonId || familyId)}>Manage family members</Link></div>}
       {/* Compact header on mobile to give the tree more room */}
       <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between gap-2">
