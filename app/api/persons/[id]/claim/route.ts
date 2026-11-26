@@ -24,7 +24,7 @@ export async function POST(
     const { id: personId } = await params;
 
     const person = await prisma.person.findUnique({
-      where: { id: personId },
+      where: { id: personId, deletedAt: null },
       include: { user: true, profileImage: true },
     });
 
@@ -53,7 +53,7 @@ export async function POST(
 
     const updatedPerson = await prisma.$transaction(async (tx) => {
       const linked = await tx.person.update({
-        where: { id: personId },
+        where: { id: personId, deletedAt: null },
         data: {
           userId: user.id,
           isVerified: true,
@@ -172,7 +172,7 @@ export async function DELETE(
     }
 
     await prisma.person.update({
-      where: { id: personId },
+      where: { id: personId, deletedAt: null },
       data: { userId: null },
     });
 

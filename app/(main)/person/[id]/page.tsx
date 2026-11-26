@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { format } from 'date-fns';
 import { Avatar, Button, Card } from '@/components/ui';
+import { PersonManagement } from '@/components/person/PersonManagement';
 import { PersonPhotos } from '@/components/person/PersonPhotos';
 import { PersonWithRelations, SessionUser } from '@/types';
 import {
@@ -85,7 +86,7 @@ export default function PersonDetailPage({ params }: PageProps) {
 
   const { data, error, isLoading, mutate } = useSWR<{
     success: boolean;
-    data: PersonWithRelations;
+    data: PersonWithRelations & { canDelete?: boolean };
   }>(`/api/persons/${id}`, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
@@ -242,6 +243,7 @@ export default function PersonDetailPage({ params }: PageProps) {
                       <LinkIcon className="mr-2 h-4 w-4" />This is me
                     </Button>
                   )}
+                  {isAuthenticated && <PersonManagement personId={id} personName={fullName} canDelete={!!person.canDelete} parents={parents.length} children={children.length} spouses={spouses.length} />}
                 </div>
               </div>
             </div>

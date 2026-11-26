@@ -357,6 +357,7 @@ export default function TreePage() {
 
   return (
     <main className="modern-heritage-workspace flex h-[calc(100dvh-4rem)] flex-col bg-white" aria-label="Family tree page">
+      {isAuthenticated && <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-1.5 text-right text-xs"><Link className="text-maroon-700 hover:underline" href={'/family-members?rootId=' + encodeURIComponent(data?.data?.rootPersonId || rootIdParam || '')}>Manage family members</Link></div>}
       {/* Top Header Bar — compact on mobile to give the tree more room */}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b-2 border-[#c99b43] bg-white px-3 py-2 sm:px-6 sm:py-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">

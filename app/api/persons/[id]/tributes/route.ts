@@ -54,7 +54,7 @@ export async function GET(
   try {
     const { id: personId } = await params;
     const person = await prisma.person.findUnique({
-      where: { id: personId },
+      where: { id: personId, deletedAt: null },
       select: { id: true },
     });
     if (!person) {
@@ -99,7 +99,7 @@ export async function POST(
     }
 
     const person = await prisma.person.findUnique({
-      where: { id: personId },
+      where: { id: personId, deletedAt: null },
       select: { id: true, userId: true },
     });
     if (!person) {
