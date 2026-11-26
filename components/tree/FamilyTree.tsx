@@ -6,6 +6,7 @@ import { TreeNode } from './TreeNode';
 import { TreeControls } from './TreeControls';
 import { TreeViewProvider, useTreeViewOptional } from './TreeViewContext';
 import { Move } from 'lucide-react';
+import type { AncestryDisplayMode } from './spouse-ancestry';
 import {
   chooseTreeFocusId,
   fitWholeTree,
@@ -24,6 +25,9 @@ interface FamilyTreeProps {
   /** No-op kept on the prop type only for backwards-compat with existing callers. */
   onViewBirthFamily?: (personId: string, maidenName?: string) => void;
   readOnly?: boolean;
+  /** Primary hides extended in-law ancestry; all retains full known links. */
+  ancestryMode?: AncestryDisplayMode;
+  onOpenSpouseAncestry?: (person: TreeNodeType) => void;
 }
 
 /** Open first two generations by default (depth 0–1 nodes with children). */
@@ -76,6 +80,8 @@ function FamilyTreeInner({
   onAddParent,
   onViewBirthFamily,
   readOnly = false,
+  ancestryMode = 'all',
+  onOpenSpouseAncestry,
 }: FamilyTreeProps) {
   const treeView = useTreeViewOptional();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -476,6 +482,9 @@ function FamilyTreeInner({
             onAddSpouse={readOnly ? undefined : onAddSpouse}
             onAddParent={readOnly ? undefined : onAddParent}
             onViewBirthFamily={onViewBirthFamily}
+            ancestryMode={ancestryMode}
+            primaryCoupleId={chooseTreeFocusId(data)}
+            onOpenSpouseAncestry={onOpenSpouseAncestry}
             expandedNodes={expandedNodes}
             toggleExpanded={toggleExpanded}
             level={0}
@@ -495,6 +504,9 @@ function FamilyTreeInner({
             onAddSpouse={readOnly ? undefined : onAddSpouse}
             onAddParent={readOnly ? undefined : onAddParent}
             onViewBirthFamily={onViewBirthFamily}
+            ancestryMode={ancestryMode}
+            primaryCoupleId={chooseTreeFocusId(data)}
+            onOpenSpouseAncestry={onOpenSpouseAncestry}
             expandedNodes={expandedNodes}
             toggleExpanded={toggleExpanded}
             level={0}
