@@ -8,4 +8,4 @@
 export const FAMILY_SITE_NAME = 'Sithole';
 
 export const FAMILY_SITE_HERITAGE_COPY =
-  'Explore our family tree, share stories, and preserve the heritage of the Sithole, Mutseyami, and Tekeshe families for future generations.';
+  'Explore our family tree, share stories, and preserve the heritage of the Sithole, Mutseyami, Tekeshe and related families for future generations.';

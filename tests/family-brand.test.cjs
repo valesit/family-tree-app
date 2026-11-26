@@ -28,7 +28,7 @@ test('Sithole remains the site name even when the family tree is rooted elsewher
 });
 
 test('heritage introduction recognizes all three surnames', () => {
-  assert.match(FAMILY_SITE_HERITAGE_COPY, /Sithole, Mutseyami, and Tekeshe/);
+  assert.match(FAMILY_SITE_HERITAGE_COPY, /Sithole, Mutseyami, Tekeshe and related families/);
   assert.match(FAMILY_SITE_HERITAGE_COPY, /future generations/);
   const homepage = fs.readFileSync('app/page.tsx', 'utf8');
   assert.match(homepage, /\{FAMILY_SITE_HERITAGE_COPY\}/);
