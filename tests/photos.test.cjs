@@ -64,7 +64,9 @@ function fixture(userId = 'owner', failActivity = false) {
         return activity.data[path[0]] === equals;
       })),
     },
-    user: { update: async ({ data }) => { state.accountImage = data.image; } },
+    user: { findUnique: async ({ where }) => ({ role: where.id === 'system-admin' ? 'ADMIN' : 'MEMBER' }), update: async ({ data }) => { state.accountImage = data.image; } },
+    familyPerson: { findFirst: async () => null },
+    family: { findUnique: async () => null },
     $transaction: async (run) => {
       const before = structuredClone(state);
       try { return await run(db); } catch (error) { state = before; throw error; }
@@ -83,6 +85,7 @@ function fixture(userId = 'owner', failActivity = false) {
     },
     '@vercel/blob': { put: async () => ({ url: `https://test.invalid/upload-${++blobWrites}.jpg` }) },
   };
+  adapters['@/lib/person-archive'] = loadSource('lib/person-archive.ts', adapters);
   adapters['@/lib/person-photos'] = loadSource('lib/person-photos.ts', adapters);
   const { POST } = loadSource('app/api/upload/route.ts', adapters);
   const { GET } = loadSource('app/api/persons/[id]/route.ts', adapters);
