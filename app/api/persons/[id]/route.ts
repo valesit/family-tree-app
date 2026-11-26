@@ -4,13 +4,11 @@ import prisma from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
+import { personArchiveAccess, activeRelationshipWhere } from '@/lib/person-archive';
 import { canManagePersonPhotos, getPersonalPhotoIds } from '@/lib/person-photos';
 import {
   findPersonFamilyRoot,
   getFamilyMembership,
-  isFamilyAdmin,
-  isSystemAdmin,
-  promoteFamilyRootIfHigher,
 } from '@/lib/family-membership';
 
 // GET /api/persons/[id] - Get a single person (public - no auth required)
@@ -24,20 +22,24 @@ export async function GET(
     const sessionUser = session?.user as SessionUser | undefined;
 
     const person = await prisma.person.findUnique({
-      where: { id },
+      where: { id, deletedAt: null },
       include: {
         profileImage: true,
         images: { orderBy: { uploadedAt: 'desc' } },
         parentRelations: {
+          where: activeRelationshipWhere,
           include: { parent: { include: { profileImage: true } } },
         },
         childRelations: {
+          where: activeRelationshipWhere,
           include: { child: { include: { profileImage: true } } },
         },
         spouseRelations1: {
+          where: activeRelationshipWhere,
           include: { spouse2: { include: { profileImage: true } } },
         },
         spouseRelations2: {
+          where: activeRelationshipWhere,
           include: { spouse1: { include: { profileImage: true } } },
         },
         user: {
@@ -89,6 +91,7 @@ export async function GET(
         data: {
           ...safePerson,
           canManagePhotos,
+          canDelete: (await personArchiveAccess(sessionUser, person)).canDelete,
           images: person.images.filter((image) =>
             personalPhotoIds.has(image.id) && !image.isPrimary && image.id !== person.profileImageId
           ),
@@ -106,7 +109,7 @@ export async function GET(
 }
 
 // PUT /api/persons/[id] - Update a person.
-// Registered contributors can publish factual edits immediately; deletion stays admin-only.
+// Registered contributors can publish factual edits immediately; deletion uses separate ownership checks.
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -123,7 +126,7 @@ export async function PUT(
     const { approverIds: _unusedApprovers, ...personData } = body;
     void _unusedApprovers;
 
-    const existingPerson = await prisma.person.findUnique({ where: { id } });
+    const existingPerson = await prisma.person.findUnique({ where: { id, deletedAt: null } });
     if (!existingPerson) {
       return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
     }
@@ -146,7 +149,7 @@ export async function PUT(
     }
 
     const updated = await prisma.person.update({
-      where: { id },
+      where: { id, deletedAt: null },
       data: {
         ...validationResult.data,
         birthDate: validationResult.data.birthDate ? new Date(validationResult.data.birthDate) : null,
@@ -175,94 +178,34 @@ export async function PUT(
   }
 }
 
-// DELETE /api/persons/[id] - Remove a person from the family tree.
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// DELETE /api/persons/[id] - Archive one person without deleting associated data.
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
+    if (!session?.user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     const user = session.user as SessionUser;
     const { id } = await params;
-
-    const person = await prisma.person.findUnique({
-      where: { id },
-      select: { id: true, firstName: true, lastName: true, userId: true },
-    });
-
-    if (!person) {
-      return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
-    }
-
-    try {
-      await promoteFamilyRootIfHigher(id);
-    } catch (err) {
-      console.error('Heal family root before delete failed:', err);
-    }
-
-    const familyAsRoot = await prisma.family.findUnique({
-      where: { rootPersonId: id },
-      select: { id: true, name: true },
-    });
-    if (familyAsRoot) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'This person is the root of a family tree and cannot be deleted. Reassign the root first.',
-        },
-        { status: 400 }
-      );
-    }
-
-    if (person.userId && person.userId === user.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'You cannot delete your own linked profile. Unlink your account first if needed.',
-        },
-        { status: 400 }
-      );
-    }
-
-    const sysAdmin = await isSystemAdmin(user.id);
-    let famAdmin = false;
-    let familyId: string | null = null;
-    if (!sysAdmin) {
-      familyId = await findPersonFamilyRoot(id);
-      if (familyId) famAdmin = await isFamilyAdmin(user.id, familyId);
-    }
-
-    if (!sysAdmin && !famAdmin) {
-      return NextResponse.json(
-        { success: false, error: 'Only System Admins or Family Admins can delete a family member' },
-        { status: 403 }
-      );
-    }
-
-    await prisma.person.delete({ where: { id } });
-
-    await prisma.activity.create({
-      data: {
-        type: 'PERSON_UPDATED',
-        description: `${person.firstName} ${person.lastName} was removed from the family tree`,
-        userId: user.id,
-        data: { personId: id, familyId },
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: `${person.firstName} ${person.lastName} was removed from the family tree.`,
-    });
+    const body = await request.json().catch(() => ({}));
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (!reason || reason.length > 500) return NextResponse.json({ success: false, error: 'Provide a deletion reason (maximum 500 characters)' }, { status: 400 });
+    const person = await prisma.person.findUnique({ where: { id } });
+    if (!person || person.deletedAt) return NextResponse.json({ success: false, error: 'Person not found' }, { status: 404 });
+    if (!(await personArchiveAccess(user, person)).canDelete) return NextResponse.json({ success: false, error: 'You cannot delete this person. Only the original contributor or an authorized administrator can delete an unlinked, non-root profile.' }, { status: 403 });
+    const familyRoot = await findPersonFamilyRoot(id);
+    await prisma.$transaction(async tx => {
+      if (await tx.family.findUnique({ where: { rootPersonId: id } })) throw new Error('Family root cannot be archived');
+      const updated = await tx.person.updateMany({ where: { id, deletedAt: null, userId: null }, data: { deletedAt: new Date(), deletedById: user.id, deletionReason: reason } });
+      if (updated.count !== 1) throw new Error('Profile changed; reload and try again');
+      // Preserve the family association even when this was a legacy record.
+      if (familyRoot) {
+        const family = await tx.family.findUnique({ where: { rootPersonId: familyRoot } });
+        if (family) await tx.familyPerson.upsert({ where: { familyId_personId: { familyId: family.id, personId: id } }, create: { familyId: family.id, personId: id }, update: {} });
+      }
+      await tx.activity.create({ data: { type: 'PERSON_UPDATED', description: person.firstName + ' ' + person.lastName + ' was removed from the active family tree', userId: user.id, data: { personId: id, familyId: familyRoot, action: 'PERSON_ARCHIVED', reason } } });
+    }, { isolationLevel: 'Serializable' });
+    return NextResponse.json({ success: true, message: 'Person removed. Other family members and associated content are preserved.' });
   } catch (error) {
-    console.error('Error deleting person:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to delete person' },
-      { status: 500 }
-    );
+    console.error('Error archiving person:', error);
+    return NextResponse.json({ success: false, error: 'Unable to remove person. Reload and try again.' }, { status: 409 });
   }
 }
