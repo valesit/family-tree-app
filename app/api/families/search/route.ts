@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { activeRelationshipWhere } from '@/lib/person-archive';
 
 // GET /api/families/search?surname=Moyo - Search for family trees by surname
 export async function GET(request: NextRequest) {
@@ -14,19 +15,21 @@ export async function GET(request: NextRequest) {
     // Find all root persons (people with no parents) with the given surname
     const rootPersons = await prisma.person.findMany({
       where: {
+        deletedAt: null,
         lastName: {
           equals: surname,
           mode: 'insensitive', // Case-insensitive search
         },
         // Root persons have no parent relationships
         parentRelations: {
-          none: {},
+          none: activeRelationshipWhere,
         },
       },
       include: {
         profileImage: true,
         // Include spouse to show family name like "Moyo/Smith"
         spouseRelations1: {
+          where: activeRelationshipWhere,
           include: {
             spouse2: {
               select: { lastName: true },
@@ -35,6 +38,7 @@ export async function GET(request: NextRequest) {
           take: 1,
         },
         spouseRelations2: {
+          where: activeRelationshipWhere,
           include: {
             spouse1: {
               select: { lastName: true },
@@ -44,6 +48,7 @@ export async function GET(request: NextRequest) {
         },
         // Count descendants
         childRelations: {
+          where: activeRelationshipWhere,
           select: { id: true },
         },
       },

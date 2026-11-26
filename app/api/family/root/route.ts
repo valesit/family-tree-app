@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const person = await prisma.person.findUnique({
-      where: { id: personId },
+      where: { id: personId, deletedAt: null },
       select: { id: true, firstName: true, lastName: true },
     });
     if (!person) {

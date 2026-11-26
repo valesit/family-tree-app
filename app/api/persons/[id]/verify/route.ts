@@ -28,7 +28,7 @@ export async function POST(
 
     // Get the person
     const person = await prisma.person.findUnique({
-      where: { id },
+      where: { id, deletedAt: null },
     });
 
     if (!person) {
@@ -71,7 +71,7 @@ export async function POST(
 
     // Verify the person
     const updatedPerson = await prisma.person.update({
-      where: { id },
+      where: { id, deletedAt: null },
       data: {
         isVerified: true,
         verifiedAt: new Date(),

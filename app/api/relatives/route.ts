@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import prisma from '@/lib/db';
+import { activeRelationshipWhere } from '@/lib/person-archive';
 import { authOptions } from '@/lib/auth';
 import { SessionUser, RelativeSuggestion } from '@/types';
 
@@ -74,6 +75,7 @@ async function findRelatives(
     // Get all relationships for this person
     const relationships = await prisma.relationship.findMany({
       where: {
+        ...activeRelationshipWhere,
         OR: [
           { parentId: personId },
           { childId: personId },
@@ -192,6 +194,7 @@ export async function GET(request: NextRequest) {
     const persons = await prisma.person.findMany({
       where: {
         id: { in: relativeIds },
+        deletedAt: null,
       },
       include: {
         profileImage: true,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { activeRelationshipWhere } from '@/lib/person-archive';
 import { calculateTreeStats, collectTreeNodeIds } from '@/lib/tree-utils';
 import { buildCollaborativeFamilyTree } from '@/lib/collaborative-tree';
 import { findPersonFamilyRoot } from '@/lib/family-membership';
@@ -18,8 +19,8 @@ export async function GET(request: NextRequest) {
     const maxDepth = parseInt(searchParams.get('maxDepth') || '10');
 
     const [persons, relationships] = await Promise.all([
-      prisma.person.findMany({ include: { profileImage: true } }),
-      prisma.relationship.findMany(),
+      prisma.person.findMany({ where: { deletedAt: null }, include: { profileImage: true } }),
+      prisma.relationship.findMany({ where: activeRelationshipWhere }),
     ]);
 
     if (persons.length === 0) {

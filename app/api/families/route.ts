@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { activeRelationshipWhere } from '@/lib/person-archive';
 import { buildCollaborativeFamilyTree } from '@/lib/collaborative-tree';
 import { collectTreeNodeIds } from '@/lib/tree-utils';
 import { findPersonFamilyRoot } from '@/lib/family-membership';
@@ -18,19 +19,19 @@ async function getStats() {
     oldestMember,
     youngestLiving,
   ] = await Promise.all([
-    prisma.person.count(),
-    prisma.person.count({ where: { isLiving: true } }),
-    prisma.person.count({ where: { isLiving: false } }),
-    prisma.person.count({ where: { gender: 'MALE' } }),
-    prisma.person.count({ where: { gender: 'FEMALE' } }),
-    prisma.relationship.count({ where: { type: 'SPOUSE' } }),
+    prisma.person.count({ where: { deletedAt: null } }),
+    prisma.person.count({ where: { deletedAt: null, isLiving: true } }),
+    prisma.person.count({ where: { deletedAt: null, isLiving: false } }),
+    prisma.person.count({ where: { deletedAt: null, gender: 'MALE' } }),
+    prisma.person.count({ where: { deletedAt: null, gender: 'FEMALE' } }),
+    prisma.relationship.count({ where: { ...activeRelationshipWhere, type: 'SPOUSE' } }),
     prisma.person.findFirst({
-      where: { birthDate: { not: null } },
+      where: { deletedAt: null, birthDate: { not: null } },
       orderBy: { birthDate: 'asc' },
       select: { firstName: true, lastName: true, birthDate: true },
     }),
     prisma.person.findFirst({
-      where: { birthDate: { not: null }, isLiving: true },
+      where: { deletedAt: null, birthDate: { not: null }, isLiving: true },
       orderBy: { birthDate: 'desc' },
       select: { firstName: true, lastName: true, birthDate: true },
     }),
@@ -67,8 +68,8 @@ function generationCount(tree: TreeNode | null): number {
 export async function GET() {
   try {
     const [persons, relationships, familyRecords] = await Promise.all([
-      prisma.person.findMany({ include: { profileImage: true } }),
-      prisma.relationship.findMany(),
+      prisma.person.findMany({ where: { deletedAt: null }, include: { profileImage: true } }),
+      prisma.relationship.findMany({ where: activeRelationshipWhere }),
       prisma.family.findMany({ orderBy: { createdAt: 'asc' } }),
     ]);
 

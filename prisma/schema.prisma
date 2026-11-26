@@ -149,6 +149,11 @@ model Person {
   isVerified    Boolean   @default(false)  // Shows a subtle "recently added" dot if false
   verifiedAt    DateTime?                   // When the person was verified
   
+  // Recoverable deletion. Keep relationships and all associated content intact.
+  deletedAt DateTime?
+  deletedById String?
+  deletionReason String?
+
   // Who added this person
   addedById     String?
   addedBy       User?     @relation("PersonAddedBy", fields: [addedById], references: [id])
@@ -179,6 +184,7 @@ model Person {
   @@index([userId])
   @@index([isNotable])
   @@index([isVerified])
+  @@index([deletedAt])
   @@index([addedById])
   @@index([verifiedById])
 }
