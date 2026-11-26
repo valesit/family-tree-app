@@ -225,7 +225,6 @@ export default function FamilyViewPage() {
               <Minimize2 className="w-4 h-4 mr-2" />
               Exit Full Screen
             </Button>
-            </div>
           </div>
         </div>
         
@@ -268,6 +267,7 @@ export default function FamilyViewPage() {
               <Minimize2 className="w-4 h-4 mr-2" />
               Exit Full Screen
             </Button>
+            </div>
           </div>
         </div>
         
