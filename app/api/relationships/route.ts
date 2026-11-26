@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import prisma from '@/lib/db';
+import { activeRelationshipWhere } from '@/lib/person-archive';
 import { authOptions } from '@/lib/auth';
 import { relationshipSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
       : {};
 
     const relationships = await prisma.relationship.findMany({
-      where,
+      where: { AND: [where, activeRelationshipWhere] },
       include: {
         parent: { include: { profileImage: true } },
         child: { include: { profileImage: true } },
@@ -58,11 +59,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = session.user as SessionUser;
+    if (user.role === 'VIEWER') return NextResponse.json({ success: false, error: 'Read-only account' }, { status: 403 });
     const body = await request.json();
     const { approverIds: _unusedApprovers, ...relationshipData } = body;
     void _unusedApprovers;
@@ -85,8 +87,8 @@ export async function POST(request: NextRequest) {
     }
 
     const [person1, person2] = await Promise.all([
-      prisma.person.findUnique({ where: { id: person1Id } }),
-      prisma.person.findUnique({ where: { id: person2Id } }),
+      prisma.person.findUnique({ where: { id: person1Id, deletedAt: null } }),
+      prisma.person.findUnique({ where: { id: person2Id, deletedAt: null } }),
     ]);
 
     if (!person1 || !person2) {

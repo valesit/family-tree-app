@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import prisma from '@/lib/db';
+import { activeRelationshipWhere } from '@/lib/person-archive';
 import { authOptions } from '@/lib/auth';
 import { personSchema } from '@/lib/validators';
 import { SessionUser } from '@/types';
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
       ? Array.from(await getConnectedPersonIds(rootId))
       : null;
     const where = {
+      deletedAt: null,
       ...(familyPersonIds ? { id: { in: familyPersonIds } } : {}),
       ...(query
         ? {
@@ -48,20 +50,24 @@ export async function GET(request: NextRequest) {
         include: {
           profileImage: true,
           parentRelations: {
+            where: activeRelationshipWhere,
             include: { parent: { include: { profileImage: true } } },
           },
           childRelations: {
+            where: activeRelationshipWhere,
             include: { child: { include: { profileImage: true } } },
           },
           // The add-person flow needs the actual spouse objects, not just the
           // relationship ids, so it can reliably offer/link the second parent.
           spouseRelations1: {
+            where: activeRelationshipWhere,
             include: {
               spouse1: { include: { profileImage: true } },
               spouse2: { include: { profileImage: true } },
             },
           },
           spouseRelations2: {
+            where: activeRelationshipWhere,
             include: {
               spouse1: { include: { profileImage: true } },
               spouse2: { include: { profileImage: true } },

@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
       // Get approved notable persons
       const notablePersons = await prisma.person.findMany({
-        where: whereClause,
+        where: { ...whereClause, deletedAt: null },
         include: {
           profileImage: true,
           images: {
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     // Check if person exists
     const person = await prisma.person.findUnique({
-      where: { id: personId },
+      where: { id: personId, deletedAt: null },
       select: { id: true, firstName: true, lastName: true, isNotable: true },
     });
 
